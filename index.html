@@ -4196,18 +4196,21 @@ function addPartCol(pNum){
 function removePartCol(pNum){
   var cur=PART_COL_COUNTS[pNum-1]||COLS_PER_PART,rows=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
   if(cur<=MIN_COLS){showAlert('⚠️ 최소 '+MIN_COLS+'열');setTimeout(hideAlert,2000);return;}
-  /* ★ FIX: 전체 _ensureIds() 대신 해당 파트만 안전하게 정비 */
-  _saveUndoSnapshot('removePartCol p'+pNum);
+  /* ★ FIX: hasCar 체크는 ids를 저장하지 않고 읽기만 함
+     (취소 시 ids가 패딩된 채로 남는 버그 방지) */
   var ids=_getIds();
   if(!ids[pNum])ids[pNum]=[];
   var expectedCur=cur*rows;
-  while(ids[pNum].length<expectedCur)ids[pNum].push(_genId());
-  _saveIds(ids);
-  var data=_getData(),oldIds=(ids[pNum]||[]).slice(0,expectedCur);
+  /* 패딩은 메모리에서만 — _saveIds 호출 안함 */
+  var tempIds=ids[pNum].slice();
+  while(tempIds.length<expectedCur) tempIds.push(_genId());
+  var data=_getData();
   var hasCar=false;
-  for(var r=0;r<rows&&!hasCar;r++){var id=oldIds[r*cur+(cur-1)];if(data[id]&&data[id].car)hasCar=true;}
+  for(var r=0;r<rows&&!hasCar;r++){
+    var id=tempIds[r*cur+(cur-1)];
+    if(data[id]&&data[id].car) hasCar=true;
+  }
   if(hasCar){
-    /* ★ FIX 위험4: 브라우저 confirm() 대신 앱 내 팝업 사용 (모바일 오작동 방지) */
     _miniConfirmType='remove_col';
     _miniConfirmPayload={pNum:pNum};
     document.getElementById('miniConfirmIcon').textContent='⚠️';
@@ -4221,28 +4224,66 @@ function removePartCol(pNum){
 }
 function _doRemovePartCol(pNum){
   var cur=PART_COL_COUNTS[pNum-1]||COLS_PER_PART,rows=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
-  var ids=_getIds(),data=_getData();
+  _saveUndoSnapshot('removePartCol p'+pNum);
+
+  /* ① IDs / 데이터 처리 */
+  var ids=_getIds(), data=_getData();
   var expectedCur=cur*rows;
-  while((ids[pNum]||[]).length<expectedCur){ if(!ids[pNum])ids[pNum]=[]; ids[pNum].push(_genId()); }
-  var oldIds=(ids[pNum]||[]).slice(0,expectedCur);
-  var newIds=[],removed=[];
+  if(!ids[pNum]) ids[pNum]=[];
+  while(ids[pNum].length<expectedCur) ids[pNum].push(_genId());
+  var oldIds=ids[pNum].slice(0,expectedCur);
+  var newIds=[], removed=[];
   for(var r2=0;r2<rows;r2++){
     for(var cc=0;cc<cur;cc++){
       var id2=oldIds[r2*cur+cc];
-      if(cc===cur-1)removed.push(id2); else newIds.push(id2);
+      if(cc===cur-1) removed.push(id2); else newIds.push(id2);
     }
   }
   removed.forEach(function(id){delete data[id];});
-  ids[pNum]=newIds;_saveIds(ids);_saveData(data);
-  PART_COL_COUNTS[pNum-1]=cur-1;localStorage.setItem(LS_PART_COLS+'_'+pNum,cur-1);
-  /* ★ FIX: 삭제된 열(마지막 열)의 열이름 삭제 */
+  ids[pNum]=newIds;
+  _saveIds(ids); _saveData(data);
+
+  /* ② 열 수 / 열이름 로컬 업데이트 */
+  PART_COL_COUNTS[pNum-1]=cur-1;
+  localStorage.setItem(LS_PART_COLS+'_'+pNum, cur-1);
   var _cn=getColNames();
   delete _cn['p'+pNum+'c'+cur];
   saveColNames(_cn);
-  if(typeof pushSettings==='function') pushSettings({colNames:_cn});
-  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'removePartCol');
-  _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
-  showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'열 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
+
+  /* ③ 구조 재계산 후 화면 갱신 (_rebuildAndRefresh의 pushSettings 건너뜀) */
+  _recalcPartArrays();
+  _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
+  _updateGridCtrlDisp(); _updateColPartSelect(); _initAllBadgeSliders();
+
+  /* ④ Firebase에 한 번만 업로드 (타임스탬프 갱신 포함) */
+  var _colTs = Date.now();
+  localStorage.setItem('pb_grid_cfg_ts', String(_colTs));
+  if(fbSlotsRef){
+    _fbSafeSet(Object.assign({}, _getData(), {
+      _ids: _getIds(),
+      _gridConfig: _getGridConfig(),
+      _localTs: _tsNow()
+    }), 'removePartCol');
+  }
+  /* ⑤ pb_settings에 구조 + 열이름 한 번에 전송 */
+  if(typeof pushSettings==='function'){
+    var _pCols={}, _pRows={};
+    for(var _p=1;_p<=NUM_PARTS;_p++){
+      _pCols[String(_p)] = PART_COL_COUNTS[_p-1]||COLS_PER_PART;
+      _pRows[String(_p)] = PART_ROW_COUNTS[_p-1]||ROWS_PER_PART;
+    }
+    pushSettings({
+      numParts:      NUM_PARTS,
+      colsPerPart:   COLS_PER_PART,
+      rowsPerPart:   ROWS_PER_PART,
+      partColCounts: _pCols,
+      partRowCounts: _pRows,
+      colNames:      _cn
+    });
+  }
+
+  showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'열 — 총 '+TOTAL+'칸');
+  setTimeout(hideAlert,2000);
 }
 function addPartRow(pNum){
   var oldR=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
@@ -6969,6 +7010,29 @@ function _applyGridConfigFromSlots(data) {
     }
     console.log('[구조동기화] Firebase 열편집 적용 (FB:'+_fbCfgTs+' > 로컬:'+_localCfgTs+')');
     localStorage.setItem('pb_grid_cfg_ts', String(_fbCfgTs));
+  } catch(e) {}
+
+  /* ★ FIX: IDs 수와 gridConfig 불일치 감지 → IDs 기준으로 열 수 보정
+     (열 삭제 후 Firebase가 OLD gridConfig로 렌더링하면 데이터 섞임 방지) */
+  try {
+    var _fbIds = data._ids || {};
+    if(cfg.partColCounts && cfg.partRowCounts){
+      var _numP = cfg.numParts || NUM_PARTS;
+      for(var _pi=1; _pi<=_numP; _pi++){
+        var _cfgCols = cfg.partColCounts[String(_pi)];
+        var _cfgRows = cfg.partRowCounts[String(_pi)];
+        var _actualIds = (_fbIds[_pi] || []).length;
+        if(_cfgCols && _cfgRows && _actualIds > 0){
+          var _cfgTotal = _cfgCols * _cfgRows;
+          if(_cfgTotal !== _actualIds && _actualIds % _cfgRows === 0){
+            /* IDs 수가 gridConfig와 다르면 IDs 기준으로 열 수 보정 */
+            var _correctedCols = Math.round(_actualIds / _cfgRows);
+            console.warn('[구조보정] 파트'+_pi+': gridConfig='+_cfgCols+'열 but IDs='+_actualIds+'개 → '+_correctedCols+'열로 보정');
+            cfg.partColCounts[String(_pi)] = _correctedCols;
+          }
+        }
+      }
+    }
   } catch(e) {}
   var changed = false;
   if (cfg.numParts && cfg.numParts !== NUM_PARTS) {
