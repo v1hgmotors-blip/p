@@ -2674,6 +2674,7 @@ function _fbLockProgress(pct) {
 function _fbSyncMarkReady(source) {
   if (_fbSyncReady) return;
   _fbSyncReady = true;
+  window._fbSyncDone = true; /* ★ diff 최적화용 플래그 */
   if (_fbSyncTimer) { clearTimeout(_fbSyncTimer); _fbSyncTimer = null; }
   _fbLockProgress(100);
   setTimeout(function() {
@@ -5646,6 +5647,8 @@ function swapSlotsData(a, b){
     _fbSafeUpdate(upd,'swap');
   }
   refreshSlot(a); refreshSlot(b);
+  /* ★ FIX: 드래그 교환 후 전체 배지 슬라이더 재초기화 */
+  setTimeout(function(){ _initAllBadgeSliders(); }, 150);
   showToast('🔄 슬롯 교환 완료','success');
 }
 
@@ -6021,7 +6024,8 @@ function refreshSlot(i){
   var el=document.getElementById('slot_'+i);if(!el)return;
   renderSlot(el,i); reapplyBlinks();
   _fitSlotCarTexts(); /* ★ 차량번호 짤림 방지 */
-  if(window.innerWidth >= 601) requestAnimationFrame(function(){ _initBadgeSlider(el); });
+  /* ★ FIX: 모바일/PC 구분 없이 배지 초기화 (드래그 후 배지 사라짐 방지) */
+  requestAnimationFrame(function(){ _initBadgeSlider(el); });
 }
 
 /* ★ PC 배지 슬라이더 */
@@ -6030,8 +6034,14 @@ function _initBadgeSlider(slotEl){
   if(!slotEl) return;
   var sid = slotEl.id;
   if(_badgeSliderTimers[sid]){ clearInterval(_badgeSliderTimers[sid]); delete _badgeSliderTimers[sid]; }
+  /* ★ FIX: wrap 제거 전 배지들을 slot으로 먼저 복귀시킴
+     (wrap과 함께 배지가 DOM에서 사라지는 버그 방지) */
   var old = slotEl.querySelector('.slot-badge-wrap');
-  if(old) old.parentNode.removeChild(old);
+  if(old){
+    var _items = Array.prototype.slice.call(old.querySelectorAll('.slot-status, .slot-inspect-badge, .slot-encar-badge'));
+    _items.forEach(function(b){ slotEl.insertBefore(b, old); });
+    old.parentNode.removeChild(old);
+  }
 
   var badges = Array.prototype.slice.call(
     slotEl.querySelectorAll('.slot-status, .slot-inspect-badge, .slot-encar-badge:not(.done)')
@@ -6085,7 +6095,7 @@ function _initBadgeSlider(slotEl){
 /* ★ FIX2: Firebase 중복 발화 시 마지막 호출만 실행 (디바운스) */
 var _badgeSliderInitTimer = null;
 function _initAllBadgeSliders(){
-  if(window.innerWidth < 601) return;
+  /* ★ FIX: 모바일에서도 배지 초기화 (드래그/복원 후 배지 사라짐 방지) */
   if(_badgeSliderInitTimer) clearTimeout(_badgeSliderInitTimer);
   _badgeSliderInitTimer = setTimeout(function(){
     _badgeSliderInitTimer = null;
@@ -6717,6 +6727,10 @@ function miniConfirmOk(){
   } else if(type==='remove_col'){
     var _p = (_miniConfirmPayload && _miniConfirmPayload.pNum) || 1;
     _doRemovePartCol(_p);
+  } else if(type==='restore_fb'){
+    var _pl=_miniConfirmPayload||{};
+    _b2msg('⏳ Firebase 백업 복원 중... ('+(_pl.label||'')+')', '#7C3AED','#F5F3FF','#C4B5FD');
+    restoreFbBackup_execute(_pl.dateKey, _pl._db, _pl._code, _pl.label);
   } else if(type==='remove_row'){
     var _p2 = (_miniConfirmPayload && _miniConfirmPayload.pNum) || 1;
     _doRemovePartRow(_p2);
@@ -7436,7 +7450,50 @@ function _registerSlotsOnListener(){
       _saveData(dat2);
     }
     if(document.getElementById('modalOv').classList.contains('show')){_fbPendingBuildGrid=true;}
-    else{buildGrid(); _initAllBadgeSliders(); /* ★ 디바운스로 중복 실행 자동 방지 */}
+    else{
+      /* ★ FIX: diff 비교로 깜박임 방지
+         - _fbSyncReady 전(초기 수신): buildGrid 전체
+         - _fbSyncReady 후(실시간 수신): diff로 변경 슬롯만 refreshSlot */
+      if(!window._fbSyncDone){
+        /* 아직 초기화 미완료 → 전체 재빌드 */
+        buildGrid(); _initAllBadgeSliders();
+      } else {
+        /* 실시간 수신: 이전 캐시와 diff 비교 */
+        var _prevCache = window._fbPrevSlotCache || {};
+        var _diffIds = [];
+        for(var _dk in recvSlots){
+          if(JSON.stringify(recvSlots[_dk]) !== JSON.stringify(_prevCache[_dk])){
+            _diffIds.push(_dk);
+          }
+        }
+        for(var _pk in _prevCache){
+          if(!recvSlots.hasOwnProperty(_pk)) _diffIds.push(_pk);
+        }
+        /* 캐시 갱신 */
+        window._fbPrevSlotCache = JSON.parse(JSON.stringify(recvSlots));
+
+        if(_diffIds.length > 0 && _diffIds.length <= 8){
+          /* 소량 변경 → refreshSlot */
+          var _anyRefreshed = false;
+          for(var _ri=0; _ri<TOTAL; _ri++){
+            var _rid = _gidx2id(_ri);
+            if(_rid && _diffIds.indexOf(_rid) >= 0){
+              refreshSlot(_ri); _anyRefreshed = true;
+            }
+          }
+          if(_anyRefreshed){
+            if(typeof updateCarCountBadge==='function') updateCarCountBadge();
+            if(typeof _encarUpdateCount==='function') _encarUpdateCount();
+            if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
+            _initAllBadgeSliders();
+          } else { buildGrid(); _initAllBadgeSliders(); }
+        } else if(_diffIds.length > 8){
+          /* 대량 변경 → 전체 재빌드 */
+          buildGrid(); _initAllBadgeSliders();
+        }
+        /* _diffIds.length === 0: 변경 없음 → 아무것도 안 함 (정상) */
+      }
+    }
     _encarUpdateCount();_encarApplyBlinks();
     /* ★ FIX: Firebase 수신 후 localTs 동기화
        Firebase의 _localTs를 로컬에도 기록해 "로컬 = Firebase 최신" 상태 유지
@@ -8185,6 +8242,7 @@ function doBackup2Import(input){
           _ensureIds(); /* ★ ID 기반 슬롯 구조 재보장 */
           _rebuildGridDOM(); loadHeaderMemo(); loadHeaderMemoStyle(); loadMemoFs();
           renderColHeaders(); buildGrid(); fitLayout();
+          setTimeout(function(){ _initAllBadgeSliders(); }, 300); /* ★ FIX: 초기 배지 슬라이더 초기화 */
           initColEditUI(); initColScopeBtns(); _updateGridCtrlDisp();
           loadPartLabels();
         }catch(ex){ console.warn('[복원UI]',ex); }
@@ -8653,6 +8711,7 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
     renderColHeaders(); buildGrid(); fitLayout();
     initColEditUI(); initColScopeBtns(); _updateGridCtrlDisp();
     loadPartLabels();
+    setTimeout(function(){ _initAllBadgeSliders(); }, 300); /* ★ FIX BUG7: 배지 슬라이더 재초기화 */
   }catch(ex){ console.warn('[로컬복원 UI]',ex); }
 
   /* 7. Firebase에 복원 데이터 push 후 재연결 */
@@ -8672,9 +8731,15 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
   if(restoredData && Object.keys(restoredData).length > 0 &&
      typeof fbDb !== 'undefined' && fbDb){
     var slotsRef = fbDb.ref('kd_rooms/'+useCode+'/pb_slots');
+    /* ★ FIX BUG3: 타임아웃 8초 — 네트워크 불량 시 페이지 멈춤 방지 */
+    var _localRestoreTimer = setTimeout(function(){
+      console.warn('[로컬복원] Firebase set 타임아웃 → 직접 연결');
+      doConnect();
+    }, 8000);
     slotsRef.set(Object.assign({}, restoredData, {
       _ids: restoredIds, _gridConfig: _getGridConfig()
-    })).then(doConnect).catch(doConnect);
+    })).then(function(){ clearTimeout(_localRestoreTimer); doConnect(); })
+       .catch(function(){ clearTimeout(_localRestoreTimer); doConnect(); });
   } else {
     doConnect();
   }
@@ -9005,13 +9070,22 @@ function _doShowFbBackupList(useListCode){
 /* ── Firebase 백업에서 복원 ── */
 /* db, code 인자 추가: showFbBackupList에서 임시 db를 사용하는 경우 대응 */
 function restoreFbBackup(dateKey, _db, _code){
-  /* dateKey 형식: YYYY-MM-DD_AM / YYYY-MM-DD_PM / YYYY-MM-DD */
   var parts=dateKey.split('_');
   var dateStr=parts[0];
   var slotStr=parts[1]||'';
   var label=dateStr + (slotStr==='AM'?' 오전':slotStr==='PM'?' 오후':'');
+  restoreFbBackup_execute(dateKey, _db, _code, label);
+}
+function restoreFbBackup_execute(dateKey, _db, _code, label){
 
-  if(!confirm('📅 '+label+' 백업으로 복원할까요?\n\n현재 주차칸 데이터가 모두 교체됩니다.\n계속하시겠습니까?')) return;
+  /* ★ FIX BUG1: confirm() 대신 앱 내 miniConfirm 사용 (모바일 차단 방지) */
+  _miniConfirmType='restore_fb';
+  _miniConfirmPayload={dateKey:dateKey, _db:_db, _code:_code, label:label};
+  document.getElementById('miniConfirmIcon').textContent='📅';
+  document.getElementById('miniConfirmMsg').textContent=label+' 백업으로 복원할까요?\n현재 주차칸 데이터가 모두 교체됩니다.';
+  var _rb=document.getElementById('miniConfirmOkBtn');
+  _rb.className='mini-confirm-ok sale'; _rb.textContent='복원하기';
+  document.getElementById('miniConfirmOv').classList.add('show');
   _b2msg('⏳ Firebase 백업 복원 중... ('+label+')','#7C3AED','#F5F3FF','#C4B5FD');
 
   var useDb   = _db   || fbDb;
@@ -9084,6 +9158,7 @@ function restoreFbBackup(dateKey, _db, _code){
         renderColHeaders(); buildGrid(); fitLayout();
         initColEditUI(); initColScopeBtns(); _updateGridCtrlDisp();
         loadPartLabels();
+        setTimeout(function(){ _initAllBadgeSliders(); }, 300); /* ★ FIX BUG6: 배지 슬라이더 재초기화 */
       }catch(ex){ console.warn('[FB복원 UI]',ex); }
 
       _b2msg('✅ 복원 완료! ('+label+')\n'+count+'개 항목 복원됨 — Firebase 재연결 중...','#1A7A00','#E8FFE0','#AAE0AA');
@@ -9133,10 +9208,15 @@ function restoreFbBackup(dateKey, _db, _code){
       });
       var slotsRef2=useDb.ref('kd_rooms/'+useCode+'/pb_slots');
       var settingsRef2=useDb.ref('kd_rooms/'+useCode+'/pb_settings');
+      /* ★ FIX BUG2: 타임아웃 10초 — 네트워크 불량 시 페이지 멈춤 방지 */
+      var _restoreTimer = setTimeout(function(){
+        console.warn('[복원] Firebase set 타임아웃 → 로컬만 복원');
+        applyFbRestore();
+      }, 10000);
       slotsRef2.set(fbSlotPayload)
         .then(function(){ return settingsRef2.update(settingsToFb); })
-        .then(applyFbRestore)
-        .catch(function(e){ console.warn('[복원 FB push]',e); applyFbRestore(); });
+        .then(function(){ clearTimeout(_restoreTimer); applyFbRestore(); })
+        .catch(function(e){ clearTimeout(_restoreTimer); console.warn('[복원 FB push]',e); applyFbRestore(); });
     } else {
       applyFbRestore();
     }
