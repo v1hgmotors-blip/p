@@ -140,7 +140,8 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   50%    {font-size:min(28px, 7vw);width:min(60px,14vw);height:min(60px,14vw);background:#E8B800;color:#3A1D1D;}
 }
 .slot.blink-search{border-color:#E8B800!important;border-width:3px!important;animation:blinkSearch .7s ease-in-out infinite;z-index:11;overflow:visible!important;}
-.slot.blink-search .slot-car{animation:blinkSearchCar .7s ease-in-out infinite!important;white-space:nowrap;}
+.slot.blink-search .slot-car{animation:blinkSearchCar .7s ease-in-out infinite!important;white-space:nowrap;overflow:hidden;max-width:100%;max-height:calc(var(--slot-h,70px) - var(--slot-num-sz,22px) - 6px);display:flex;align-items:center;justify-content:center;}
+.slot.blink-search .slot-memo{overflow:hidden!important;max-width:100%;white-space:nowrap;text-overflow:ellipsis;}
 .slot.blink-search .slot-num{animation:blinkSearchNum .7s ease-in-out infinite!important;}
 /* ★ slot-num 인라인 편집 커서 */
 .slot-num { cursor: text !important; }
@@ -646,8 +647,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   100%{background:#EF4444;color:#fff;}
 }
 .slot.blink-dispatch{border-color:#2DB400!important;border-width:3px!important;animation:blinkGreen .7s ease-in-out infinite;z-index:10;overflow:visible!important;}
-.slot.blink-dispatch .slot-num{animation:blinkDispatchNum .7s ease-in-out infinite!important;}
-.slot.blink-dispatch .slot-car{animation:blinkDispatchCar .7s ease-in-out infinite!important;white-space:nowrap;}
+.slot.blink-dispatch .slot-num{animation:blinkDispatchNum .7s ease-in-out infinite!important;overflow:visible!important;position:absolute;z-index:20;}
+.slot.blink-dispatch .slot-car{animation:blinkDispatchCar .7s ease-in-out infinite!important;overflow:hidden;width:100%;max-width:100%;max-height:calc(var(--slot-h,70px) - var(--slot-num-sz,22px) - 6px);display:flex;align-items:center;justify-content:center;}
+.slot.blink-dispatch .slot-memo{overflow:hidden!important;max-width:100%;white-space:nowrap;text-overflow:ellipsis;}
 /* 키불출 파트 라벨 깜박 */
 .part-label.blink-dispatch-label{animation:blinkPartLabel .7s ease-in-out infinite!important;}
 @keyframes blinkPartLabel{
@@ -4970,29 +4972,13 @@ function _encarUpdateBtn(idx){
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
 function _encarApplyBlinks(){
-  var now=new Date();
   var s=getSlots();
   for(var i=0;i<TOTAL;i++){
     var el=document.getElementById('slot_'+i);
     if(!el) continue;
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
-    if(!ec.time||ec.done){
-      el.classList.remove('blink-encar');
-      continue;
-    }
-    /* 예약 날짜+시각 파싱 */
-    var rsvDate;
-    if(ec.date && ec.date.length===10){
-      rsvDate = new Date(ec.date+'T'+ec.time+':00');
-    } else {
-      var _pts=ec.time.split(':');
-      rsvDate=new Date();
-      rsvDate.setHours(parseInt(_pts[0]),parseInt(_pts[1]),0,0);
-      if(rsvDate<now) rsvDate.setDate(rsvDate.getDate()+1);
-    }
-    var diffMs=rsvDate-now;
-    var twoH=2*60*60*1000;
-    if(diffMs<=twoH && diffMs>0){
+    /* ★ FIX: 예약 즉시 깜박임 시작 → 완료 확인 전까지 계속 (2시간 조건 제거) */
+    if(ec.time && !ec.done){
       el.classList.add('blink-encar');
     } else {
       el.classList.remove('blink-encar');
@@ -6605,7 +6591,13 @@ function saveSlot(){
     var _chkOwnerSlot = (s0[activeSlot] && s0[activeSlot].owner) ? s0[activeSlot].owner : '';
     var _finalOwner = _chkOwnerMemo || _chkOwnerSlot;
 
-    if(!_finalOwner){
+    /* ★ FIX: 차량번호에 한글 2자 이상이면 차주 없어도 저장 허용 */
+    var _carHasKorean2 = (function(){
+      var _kor = (car||'').match(/[가-힣]/g);
+      return _kor && _kor.length >= 2;
+    })();
+
+    if(!_finalOwner && !_carHasKorean2){
       /* 차주 없음 → 에러 표시, 저장 차단 */
       var ownerErrEl = document.getElementById('mOwnerError');
       if(ownerErrEl){
