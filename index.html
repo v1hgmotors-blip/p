@@ -1944,6 +1944,7 @@ var _FB_RETRY_DELAY= 8000; /* 8초 후 재시도 */
 
 function _fbSafeUpdate(updObj, label){
   if(!fbSlotsRef) return;
+  if(_getStorageMode()==='local'){ console.log('[로컬모드] _fbSafeUpdate 스킵'); return; }
   fbSlotsRef.update(updObj)
     .then(function(){
       _fbFailStreak = 0;
@@ -1960,6 +1961,7 @@ function _fbSafeUpdate(updObj, label){
 
 function _fbSafeSet(dataObj, label){
   if(!fbSlotsRef) return;
+  if(_getStorageMode()==='local'){ console.log('[로컬모드] _fbSafeSet 스킵'); return; }
   fbSlotsRef.set(dataObj)
     .then(function(){
       _fbFailStreak = 0;
@@ -2049,6 +2051,7 @@ var _AUTO_BACKUP_MAX  = 3;  /* 최근 3일치 보관 */
 
 function _autoBackupTick(){
   try{
+    /* ★ FIX: 로컬 모드에서도 로컬 자동백업 실행 (Firebase 저장 없음) */
     var _now   = new Date();
     var today  = _now.toISOString().slice(0,10); /* YYYY-MM-DD */
     var hour   = _now.getHours();
@@ -2657,6 +2660,44 @@ function _fbV7Apply(fbData){
 
 /* 동기화 준비 상태 플래그 */
 var _fbSyncReady = false;   /* Firebase 첫 수신 완료 여부 */
+/* ★ 오프라인/로컬 모드는 pb_storage_mode('local'/'both')로 단일 관리 */
+
+/* ★ 오프라인 로컬 모드 전역 함수 */
+function _showOfflinePopup(){
+  var ov = document.getElementById('offlinePopupOv');
+  if(ov) ov.classList.add('show');
+}
+function _dismissOfflinePopup(){
+  var ov = document.getElementById('offlinePopupOv');
+  if(ov) ov.classList.remove('show');
+}
+function _startOfflineLocalMode(){
+  _dismissOfflinePopup();
+  _setStorageMode('local');
+  /* ★ FIX: Firebase 리스너 완전 해제 + going_offline 연장 (10초 → 30초) */
+  localStorage.setItem('pb_going_offline', String(Date.now()));
+  try{ if(fbRef)         { fbRef.off();         fbRef=null;         } }catch(e){}
+  try{ if(fbSlotsRef)    { fbSlotsRef.off();    fbSlotsRef=null;    } }catch(e){}
+  try{ if(fbSettingsRef) { fbSettingsRef.off();  fbSettingsRef=null; } }catch(e){}
+  try{ if(fbEncarLogRef) { fbEncarLogRef.off();  fbEncarLogRef=null; } }catch(e){}
+  fbConnected = false; _fbSyncReady = true; _fbLockShow(false);
+  _applyStorageModeUI('local');
+  if(!document.getElementById('offlineModeBanner')){
+    var banner = document.createElement('div');
+    banner.id = 'offlineModeBanner';
+    banner.className = 'offline-mode-banner';
+    banner.innerHTML = '📴 로컬 사용 모드 &nbsp;|&nbsp; 인터넷 재연결 시 자동 동기화 <button onclick="_exitOfflineLocalMode()" style="background:#fff;color:#EF4444;border:none;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:900;cursor:pointer;margin-left:8px;">해제</button>';
+    document.body.appendChild(banner);
+  }
+  if(typeof showAlert==='function'){ showAlert('📴 로컬 사용 모드 전환 완료'); setTimeout(hideAlert, 2500); }
+}
+function _exitOfflineLocalMode(){
+  _setStorageMode('both');
+  window._wasOfflineLocalMode = true; /* ★ 온라인 복귀 시 강제 업로드 트리거 */
+  var banner = document.getElementById('offlineModeBanner');
+  if(banner) banner.parentNode.removeChild(banner);
+  _applyStorageModeUI('both');
+}
 var _fbSyncTimer = null;    /* 타임아웃 타이머 */
 var _SYNC_TIMEOUT_MS = 8000; /* 8초 대기 후 타임아웃 */
 
@@ -3707,7 +3748,15 @@ function _genId(){ return 'S'+(Date.now()+_idSeq++).toString(36)+Math.random().t
 function _getIds(){ try{return JSON.parse(localStorage.getItem(LS_SLOT_IDS)||'{}')}catch(e){return{}} }
 function _saveIds(o){ localStorage.setItem(LS_SLOT_IDS,JSON.stringify(o)); }
 function _getData(){ try{return JSON.parse(localStorage.getItem(LS_SLOT_DATA)||'{}')}catch(e){return{}} }
-function _saveData(d){ localStorage.setItem(LS_SLOT_DATA,JSON.stringify(d)); }
+function _saveData(d){
+  localStorage.setItem(LS_SLOT_DATA,JSON.stringify(d));
+  /* ★ FIX: 저장 시마다 로컬 타임스탬프 갱신 */
+  try{ localStorage.setItem(LS_LOCAL_TS, String(_tsNow())); }catch(e){}
+  /* ★ FIX BUG-A,B: 로컬/오프라인 모드에서 저장 시 영구 플래그 설정 (새로고침 후에도 유지) */
+  if(_getStorageMode()==='local'){
+    localStorage.setItem('pb_offline_was_local', String(_tsNow()));
+  }
+}
 function _getRawV7(){ return _getIds(); }
 function _saveRawV7(){} /* ★ Fix: 중복 선언 제거 */
 
@@ -4191,9 +4240,22 @@ function addPartCol(pNum){
   ids[pNum]=newIds;_saveIds(ids);
   PART_COL_COUNTS[pNum-1]=newC;PART_ROW_COUNTS[pNum-1]=rows;
   localStorage.setItem(LS_PART_COLS+'_'+pNum,newC);
-  localStorage.setItem(LS_PART_ROWS+'_'+pNum,rows); /* ★ FIX: 행 수도 localStorage에 저장 */
-  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'struct-set');
-  _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
+  localStorage.setItem(LS_PART_ROWS+'_'+pNum,rows);
+  /* ★ FIX: recalc 먼저 → gridConfig 확정 → Firebase 단 1회 업로드 */
+  _recalcPartArrays();
+  localStorage.setItem('pb_grid_cfg_ts', String(Date.now()));
+  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'addPartCol');
+  _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
+  _updateGridCtrlDisp(); _updateColPartSelect(); _initAllBadgeSliders();
+  /* pb_settings 구조 전송 */
+  if(typeof pushSettings==='function'){
+    var _pCols={},_pRows={};
+    for(var _p=1;_p<=NUM_PARTS;_p++){
+      _pCols[String(_p)]=PART_COL_COUNTS[_p-1]||COLS_PER_PART;
+      _pRows[String(_p)]=PART_ROW_COUNTS[_p-1]||ROWS_PER_PART;
+    }
+    pushSettings({numParts:NUM_PARTS,partColCounts:_pCols,partRowCounts:_pRows});
+  }
   showAlert('✅ '+pNum+'파트 '+newC+'열×'+rows+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
 }
 function removePartCol(pNum){
@@ -4299,8 +4361,20 @@ function addPartRow(pNum){
   for(var cc=0;cc<cols;cc++) ids[pNum].push(_genId());
   _saveIds(ids);
   PART_ROW_COUNTS[pNum-1]=newR;localStorage.setItem(LS_PART_ROWS+'_'+pNum,newR);
+  /* ★ FIX: recalc 먼저 → gridConfig 확정 → Firebase 단 1회 업로드 */
+  _recalcPartArrays();
+  localStorage.setItem('pb_grid_cfg_ts', String(Date.now()));
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'addPartRow');
-  _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
+  _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
+  _updateGridCtrlDisp(); _updateColPartSelect(); _initAllBadgeSliders();
+  if(typeof pushSettings==='function'){
+    var _pCols2={},_pRows2={};
+    for(var _p2=1;_p2<=NUM_PARTS;_p2++){
+      _pCols2[String(_p2)]=PART_COL_COUNTS[_p2-1]||COLS_PER_PART;
+      _pRows2[String(_p2)]=PART_ROW_COUNTS[_p2-1]||ROWS_PER_PART;
+    }
+    pushSettings({numParts:NUM_PARTS,partColCounts:_pCols2,partRowCounts:_pRows2});
+  }
   showAlert('✅ '+pNum+'파트 '+cols+'열×'+newR+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
 }
 function removePartRow(pNum){
@@ -5146,32 +5220,16 @@ function onStorageModeSwitchChange(isLocalOnly){
   var confirmMsg = isLocalOnly
     ? '📱 로컬 전용 모드로 전환합니다.\nFirebase 실시간 동기화가 중단됩니다.\n계속하시겠습니까?'
     : '☁️ Firebase+로컬 모드로 전환합니다.\nFirebase에 재연결합니다.\n계속하시겠습니까?';
-  if(!confirm(confirmMsg)){
-    /* 취소 → 스위치 원래대로 */
-    _applyStorageModeUI(_getStorageMode());
-    return;
-  }
-  _setStorageMode(newMode);
-  if(newMode === 'local'){
-    /* Firebase 리스너 해제 */
-    try{ if(fbRef)         fbRef.off('value'); }catch(e){}
-    try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
-    try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
-    try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
-    fbConnected = false;
-    _fbSyncReady = true; /* 로컬 모드에서는 잠금 해제 */
-    _fbLockShow(false);
-    setDot('off','로컬 전용 모드');
-    showAlert('📱 로컬 전용 모드로 전환됐습니다');
-    setTimeout(hideAlert, 3000);
-  } else {
-    /* Firebase 재연결 */
-    var u = localStorage.getItem(LS_URL) || _PB_DEFAULTS.url;
-    var c = localStorage.getItem(LS_CODE) || _PB_DEFAULTS.code;
-    connectFb(u, c);
-    showAlert('☁️ Firebase 연결 중...');
-    setTimeout(hideAlert, 3000);
-  }
+  /* ★ FIX: confirm() → miniConfirm (모바일 차단 방지) */
+  _miniConfirmType = 'storage_mode_switch';
+  _miniConfirmPayload = { isLocalOnly: isLocalOnly, newMode: newMode };
+  document.getElementById('miniConfirmIcon').textContent = isLocalOnly ? '📱' : '☁️';
+  document.getElementById('miniConfirmMsg').textContent = confirmMsg;
+  var _smb = document.getElementById('miniConfirmOkBtn');
+  _smb.className = 'mini-confirm-ok ' + (isLocalOnly ? 'clear' : 'sale');
+  _smb.textContent = isLocalOnly ? '로컬 전용으로 전환' : 'Firebase+로컬로 전환';
+  document.getElementById('miniConfirmOv').classList.add('show');
+  /* ★ 실제 처리는 miniConfirmOk 핸들러(type==='storage_mode_switch')에서 실행 */
 }
 
 /* ── 시작 팝업: 처음 실행 시 모드 선택 ── */
@@ -5226,6 +5284,52 @@ var _fbStartUrl     = '';
 var _fbStartCode    = '';
 
 function _checkFbRestoreOnStart(){
+  /* ★ FIX BUG-A,B: 이전 세션에서 로컬/오프라인 저장 있었으면 업로드 우선 처리 */
+  var _prevOfflineTs = parseInt(localStorage.getItem('pb_offline_was_local')||'0');
+  var _prevLocalTs   = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
+  if(_prevOfflineTs > 0 && _prevLocalTs > 0 && navigator.onLine && _getStorageMode()==='both'){
+    /* 이전 오프라인 저장 감지 → 업로드 보호 활성화 */
+    localStorage.setItem('pb_offline_upload_pending', String(Date.now()));
+    window._wasOfflineLocalMode = true;
+    console.log('[시작] 이전 오프라인 저장 감지 → 업로드 예약');
+  }
+  /* ★ FIX: 저장된 모드가 'local'이면 Firebase 연결 없이 로컬 전용으로 시작 */
+  if(_getStorageMode() === 'local'){
+    _fbSyncReady = true;
+    _fbLockShow(false);
+    setDot('off','로컬 전용 모드');
+    _applyStorageModeUI('local');
+    try{
+      _rebuildGridDOM(); loadHeaderMemo(); loadHeaderMemoStyle(); loadMemoFs();
+      renderColHeaders(); buildGrid(); fitLayout();
+      setTimeout(function(){ _initAllBadgeSliders(); }, 300);
+      loadPartLabels();
+    }catch(ex){ console.warn('[로컬모드시작 UI]',ex); }
+    showAlert('📱 로컬 전용 모드로 시작합니다'); setTimeout(hideAlert, 3000);
+    return;
+  }
+  /* ★ FIX Case4: 앱 시작 시 30초 이상 된 오래된 pb_offline_upload_pending 정리 */
+  try{
+    var _oldPending = parseInt(localStorage.getItem('pb_offline_upload_pending')||'0');
+    if(_oldPending && Date.now() - _oldPending > 30000){
+      localStorage.removeItem('pb_offline_upload_pending');
+      console.log('[초기화] 오래된 pb_offline_upload_pending 정리');
+    }
+  }catch(e){}
+  /* ★ FIX: 앱 시작 시 오프라인이면 즉시 로컬 모드 전환 */
+  if(!navigator.onLine){
+    _startOfflineLocalMode();
+    /* 로컬 데이터로 화면 구성 후 온라인 복귀 대기 */
+    try{
+      _rebuildGridDOM(); loadHeaderMemo(); loadHeaderMemoStyle(); loadMemoFs();
+      renderColHeaders(); buildGrid(); fitLayout();
+      setTimeout(function(){ _initAllBadgeSliders(); }, 300);
+      loadPartLabels();
+    }catch(ex){ console.warn('[오프라인시작 UI]',ex); }
+    showAlert('📴 오프라인 상태 — 로컬 사용 모드로 시작합니다.'); setTimeout(hideAlert, 3500);
+    return;
+  }
+
   /* ★ FIX: sessionStorage 체크 제거 — 새로고침 시에도 항상 Firebase 자동 연결 */
 
   var savedUrl  = localStorage.getItem(LS_URL)  || '';
@@ -6659,10 +6763,17 @@ function saveSlot(){
     encar:    isClear ? {date:'',time:'',done:false,doneDate:''} : _prevEncar,
     inspect:  isClear ? {date:'',done:false} : _newInspect
   };
+  /* ★ 경우3: 슬롯별 저장 타임스탬프 기록 — 동시 저장 충돌 시 최신값 식별 */
+  if(s[activeSlot]) s[activeSlot]._savedAt = _tsNow();
   saveSlots(s);
   /* Firebase에도 동기화 */
   if(fbSlotsRef){
-    var fbVal={}; fbVal[activeSlot]=s[activeSlot];
+    /* ★ FIX Case3: _localTs 포함 → 동시 저장 시 최신 타임스탬프 우선 */
+    /* ★ 경우3: 슬롯별 저장 타임스탬프 기록 (동시 저장 충돌 방지) */
+  if(s[activeSlot]) s[activeSlot]._savedAt = _tsNow();
+  saveSlots(s);
+  var fbVal={}; fbVal[activeSlot]=s[activeSlot];
+    fbVal['_localTs'] = _tsNow();
     _fbV7Update(fbVal);
   }
   _inspectApplyBlinks();
@@ -6719,10 +6830,87 @@ function miniConfirmOk(){
   } else if(type==='remove_col'){
     var _p = (_miniConfirmPayload && _miniConfirmPayload.pNum) || 1;
     _doRemovePartCol(_p);
+  } else if(type==='local_backup_restore'){
+    var _lpl = _miniConfirmPayload || {};
+    if(_lpl.data && _lpl.url !== undefined){
+      try{ _doLocalRestore(_lpl.data, _lpl.url, _lpl.code, _lpl.includeCredentials||false); }
+      catch(e){ showAlert('❌ 복원 실패: '+e.message); setTimeout(hideAlert,3000); }
+    }
+  } else if(type==='storage_mode_switch'){
+    var _pl2 = _miniConfirmPayload || {};
+    _setStorageMode(_pl2.newMode);
+    if(_pl2.newMode === 'local'){
+      try{ if(fbRef)         fbRef.off('value'); }catch(e){}
+      try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
+      try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
+      try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
+      fbConnected = false; _fbSyncReady = true; _fbLockShow(false);
+      setDot('off','로컬 전용 모드');
+      _applyStorageModeUI('local');
+      showAlert('📱 로컬 전용 모드로 전환됐습니다'); setTimeout(hideAlert, 3000);
+    } else {
+      var _u2 = localStorage.getItem(LS_URL) || _PB_DEFAULTS.url;
+      var _c2 = localStorage.getItem(LS_CODE) || _PB_DEFAULTS.code;
+      /* ① 로컬 데이터 메모리 캡처 (connectFb 전!) */
+      var _localSnapshot  = _getData();
+      var _localIds2      = _getIds();
+      var _localCfg2      = (typeof _getGridConfig==='function') ? _getGridConfig() : {};
+      /* ★ FIX: 실제 마지막 로컬 저장 ts 사용 */
+      var _localTs2 = parseInt(localStorage.getItem(LS_LOCAL_TS) || '0') || Date.now();
+      /* ② 보호 타임스탬프 설정 (connectFb 전! — on(value) 차단용) */
+      localStorage.setItem('pb_offline_upload_pending', String(Date.now()));
+      window._wasOfflineLocalMode = true;
+      showAlert('☁️ Firebase 연결 중... 로컬 데이터 업로드 예약'); setTimeout(hideAlert, 3000);
+      /* ③ Firebase 연결 */
+      connectFb(_u2, _c2);
+      /* ④ fbSlotsRef 준비 후 캡처된 데이터 업로드 */
+      var _r2=0, _doUp2=function(){
+        if(typeof fbSlotsRef!=='undefined' && fbSlotsRef){
+          var _swUploadTs = Date.now();
+          var _upObj2 = Object.assign({}, _localSnapshot, {
+            _ids:        _localIds2,
+            _gridConfig: _localCfg2,
+            _localTs:    _swUploadTs
+          });
+          /* ★ FIX: 실제 저장이 없으면 업로드 생략 */
+          var _swHasCar = Object.keys(_localSnapshot).some(function(k){
+            return _localSnapshot[k] && _localSnapshot[k].car;
+          });
+          if(_localTs2 === 0 || !_swHasCar){
+            localStorage.removeItem('pb_offline_upload_pending');
+            window._wasOfflineLocalMode = false;
+            console.log('[모드전환] 로컬 데이터 없음 → Firebase 데이터 수신 대기');
+            return;
+          }
+          var _swSettings = _collectSettingsForUpload();
+          fbSlotsRef.set(_upObj2)
+            .then(function(){
+              if(fbSettingsRef && _swSettings) return fbSettingsRef.update(_swSettings);
+            })
+            .then(function(){
+              /* ⑤ 업로드 완료 후 보호 해제 */
+              localStorage.removeItem('pb_offline_upload_pending');
+              window._wasOfflineLocalMode = false;
+              showAlert('✅ 로컬 데이터 Firebase 업로드 완료!');
+              setTimeout(hideAlert, 2500);
+            })
+            .catch(function(){
+              localStorage.removeItem('pb_offline_upload_pending');
+              window._wasOfflineLocalMode = false;
+            });
+        } else if(_r2 < 15){
+          _r2++;
+          setTimeout(_doUp2, 800);
+        } else {
+          localStorage.removeItem('pb_offline_upload_pending');
+          window._wasOfflineLocalMode = false;
+        }
+      };
+      setTimeout(_doUp2, 1000);
+    }
   } else if(type==='restore_fb'){
     var _pl=_miniConfirmPayload||{};
-    _b2msg('⏳ Firebase 백업 복원 중... ('+(_pl.label||'')+')', '#7C3AED','#F5F3FF','#C4B5FD');
-    restoreFbBackup_execute(_pl.dateKey, _pl._db, _pl._code, _pl.label);
+    _restoreFbCore(_pl.dateKey, _pl._db, _pl._code, _pl.label);
   } else if(type==='remove_row'){
     var _p2 = (_miniConfirmPayload && _miniConfirmPayload.pNum) || 1;
     _doRemovePartRow(_p2);
@@ -6733,8 +6921,8 @@ function clearSlot(){
   if(activeSlot===null)return;
   var s=getSlots();
   _backupSlot(activeSlot); /* ★ 초기화 전 백업 */
-  /* 슬롯 완전 삭제 (encar, inspect 포함) */
-  delete s[activeSlot];
+  /* ★ FIX: delete 대신 null 설정 → saveSlots에서 data[id] 삭제 처리됨 */
+  s[activeSlot]=null;
   saveSlots(s);
   if(fbSlotsRef){
     var upd={}; upd[activeSlot]=null;
@@ -7030,11 +7218,23 @@ function _applyGridConfigFromSlots(data) {
         var _actualIds = (_fbIds[_pi] || []).length;
         if(_cfgCols && _cfgRows && _actualIds > 0){
           var _cfgTotal = _cfgCols * _cfgRows;
-          if(_cfgTotal !== _actualIds && _actualIds % _cfgRows === 0){
-            /* IDs 수가 gridConfig와 다르면 IDs 기준으로 열 수 보정 */
-            var _correctedCols = Math.round(_actualIds / _cfgRows);
-            console.warn('[구조보정] 파트'+_pi+': gridConfig='+_cfgCols+'열 but IDs='+_actualIds+'개 → '+_correctedCols+'열로 보정');
-            cfg.partColCounts[String(_pi)] = _correctedCols;
+          /* ★ FIX Case5: IDs수와 gridConfig 불일치 → 항상 IDs 기준으로 보정
+             (열수/행수가 동시에 바뀐 경우도 처리) */
+          if(_cfgTotal !== _actualIds){
+            if(_actualIds % _cfgRows === 0){
+              var _correctedCols = Math.round(_actualIds / _cfgRows);
+              console.warn('[구조보정-열] 파트'+_pi+': gridConfig='+_cfgCols+'열×'+_cfgRows+'행 but IDs='+_actualIds+'개 → '+_correctedCols+'열로 보정');
+              cfg.partColCounts[String(_pi)] = _correctedCols;
+            } else if(_actualIds % _cfgCols === 0){
+              var _correctedRows = Math.round(_actualIds / _cfgCols);
+              console.warn('[구조보정-행] 파트'+_pi+': gridConfig='+_cfgCols+'열×'+_cfgRows+'행 but IDs='+_actualIds+'개 → '+_correctedRows+'행으로 보정');
+              cfg.partRowCounts[String(_pi)] = _correctedRows;
+            } else {
+              /* 열수/행수 모두 맞지 않으면 IDs 수로 1행 보정 */
+              console.warn('[구조보정-강제] 파트'+_pi+': IDs='+_actualIds+'개 맞는 열/행 없음 → '+_actualIds+'열×1행으로 보정');
+              cfg.partColCounts[String(_pi)] = _actualIds;
+              cfg.partRowCounts[String(_pi)] = 1;
+            }
           }
         }
       }
@@ -7110,7 +7310,38 @@ function _ensureGridConfigInFirebase() {
   }).catch(function(){});
 }
 
+/* ★ 로컬 모드→온라인 복귀 시 설정 데이터 수집 */
+function _collectSettingsForUpload(){
+  try{
+    var obj = {};
+    /* 파트 구조 */
+    var pCols={}, pRows={};
+    for(var p=1;p<=NUM_PARTS;p++){
+      pCols[String(p)]=PART_COL_COUNTS[p-1]||COLS_PER_PART;
+      pRows[String(p)]=PART_ROW_COUNTS[p-1]||ROWS_PER_PART;
+    }
+    obj.numParts=NUM_PARTS; obj.colsPerPart=COLS_PER_PART; obj.rowsPerPart=ROWS_PER_PART;
+    obj.partColCounts=pCols; obj.partRowCounts=pRows;
+    /* 헤더 메모 */
+    var hm=localStorage.getItem(LS_HEADER_MEMO);   if(hm)  obj.headerMemo=hm;
+    var hf=localStorage.getItem(LS_MEMO_FS2);      if(hf)  obj.headerMemoFs=parseInt(hf)||14;
+    var hc=localStorage.getItem(LS_MEMO_COLOR2);   if(hc)  obj.headerMemoColor=hc;
+    /* 홍보 텍스트 */
+    var pt=localStorage.getItem(LS_PROMO_TEXT);    if(pt)  obj.promoText=pt;
+    var pf=localStorage.getItem(LS_PROMO_FS);      if(pf)  obj.promoFs=parseInt(pf)||13;
+    var pc=localStorage.getItem(LS_PROMO_COLOR);   if(pc)  obj.promoColor=pc;
+    /* 차주 목록 */
+    var ol=localStorage.getItem(LS_OWNER_LIST);    if(ol)  try{ obj.ownerList=JSON.parse(ol); }catch(e){}
+    /* 열 이름 */
+    var cn=localStorage.getItem(LS_COL_NAMES);     if(cn)  obj.colNames=cn;
+    var cc=localStorage.getItem(LS_COL_HC_COLOR);  if(cc)  obj.colHcColor=cc;
+    /* 메모 폰트 */
+    var mf=localStorage.getItem(LS_MEMO_FS);       if(mf)  obj.memoFs=parseInt(mf)||9;
+    return obj;
+  }catch(e){ console.warn('[설정수집]',e); return {}; }
+}
 function pushSettings(obj){
+  if(_getStorageMode()==='local'){ console.log('[로컬모드] pushSettings 스킵'); return; }
   if(fbSettingsRef){
     fbSettingsRef.update(obj).catch(function(e){console.warn('[설정FB저장]',e);});
   }
@@ -7299,6 +7530,23 @@ function saveAndConnect(){
 function _registerSlotsOnListener(){
   if(!fbSlotsRef) return;
   fbSlotsRef.on('value',function(snap){
+    /* ★ 로컬 모드 보호 */
+    if(_getStorageMode()==='local'){
+      console.log('[로컬모드보호] Firebase 수신 무시');
+      return;
+    }
+    /* ★ FIX: 오프라인 전환 중이면 Firebase 수신 차단 (SDK 잔여 콜백 방지) */
+    var _goingOffTs = parseInt(localStorage.getItem('pb_going_offline')||'0');
+    if(_goingOffTs && Date.now() - _goingOffTs < 10000){
+      console.log('[오프라인전환보호] Firebase 수신 무시');
+      return;
+    }
+    /* ★ 오프라인 업로드 보호: 업로드 완료 전까지 Firebase 덮어쓰기 차단 (30초) */
+    var _offUpTs = parseInt(localStorage.getItem('pb_offline_upload_pending')||'0');
+    if(_offUpTs && Date.now() - _offUpTs < 30000){
+      console.log('[오프라인보호] 업로드 진행 중 — Firebase 수신 무시');
+      return;
+    }
     /* ★ 복원 보호: 복원 완료 후 30초간 Firebase 덮어쓰기 차단 */
     var restoreTs = parseInt(localStorage.getItem('pb_restore_pending')||'0');
     if(restoreTs && Date.now() - restoreTs < 30000){
@@ -7418,15 +7666,38 @@ function _registerSlotsOnListener(){
       var _localTs2 = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
       var _fbTs2    = parseInt(data._localTs||'0');
       var _merged   = {};
-      for(var _mk in _idOnly){ _merged[_mk] = _idOnly[_mk]; }
-      if(_localTs2 > _fbTs2 + 5000){
-        for(var _lk in _localExisting){
-          if(_localExisting[_lk] && _localExisting[_lk].car && !_merged[_lk]){
-            _merged[_lk] = _localExisting[_lk];
+      for(var _mk in _idOnly){
+          /* ★ 경우3 강화: 슬롯별 _savedAt 비교 → 더 최신인 쪽 보존 */
+          var _fbSl = _idOnly[_mk];
+          var _lcSl = _localExisting[_mk];
+          if(_fbSl && _lcSl &&
+             typeof _lcSl._savedAt !== 'undefined' &&
+             typeof _fbSl._savedAt !== 'undefined' &&
+             _lcSl._savedAt > _fbSl._savedAt){
+            _merged[_mk] = _lcSl; /* 로컬 슬롯이 더 최신 */
+          } else {
+            _merged[_mk] = _fbSl;
           }
         }
-      }
-      _saveData(_merged);
+        /* ★ FIX Case3: 전체 ts 비교로 보완 */
+        if(_localTs2 > _fbTs2 + 3000){
+          for(var _lk in _localExisting){
+            if(_localExisting[_lk] && _localExisting[_lk].car){
+              if(!_merged[_lk] || (_localExisting[_lk]._savedAt && _merged[_lk]._savedAt &&
+                 _localExisting[_lk]._savedAt > _merged[_lk]._savedAt)){
+                _merged[_lk] = _localExisting[_lk];
+              }
+            }
+          }
+          console.log('[동시저장보호] 로컬 ts > FB ts — 슬롯별 최신값 우선');
+        } else if(_localTs2 > _fbTs2){
+          for(var _lk in _localExisting){
+            if(_localExisting[_lk] && _localExisting[_lk].car && !_merged[_lk]){
+              _merged[_lk] = _localExisting[_lk];
+            }
+          }
+        }
+        _saveData(_merged);
     } else if(Object.keys(recvSlots).length > 0){
       _ensureIds();var ids2=_getIds(),dat2=_getData();
       for(var k2 in recvSlots){
@@ -7434,9 +7705,8 @@ function _registerSlotsOnListener(){
           var m2=k2.match(/^p(\d+)_(\d+)$/);if(!m2)continue;
           var id2=(ids2[parseInt(m2[1])]||[])[parseInt(m2[2])];if(id2)dat2[id2]=recvSlots[k2];
         } else {
-          var gi2=parseInt(k2);if(isNaN(gi2))continue;
-          var pl2=_gidxToPartLocal(gi2);
-          var id3=pl2?(_gidx2id(PART_OFFSETS[pl2.part-1]+pl2.local)):null;if(id3)dat2[id3]=recvSlots[k2];
+          /* ★ FIX Case2: 구버전 연속인덱스 매핑 제거 — ID 형식(S...)이 아닌 키 무시 */
+          console.warn('[구버전키 무시]', k2);
         }
       }
       _saveData(dat2);
@@ -7494,7 +7764,10 @@ function _registerSlotsOnListener(){
       var _fbRecvTs = parseInt(data._localTs||'0');
       if(_fbRecvTs > 0){
         var _curLocalTs = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
-        if(_fbRecvTs > _curLocalTs){
+        /* ★ FIX BUG-C: 오프라인 저장 보호 중이면 LS_LOCAL_TS 덮어씌우기 금지 */
+        var _offUpPend = parseInt(localStorage.getItem('pb_offline_upload_pending')||'0');
+        var _isProtected = _offUpPend && (Date.now() - _offUpPend < 60000);
+        if(_fbRecvTs > _curLocalTs && !_isProtected){
           localStorage.setItem(LS_LOCAL_TS, String(_fbRecvTs));
           console.log('[TS동기화] Firebase TS → 로컬 갱신:', _fbRecvTs);
         }
@@ -7514,6 +7787,13 @@ function _registerSlotsOnListener(){
 
 function connectFb(url,code){
   /* ★ 저장소 모드 체크 — 로컬 전용 모드이면 Firebase 연결 건너뜀 */
+  if(_getStorageMode() === 'local'){
+    console.log('[connectFb] 로컬 전용 모드 — Firebase 연결 차단');
+    _fbSyncReady = true; _fbLockShow(false);
+    setDot('off','로컬 전용 모드');
+    _applyStorageModeUI('local');
+    return;
+  }
   if(!_isFirebaseEnabled()){
     console.log('[SYNC] 로컬 전용 모드 — Firebase 연결 생략');
     _fbSyncReady = true;
@@ -7603,6 +7883,10 @@ function connectFb(url,code){
     fbRef.on('value',function(snap){handleData(snap.val());},function(err){
       setDot('off','연결 실패'); console.error('[현황판]',err);
       _fbSyncMarkReady('fb-error'); /* 연결 실패시에도 잠금 해제 */
+      /* ★ FIX: 오프라인이면 로컬 모드 자동 전환 */
+      if(!navigator.onLine && _getStorageMode()!=='local'){
+        setTimeout(function(){ _startOfflineLocalMode(); }, 500);
+      }
       /* ★ FIX: 네트워크 끊김 후 10초 뒤 자동 재연결 */
       setTimeout(function(){
         var u=localStorage.getItem(LS_URL)||'';
@@ -7804,6 +8088,8 @@ function connectFb(url,code){
       if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef && navigator.onLine === false){
         /* 이미 끊겼으면 스킵, 아직 연결 중이면 마지막 스냅샷 시도 */
       }
+      /* ★ FIX: offline 즉시 보호 플래그 설정 (Firebase SDK 잔여 콜백 차단) */
+      localStorage.setItem('pb_going_offline', String(Date.now()));
       try{
         /* 현재 로컬 데이터로 즉시 오프라인 스냅샷 저장 */
         var _offSnap = {
@@ -7817,36 +8103,130 @@ function connectFb(url,code){
         localStorage.setItem('pb_offline_snapshot', JSON.stringify(_offSnap));
         console.log('[오프라인전환] 로컬 스냅샷 저장 완료:', Object.keys(_offSnap.data).filter(function(k){return _offSnap.data[k]&&_offSnap.data[k].car;}).length+'대');
       }catch(e){ console.warn('[오프라인스냅샷]', e); }
+      /* ★ FIX: 오프라인 전환 시 팝업 표시 (Firebase 동기화 중이었을 때만) */
+      if(_fbSyncReady && _getStorageMode()!=='local'){
+        setTimeout(_showOfflinePopup, 800);
+      }
     });
     window.addEventListener('online', function(){
       var _st = document.getElementById('syncStatus');
       if(_st) _st.textContent = '⚡ 재연결 중...';
-      /* ★ FIX: 인터넷 재연결 시 미전송 데이터 즉시 동기화 */
-      setTimeout(function(){
-        /* ① 재시도 큐 즉시 처리 (오프라인 중 실패한 Firebase 요청들) */
-        if(typeof _fbRetryFlush === 'function' && _fbRetryQueue && _fbRetryQueue.length > 0){
-          console.log('[온라인복귀] 재시도 큐 즉시 처리 ('+_fbRetryQueue.length+'개)');
-          _fbRetryTimer = null;
-          _fbRetryFlush();
-        }
-        /* ② 로컬이 Firebase보다 최신이면 즉시 업로드 */
-        if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef && typeof _tsLocalIsNewer === 'function'){
-          fbSlotsRef.once('value').then(function(snap){
-            var fbData = snap.val() || {};
-            var _fbTs  = parseInt(fbData._localTs||'0');
-            if(_tsLocalIsNewer(_fbTs)){
-              var _localData = _getData();
-              var _hasLocalCar = Object.keys(_localData).some(function(k){ return _localData[k]&&_localData[k].car; });
-              if(_hasLocalCar){
-                console.log('[온라인복귀] 로컬→Firebase 동기화 실행');
-                _fbLocalFirstMerge(_localData, _getIds(), parseInt(localStorage.getItem(LS_LOCAL_TS)||'0'));
-                var _st2 = document.getElementById('syncStatus');
-                if(_st2) _st2.textContent = '📤 오프라인 데이터 업로드 중...';
-              }
+      /* ★ FIX: 온라인 복귀 시 오프라인 보호 플래그 해제 */
+      localStorage.removeItem('pb_going_offline');
+      /* ★ 팝업 닫기 */
+      _dismissOfflinePopup();
+      /* ★ 로컬 모드였으면 자동 해제 */
+      if(_getStorageMode()==='local'){
+        _exitOfflineLocalMode(); /* → _wasOfflineLocalMode=true + mode='both' */
+        showAlert('🌐 인터넷 재연결! 오프라인 데이터를 동기화합니다...');
+        setTimeout(hideAlert, 3000);
+      }
+      /* ★ FIX: 오프라인/로컬 모드 복귀 시 정확한 순서로 동기화 */
+      if(window._wasOfflineLocalMode){
+        var _savedUrl  = localStorage.getItem(LS_URL)  || _PB_DEFAULTS.url;
+        var _savedCode = localStorage.getItem(LS_CODE) || _PB_DEFAULTS.code;
+        if(_savedUrl && _savedCode){
+          /* ① 로컬 데이터 메모리에 캡처 (connectFb 전!) */
+          var _capturedData   = _getData();
+          var _capturedIds    = _getIds();
+          var _capturedConfig = (typeof _getGridConfig==='function') ? _getGridConfig() : {};
+          /* ★ FIX: Date.now() 대신 실제 마지막 로컬 저장 ts 사용 */
+          var _capturedTs     = parseInt(localStorage.getItem(LS_LOCAL_TS) || '0');
+          /* ② 보호 타임스탬프 설정 (connectFb 전! — on(value) 차단용) */
+          localStorage.setItem('pb_offline_upload_pending', String(Date.now()));
+          console.log('[온라인복귀] 로컬 데이터 캡처 완료 (localTs='+_capturedTs+'), 보호 시작');
+          /* ③ Firebase 연결 */
+          connectFb(_savedUrl, _savedCode);
+          /* ④ fbSlotsRef 준비 후 캡처된 데이터 업로드 */
+          var _upRetry = 0;
+          var _doUpload = function(){
+            if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
+              /* ★ 업로드 전 Firebase ts 비교 — 로컬이 최신일 때만 업로드 */
+              fbSlotsRef.once('value').then(function(snap){
+                var _fbData = snap.val() || {};
+                var _fbTs   = parseInt(_fbData._localTs || '0');
+                var _hasLocalCar = Object.keys(_capturedData).some(function(k){
+                  return _capturedData[k] && _capturedData[k].car;
+                });
+                /* _capturedTs=0은 로컬 저장 없음을 의미 */
+                if(_capturedTs > 0 && _capturedTs > _fbTs && _hasLocalCar){
+                  /* 로컬이 더 최신 → 업로드 */
+                  console.log('[온라인복귀] 로컬('+_capturedTs+') > Firebase('+_fbTs+') → 업로드');
+                  var _uploadTs  = Date.now(); /* 실제 업로드 시각 */
+                  var _uploadObj = Object.assign({}, _capturedData, {
+                    _ids:        _capturedIds,
+                    _gridConfig: _capturedConfig,
+                    _localTs:    _uploadTs  /* 업로드 시각으로 Firebase ts 갱신 */
+                  });
+                  var _settingsObj = _collectSettingsForUpload();
+                  fbSlotsRef.set(_uploadObj)
+                    .then(function(){
+                      if(fbSettingsRef && _settingsObj) return fbSettingsRef.update(_settingsObj);
+                    })
+                    .then(function(){
+                      localStorage.removeItem('pb_offline_upload_pending');
+                      localStorage.removeItem('pb_offline_was_local'); /* ★ FIX: 플래그 제거 */
+                      window._wasOfflineLocalMode = false;
+                      console.log('[온라인복귀] 슬롯+설정 업로드 완료');
+                      var _st2 = document.getElementById('syncStatus');
+                      if(_st2) _st2.textContent = '✅ 동기화 완료';
+                      if(typeof showAlert==='function'){
+                        showAlert('✅ 오프라인 데이터 동기화 완료!');
+                        setTimeout(hideAlert, 2500);
+                      }
+                    })
+                    .catch(function(e){
+                      localStorage.removeItem('pb_offline_upload_pending');
+                      localStorage.removeItem('pb_offline_was_local'); /* ★ FIX: 플래그 제거 */
+                      window._wasOfflineLocalMode = false;
+                      console.warn('[온라인복귀] 업로드 실패', e);
+                    });
+                } else {
+                  /* Firebase가 더 최신 또는 로컬 데이터 없음 → 업로드 생략 */
+                  console.log('[온라인복귀] Firebase('+_fbTs+') >= 로컬('+_capturedTs+') → Firebase 최신 데이터 적용');
+                  localStorage.removeItem('pb_offline_upload_pending');
+                  localStorage.removeItem('pb_offline_was_local'); /* ★ FIX: 플래그 제거 */
+                  window._wasOfflineLocalMode = false;
+                  /* on(value)가 자동으로 Firebase 최신 데이터 수신 */
+                }
+              }).catch(function(){
+                localStorage.removeItem('pb_offline_upload_pending');
+                window._wasOfflineLocalMode = false;
+              });
+            } else if(_upRetry < 15){
+              _upRetry++;
+              console.log('[온라인복귀] fbSlotsRef 대기... ('+_upRetry+'/15)');
+              setTimeout(_doUpload, 800);
+            } else {
+              localStorage.removeItem('pb_offline_upload_pending');
+              window._wasOfflineLocalMode = false;
+              console.warn('[온라인복귀] fbSlotsRef 타임아웃');
             }
-          }).catch(function(e){ console.warn('[온라인복귀] Firebase 읽기 실패', e); });
+          };
+          /* 첫 시도: 1초 후 (Firebase 연결 안정화) */
+          setTimeout(_doUpload, 1000);
         }
-      }, 1500); /* Firebase 재연결 안정화 대기 1.5초 */
+      } else {
+        /* 일반 재연결 - 재시도 큐 처리 + 로컬 최신이면 업로드 */
+        setTimeout(function(){
+          if(typeof _fbRetryFlush === 'function' && _fbRetryQueue && _fbRetryQueue.length > 0){
+            _fbRetryTimer = null; _fbRetryFlush();
+          }
+          if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef && typeof _tsLocalIsNewer === 'function'){
+            fbSlotsRef.once('value').then(function(snap){
+              var fbData   = snap.val() || {};
+              var _fbTs    = parseInt(fbData._localTs||'0');
+              var _localTs = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
+              if(_localTs > 0 && _tsLocalIsNewer(_fbTs)){
+                var _ld = _getData(), _li = _getIds();
+                if(Object.keys(_ld).some(function(k){ return _ld[k]&&_ld[k].car; })){
+                  _fbLocalFirstMerge(_ld, _li, _localTs);
+                }
+              }
+            }).catch(function(e){ console.warn('[온라인복귀] 읽기 실패', e); });
+          }
+        }, 1500);
+      }
     });
     /* ★ Firebase pb_slots에 _gridConfig 보장 */
     setTimeout(_ensureGridConfigInFirebase, 2000);
@@ -8566,8 +8946,14 @@ function showLocalBackupList(){
           }
 
           /* ── 공유코드 일치 → 즉시 복원 ── */
-          if(!confirm('이 로컬 백업으로 복원하시겠습니까?\n📡 공유코드: ' + curCode + '\n(현재 데이터가 교체됩니다)')) return;
-          _doLocalRestore(data, curUrl, curCode);
+          /* ★ FIX: confirm() → miniConfirm */
+          _miniConfirmType='local_backup_restore';
+          _miniConfirmPayload={data:data, url:curUrl, code:curCode};
+          document.getElementById('miniConfirmIcon').textContent='📱';
+          document.getElementById('miniConfirmMsg').textContent='이 로컬 백업으로 복원하시겠습니까?\n📡 공유코드: '+curCode+'\n(현재 데이터가 교체됩니다)';
+          var _lrb=document.getElementById('miniConfirmOkBtn');
+          _lrb.className='mini-confirm-ok sale'; _lrb.textContent='복원하기';
+          document.getElementById('miniConfirmOv').classList.add('show');
         }catch(e){ alert('복원 실패: '+e.message); }
       });
     })(k);
@@ -8627,8 +9013,14 @@ function _showLocalMismatchPopup(data, backupUrl, backupCode, curUrl, curCode){
   btn1.innerHTML = '① 현재 연결 유지 ('+curCode+')로 복원<br><span style="font-size:11px;font-weight:400;">주차 데이터만 복원, Firebase 연결 유지</span>';
   btn1.addEventListener('click', function(){
     ov.style.display = 'none';
-    if(!confirm('현재 연결('+curCode+')을 유지하고 주차 데이터만 복원합니다.\n계속하시겠습니까?')) return;
-    _doLocalRestore(data, curUrl, curCode);
+    /* ★ FIX: confirm() → miniConfirm */
+    _miniConfirmType='local_backup_restore';
+    _miniConfirmPayload={data:data, url:curUrl, code:curCode};
+    document.getElementById('miniConfirmIcon').textContent='📱';
+    document.getElementById('miniConfirmMsg').textContent='현재 연결('+curCode+')을 유지하고 주차 데이터만 복원합니다.\n계속하시겠습니까?';
+    var _lrb2=document.getElementById('miniConfirmOkBtn');
+    _lrb2.className='mini-confirm-ok sale'; _lrb2.textContent='복원하기';
+    document.getElementById('miniConfirmOv').classList.add('show');
   });
   box.appendChild(btn1);
 
@@ -8638,8 +9030,14 @@ function _showLocalMismatchPopup(data, backupUrl, backupCode, curUrl, curCode){
   btn2.innerHTML = '② 백업 연결 ('+backupCode+')로 전환 후 복원<br><span style="font-size:11px;font-weight:400;">Firebase URL/코드까지 백업값으로 변경</span>';
   btn2.addEventListener('click', function(){
     ov.style.display = 'none';
-    if(!confirm('백업 연결('+backupCode+')로 전환 후 전체 복원합니다.\nFirebase 연결이 변경됩니다. 계속하시겠습니까?')) return;
-    _doLocalRestore(data, backupUrl, backupCode, true); /* URL/코드 포함 복원 */
+    /* ★ FIX: confirm() → miniConfirm */
+    _miniConfirmType='local_backup_restore';
+    _miniConfirmPayload={data:data, url:backupUrl, code:backupCode, includeCredentials:true};
+    document.getElementById('miniConfirmIcon').textContent='🔄';
+    document.getElementById('miniConfirmMsg').textContent='백업 연결('+backupCode+')로 전환 후 전체 복원합니다.\nFirebase 연결이 변경됩니다. 계속하시겠습니까?';
+    var _lrb3=document.getElementById('miniConfirmOkBtn');
+    _lrb3.className='mini-confirm-ok sale'; _lrb3.textContent='전환 후 복원';
+    document.getElementById('miniConfirmOv').classList.add('show'); /* URL/코드 포함 복원 */
   });
   box.appendChild(btn2);
 
@@ -8655,7 +9053,32 @@ function _showLocalMismatchPopup(data, backupUrl, backupCode, curUrl, curCode){
 
 /* ★ 실제 로컬 복원 실행 */
 function _doLocalRestore(data, useUrl, useCode, includeCredentials){
+  /* ★ FIX: _autoBackupTick 형식(중첩 객체) → localStorage 키:값 형식 변환
+     _autoBackupTick: { ts, date, slot, code, data:{슬롯}, ids:{IDs}, gridConfig }
+     _doBackup(Firebase): { 'pb_slot_data':'...', 'pb_slot_ids':'...', ... } */
+  if(data && data.data && data.ids && !data['pb_slot_data']){
+    /* _autoBackupTick 형식 → 변환 */
+    var _converted = {};
+    _converted[LS_SLOT_DATA] = JSON.stringify(data.data);
+    _converted[LS_SLOT_IDS]  = JSON.stringify(data.ids);
+    if(data.gridConfig){
+      try{
+        var gc = data.gridConfig;
+        if(gc.numParts)    _converted['pb_num_parts']  = String(gc.numParts);
+        if(gc.colsPerPart) _converted['pb_cols_part']  = String(gc.colsPerPart);
+        if(gc.rowsPerPart) _converted['pb_rows_part']  = String(gc.rowsPerPart);
+        if(gc.partColCounts){ for(var _p in gc.partColCounts) _converted['pb_pcols_'+_p]=String(gc.partColCounts[_p]); }
+        if(gc.partRowCounts){ for(var _r in gc.partRowCounts) _converted['pb_prows_'+_r]=String(gc.partRowCounts[_r]); }
+      }catch(e){}
+    }
+    if(data.code) _converted['pb_code'] = data.code;
+    data = _converted;
+    console.log('[로컬복원] _autoBackupTick 형식 변환 완료');
+  }
+
   /* 1. 기존 pb_ 삭제 */
+  /* ★ FIX: 복원 전 현재 저장방식 모드 보존 */
+  var _savedStorageMode = localStorage.getItem(LS_STORAGE_MODE) || 'both';
   for(var i=localStorage.length-1; i>=0; i--){
     var dk = localStorage.key(i);
     if(dk && dk.startsWith('pb_') &&
@@ -8665,6 +9088,10 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
       localStorage.removeItem(dk);
     }
   }
+  /* ★ FIX: 복원 후 저장방식 모드 복원 (로컬/Firebase 유지) */
+  localStorage.setItem(LS_STORAGE_MODE, _savedStorageMode);
+  /* ★ FIX: 오프라인 업로드 보호 플래그 정리 */
+  localStorage.removeItem('pb_offline_upload_pending');
 
   /* 2. 백업 데이터 쓰기 */
   var count = 0;
@@ -8717,7 +9144,13 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
     var cInp = document.getElementById('syncCodeInput');
     if(uInp) uInp.value = useUrl;
     if(cInp) cInp.value = useCode;
-    connectFb(useUrl, useCode);
+    /* ★ FIX: 로컬 전용 모드이면 Firebase 재연결 생략 */
+    if(_getStorageMode() !== 'local'){
+      connectFb(useUrl, useCode);
+    } else {
+      _fbSyncReady = true; _fbLockShow(false);
+      setDot('off','로컬 전용 모드');
+    }
   };
 
   if(restoredData && Object.keys(restoredData).length > 0 &&
@@ -9069,8 +9502,7 @@ function restoreFbBackup(dateKey, _db, _code){
   restoreFbBackup_execute(dateKey, _db, _code, label);
 }
 function restoreFbBackup_execute(dateKey, _db, _code, label){
-
-  /* ★ FIX BUG1: confirm() 대신 앱 내 miniConfirm 사용 (모바일 차단 방지) */
+  /* ★ FIX: miniConfirm 표시 후 반드시 return (확인 후 _restoreFbCore 실행) */
   _miniConfirmType='restore_fb';
   _miniConfirmPayload={dateKey:dateKey, _db:_db, _code:_code, label:label};
   document.getElementById('miniConfirmIcon').textContent='📅';
@@ -9078,6 +9510,10 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
   var _rb=document.getElementById('miniConfirmOkBtn');
   _rb.className='mini-confirm-ok sale'; _rb.textContent='복원하기';
   document.getElementById('miniConfirmOv').classList.add('show');
+  /* ★ 반드시 return — 복원은 miniConfirmOk에서 _restoreFbCore() 호출 */
+  return;
+}
+function _restoreFbCore(dateKey, _db, _code, label){
   _b2msg('⏳ Firebase 백업 복원 중... ('+label+')','#7C3AED','#F5F3FF','#C4B5FD');
 
   var useDb   = _db   || fbDb;
@@ -9295,6 +9731,33 @@ function _initPcScrollLimiter2(){
     <div class="storage-init-remember">※ 선택 후 언제든 설정바에서 변경 가능합니다</div>
   </div>
 </div>
+<!-- ★ 오프라인 로컬모드 팝업 -->
+<div id="offlinePopupOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#1A0A00;border:3px solid #EF4444;border-radius:20px;padding:22px 18px 18px;width:min(340px,95vw);box-shadow:0 16px 50px rgba(0,0,0,.7);display:flex;flex-direction:column;gap:14px;">
+    <div style="text-align:center;font-size:36px;">📵</div>
+    <div style="font-size:18px;font-weight:900;color:#FEE500;text-align:center;">인터넷 연결 끊김</div>
+    <div style="font-size:13px;color:#FFD580;text-align:center;line-height:1.6;">
+      Firebase 동기화가 중단됩니다.<br>
+      <b style="color:#FEE500;">로컬 사용 모드</b>로 전환하면<br>
+      인터넷 없이도 계속 사용할 수 있습니다.<br>
+      <span style="font-size:11px;color:#aaa;">재연결 시 자동으로 동기화됩니다.</span>
+    </div>
+    <button onclick="_startOfflineLocalMode()" style="background:#EF4444;color:#fff;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:900;cursor:pointer;">📴 로컬 사용 모드로 전환</button>
+    <button onclick="_dismissOfflinePopup()" style="background:#333;color:#ccc;border:none;border-radius:12px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;">닫기 (동기화 오류 무시)</button>
+  </div>
+</div>
+<style>
+#offlinePopupOv{display:none;}
+#offlinePopupOv.show{display:flex!important;}
+.offline-mode-banner{
+  position:fixed;bottom:0;left:0;right:0;
+  background:#EF4444;color:#fff;
+  text-align:center;font-size:13px;font-weight:900;
+  padding:8px 16px;z-index:9998;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+}
+</style>
+
 <!-- ★ 파트 선택 삭제 팝업 -->
 <div id="partSelectDeleteOv" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9991;align-items:center;justify-content:center;padding:16px;display:none;">
   <div style="background:#fff;border-radius:18px;padding:20px 16px 16px;width:min(340px,96vw);box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:12px;max-height:80vh;overflow-y:auto;">
