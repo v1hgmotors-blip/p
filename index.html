@@ -7583,6 +7583,8 @@ function _collectSettingsForUpload(){
 function pushSettings(obj){
   if(_getStorageMode()==='local'){ console.log('[로컬모드] pushSettings 스킵'); return; }
   if(fbSettingsRef){
+    /* ★ 5번: 설정 병합용 _savedAt 자동 기록 */
+    if(!obj._savedAt) obj._savedAt = _tsNow ? _tsNow() : Date.now();
     fbSettingsRef.update(obj).catch(function(e){console.warn('[설정FB저장]',e);});
   }
 }
@@ -8488,91 +8490,138 @@ function connectFb(url,code){
                   return;
                 }
 
-                /* ★★ 핵심: 양쪽 모두 데이터 있음 → 사용자 선택 팝업 표시 */
-                _showOfflineReconnectPopup(
-                  _capturedData, _capturedIds, _capturedConfig, _capturedTs,
-                  _fbData, _fbTs,
-                  /* 로컬(이 기기) 선택 시 */
-                  function(){
-                    var _uploadTs = Date.now();
+                /* ★★ 핵심: 양쪽 모두 데이터 있음 → Firebase 설정 읽기 후 팝업 표시 */
+                var _showMergePopup = function(_fbSettingsSnap){
+                /* ★ 4번: _mergeBySlot — 슬롯별 _savedAt 병합
+                   ★ 5번: 설정 _savedAt 병합 (파트라벨·열이름·헤더멘트 등)
+                   base 구조 기준으로 슬롯별 최신 데이터 선택 후 설정도 병합 */
+                function _normalizeConfig(cfg){
+                  if(!cfg) return _getGridConfig();
+                  if(Array.isArray(cfg.partColCounts)){
+                    var _pc={}, _pr={};
+                    (cfg.partColCounts||[]).forEach(function(v,i){ _pc[String(i+1)]=v; });
+                    (cfg.partRowCounts||[]).forEach(function(v,i){ _pr[String(i+1)]=v; });
+                    return { numParts:cfg.numParts||NUM_PARTS, colsPerPart:COLS_PER_PART, rowsPerPart:ROWS_PER_PART, partColCounts:_pc, partRowCounts:_pr };
+                  }
+                  if(!cfg.partColCounts) return _getGridConfig();
+                  return cfg;
+                }
 
-                    /* ★ _capturedConfig 구조 정규화
-                       _getGridConfig() 형태면 그대로, 스냅샷(배열) 형태면 객체로 변환 */
-                    var _finalCfg = _capturedConfig;
-                    if(_capturedConfig && Array.isArray(_capturedConfig.partColCounts)){
-                      /* 스냅샷 배열 → 객체 변환 */
-                      var _pCols2={}, _pRows2={};
-                      (_capturedConfig.partColCounts||[]).forEach(function(v,i){ _pCols2[String(i+1)]=v; });
-                      (_capturedConfig.partRowCounts||[]).forEach(function(v,i){ _pRows2[String(i+1)]=v; });
-                      _finalCfg = {
-                        numParts:      _capturedConfig.numParts || NUM_PARTS,
-                        colsPerPart:   COLS_PER_PART,
-                        rowsPerPart:   ROWS_PER_PART,
-                        partColCounts: _pCols2,
-                        partRowCounts: _pRows2
-                      };
-                    } else if(!_capturedConfig || !_capturedConfig.partColCounts){
-                      /* config 없으면 현재 로컬 상태 사용 */
-                      _finalCfg = _getGridConfig();
+                function _mergeBySlot(baseData, baseIds, baseCfg, otherData, otherIds, label, fbSetsSnap, localSetsObj){
+                  var _uploadTs = Date.now();
+                  var _finalCfg = _normalizeConfig(baseCfg);
+
+                  /* ① 슬롯별 병합: _savedAt 기준으로 더 최신 슬롯 선택 */
+                  var _merged = Object.assign({}, baseData);
+                  var _mergedCount = 0;
+                  Object.keys(baseIds).forEach(function(p){
+                    (baseIds[p]||[]).forEach(function(id){
+                      if(!id) return;
+                      var bSat = (baseData[id]  && baseData[id]._savedAt)  || 0;
+                      var oSat = (otherData[id] && otherData[id]._savedAt) || 0;
+                      if(oSat > bSat){ _merged[id]=otherData[id]; _mergedCount++; }
+                    });
+                  });
+                  /* base에 없는 other 슬롯 추가 */
+                  if(otherIds && typeof otherIds==='object'){
+                    Object.keys(otherIds).forEach(function(p){
+                      (otherIds[p]||[]).forEach(function(id){
+                        if(!id||_merged[id]) return;
+                        if(otherData[id]&&otherData[id].car){ _merged[id]=otherData[id]; _mergedCount++; }
+                      });
+                    });
+                  }
+                  console.log('[병합] '+label+' 기준, '+_mergedCount+'개 슬롯 업데이트');
+
+                  /* ② 설정 병합: Firebase vs 로컬 _savedAt 비교 (5번) */
+                  var _fbSets  = fbSetsSnap  || {};
+                  var _lcSets  = localSetsObj || {};
+                  var _fbSetTs = parseInt(_fbSets._savedAt  || '0');
+                  var _lcSetTs = parseInt(_lcSets._savedAt  || '0');
+                  var _finalSettings = (_fbSetTs > _lcSetTs) ? _fbSets : _lcSets;
+                  console.log('[병합] 설정: '+(_fbSetTs>_lcSetTs?'Firebase':'로컬')+' 최신');
+                  if(_finalSettings && Object.keys(_finalSettings).length > 0){
+                    applyRemoteSettings(_finalSettings);
+                  }
+                  if(fbSettingsRef && _finalSettings){
+                    _finalSettings._savedAt = _uploadTs;
+                    fbSettingsRef.update(_finalSettings).catch(function(e){ console.warn('[병합] 설정 업로드 실패',e); });
+                  }
+
+                  /* ③ onValue 역주행 차단 */
+                  _structLockActive = true;
+                  _localColEditTs   = _uploadTs;
+                  localStorage.setItem('pb_grid_cfg_ts', String(_uploadTs));
+                  localStorage.setItem('pb_offline_upload_pending', String(_uploadTs));
+
+                  /* ④ 로컬 즉시 반영 */
+                  _saveData(_merged);
+                  _saveIds(baseIds);
+                  localStorage.setItem(LS_LOCAL_TS, String(_uploadTs));
+
+                  /* ⑤ gridConfig → 그리드 재빌드 */
+                  try{
+                    var _pc=_finalCfg.partColCounts||{}, _pr=_finalCfg.partRowCounts||{};
+                    var _np=parseInt(_finalCfg.numParts)||NUM_PARTS;
+                    if(_np!==NUM_PARTS) _applyPartCount(_np);
+                    for(var _pi=1;_pi<=NUM_PARTS;_pi++){
+                      if(_pc[String(_pi)]!==undefined) PART_COL_COUNTS[_pi-1]=parseInt(_pc[String(_pi)])||COLS_PER_PART;
+                      if(_pr[String(_pi)]!==undefined) PART_ROW_COUNTS[_pi-1]=parseInt(_pr[String(_pi)])||ROWS_PER_PART;
                     }
+                    _recalcPartArrays();
+                    _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
+                    _updateGridCtrlDisp(); updateCarCountBadge();
+                  }catch(e){ console.warn('[병합] gridConfig 오류',e); }
 
-                    var _uploadObj = Object.assign({}, _capturedData, {
-                      _ids:        _capturedIds,
-                      _gridConfig: _finalCfg,
-                      _localTs:    _uploadTs
-                    });
-
-                    /* ★ onValue 역주행 차단: 업로드 완료까지 gridConfig 적용 금지 */
-                    _structLockActive = true;
-                    _localColEditTs   = _uploadTs;
-                    localStorage.setItem('pb_grid_cfg_ts', String(_uploadTs));
-
-                    /* ★ 로컬 즉시 반영 */
-                    _saveData(_capturedData);
-                    _saveIds(_capturedIds);
-                    localStorage.setItem(LS_LOCAL_TS, String(_uploadTs));
-
-                    /* ★ gridConfig → PART_COL_COUNTS/PART_ROW_COUNTS 반영 후 그리드 재빌드 */
-                    try{
-                      var _pc = _finalCfg.partColCounts || {};
-                      var _pr = _finalCfg.partRowCounts || {};
-                      var _np = parseInt(_finalCfg.numParts)||NUM_PARTS;
-                      if(_np !== NUM_PARTS) _applyPartCount(_np);
-                      for(var _pi=1;_pi<=NUM_PARTS;_pi++){
-                        if(_pc[String(_pi)]!==undefined) PART_COL_COUNTS[_pi-1]=parseInt(_pc[String(_pi)])||COLS_PER_PART;
-                        if(_pr[String(_pi)]!==undefined) PART_ROW_COUNTS[_pi-1]=parseInt(_pr[String(_pi)])||ROWS_PER_PART;
-                      }
-                      _recalcPartArrays();
-                      _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
-                      _updateGridCtrlDisp(); updateCarCountBadge();
-                    }catch(e){ console.warn('[로컬적용] gridConfig 오류',e); }
-
-                    /* ★ Firebase 업로드 */
-                    fbSlotsRef.set(_uploadObj).then(function(){
-                      if(fbSettingsRef){ fbSettingsRef.update(_collectSettingsForUpload()).catch(function(){}); }
-                      localStorage.removeItem('pb_offline_upload_pending');
-                      localStorage.removeItem('pb_offline_was_local');
-                      localStorage.removeItem('pb_offline_snapshot');
-                      window._wasOfflineLocalMode = false;
-                      setTimeout(function(){ _structLockActive = false; }, 3000);
-                      showAlert('✅ 이 기기 데이터로 동기화 완료!'); setTimeout(hideAlert,2500);
-                    }).catch(function(e){
-                      localStorage.removeItem('pb_offline_upload_pending');
-                      window._wasOfflineLocalMode = false;
-                      _structLockActive = false;
-                      console.warn('[온라인복귀] 로컬업로드 실패', e);
-                    });
-                  },
-                  /* Firebase 선택 시 */
-                  function(){
+                  /* ⑥ Firebase 슬롯 업로드 */
+                  var _uploadObj = Object.assign({}, _merged, {
+                    _ids: baseIds, _gridConfig: _finalCfg, _localTs: _uploadTs
+                  });
+                  fbSlotsRef.set(_uploadObj).then(function(){
                     localStorage.removeItem('pb_offline_upload_pending');
                     localStorage.removeItem('pb_offline_was_local');
                     localStorage.removeItem('pb_offline_snapshot');
                     window._wasOfflineLocalMode = false;
-                    /* onValue가 자동으로 Firebase 데이터 수신·적용 */
-                    showAlert('✅ Firebase 데이터 적용 중...'); setTimeout(hideAlert,2500);
+                    setTimeout(function(){ _structLockActive=false; }, 3000);
+                    showAlert('✅ 병합 동기화 완료! ('+label+' 구조 기준)');
+                    setTimeout(hideAlert, 2500);
+                  }).catch(function(e){
+                    localStorage.removeItem('pb_offline_upload_pending');
+                    window._wasOfflineLocalMode = false;
+                    _structLockActive = false;
+                    console.warn('[병합] 업로드 실패', e);
+                  });
+                }
+
+                /* 로컬 설정 수집 */
+                var _localSettings = _collectSettingsForUpload();
+                _localSettings._savedAt = _capturedTs;
+                var _fbIdsObj = (_fbData._ids && typeof _fbData._ids==='object') ? _fbData._ids : {};
+
+                _showOfflineReconnectPopup(
+                  _capturedData, _capturedIds, _capturedConfig, _capturedTs,
+                  _fbData, _fbTs,
+                  /* 이 기기 선택: 이 기기 구조 기준 병합 */
+                  function(){
+                    _mergeBySlot(_capturedData, _capturedIds, _capturedConfig,
+                      _fbData, _fbIdsObj, '이 기기', _fbSettingsSnap, _localSettings);
+                  },
+                  /* Firebase 선택: Firebase 구조 기준 병합 */
+                  function(){
+                    _mergeBySlot(_fbData, _fbIdsObj, _fbData._gridConfig||null,
+                      _capturedData, _capturedIds, 'Firebase', _fbSettingsSnap, _localSettings);
                   }
                 );
+                }; /* _showMergePopup end */
+
+                /* Firebase 설정 읽기 후 팝업 표시 */
+                if(fbSettingsRef){
+                  fbSettingsRef.once('value').then(function(snap){
+                    _showMergePopup(snap.val() || {});
+                  }).catch(function(){ _showMergePopup({}); });
+                } else {
+                  _showMergePopup({});
+                }
               }).catch(function(){
                 localStorage.removeItem('pb_offline_upload_pending');
                 window._wasOfflineLocalMode = false;
@@ -10194,7 +10243,7 @@ function _initPcScrollLimiter2(){
     </div>
 
     <div style="font-size:11px;color:#FCA5A5;background:rgba(220,38,38,.15);border-radius:8px;padding:8px 10px;text-align:center;line-height:1.6;">
-      ⚠️ 선택하지 않은 데이터는 덮어씌워집니다
+      ℹ️ 선택한 쪽의 <b>구조(파트/열/행)</b>를 기준으로<br>슬롯별 최신 데이터를 자동 병합합니다
     </div>
 
     <div style="display:flex;gap:8px;">
