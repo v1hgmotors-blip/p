@@ -132,7 +132,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   50%    {background:#FFE600;box-shadow:0 0 0 7px rgba(255,200,0,.55),0 6px 24px rgba(255,200,0,.6);}
 }
 @keyframes blinkSearchCar{
-  0%,100%{font-size:var(--slot-car-fs,13px);color:#1A0A00;}
+  0%,100%{font-size:var(--slot-car-fs-user, var(--slot-car-fs,13px));color:#1A0A00;}
   50%    {font-size:min(60px, 18vw);color:#7A5500;}
 }
 @keyframes blinkSearchNum{
@@ -349,7 +349,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .slot-num{min-width:var(--slot-num-sz,22px);width:auto;height:var(--slot-num-sz,22px);border-radius:999px;background:#2DB400;color:#fff;font-size:var(--slot-num-fs,13px);font-weight:900;display:flex;align-items:center;justify-content:center;position:absolute;top:-6px;left:50%;transform:translateX(-50%);border:2.5px solid rgba(255,255,255,.95);box-shadow:0 2px 6px rgba(0,0,0,.45);transition:background .2s,color .2s;z-index:10;letter-spacing:-0.3px;padding:0 4px;white-space:nowrap;overflow:visible;}
 
 /* ★ 차량번호 위2/아래2 표시 */
-.slot-car{font-size:var(--slot-car-fs,13px);font-weight:900;color:#1A0A00;text-align:center;line-height:1.1;padding:0 2px;margin-top:calc(var(--slot-num-sz,22px) + 2px);width:100%;white-space:nowrap;overflow:hidden;letter-spacing:.3px;flex-shrink:0;}
+.slot-car{font-size:var(--slot-car-fs-user, var(--slot-car-fs,13px));font-weight:900;color:#1A0A00;text-align:center;line-height:1.1;padding:0 2px;margin-top:calc(var(--slot-num-sz,22px) + 2px);width:100%;white-space:nowrap;overflow:hidden;letter-spacing:.3px;flex-shrink:0;}
 .slot-car .car-d1{font-size:inherit;font-weight:inherit;color:inherit;display:inline;white-space:nowrap;}
 .slot-car .car-d2{font-size:0.75em; opacity:0.8; display:inline; margin-left:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .car-four-grid{display:none; flex-direction:column; align-items:center; line-height:1; margin-bottom:0px;}
@@ -392,7 +392,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     margin-top: calc(var(--slot-num-sz,22px) * 0.76);
     padding:0; font-weight:900; color:#000;
     text-shadow:0 1px 3px rgba(0,0,0,0.25);
-    font-size:var(--slot-car-fs,13px); white-space:normal;
+    font-size:var(--slot-car-fs-user, var(--slot-car-fs,13px)); white-space:normal;
     letter-spacing:-.3px; line-height:1.05;
     -webkit-text-stroke: 0.3px #000;
   }
@@ -438,10 +438,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .slot.occupied .slot-num{background:#D09000;color:#fff;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,.4);}
 
 /* 사용안함 */
-.slot.disabled{background:#F5F5F5!important;border-color:#D0D0D0!important;box-shadow:none!important;}
-.slot.disabled .slot-num{background:#C0C0C0!important;color:#888!important;}
-.slot-x{font-size:18px;font-weight:900;color:#C0C0C0;margin-top:30px;line-height:1;}
-.slot-x-label{font-size:8px;color:#AAAAAA;font-weight:700;margin-top:2px;}
+.slot.disabled{background:#1A1A1A!important;border-color:#000000!important;box-shadow:none!important;}
+.slot.disabled .slot-num{background:#333333!important;color:#888888!important;}
+.slot-x{font-size:18px;font-weight:900;color:#FFFFFF;margin-top:30px;line-height:1;}
+.slot-x-label{font-size:8px;color:#FFFFFF;font-weight:700;margin-top:2px;}
 
 /* 키불출 깜박 */
 /* ══ 엔카 사진 예약 ══ */
@@ -785,6 +785,27 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .m-memo-fs-btn{width:28px;height:28px;border-radius:7px;border:2px solid var(--border);background:#FFF8CC;color:var(--kakao-deep);font-size:16px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;touch-action:manipulation;transition:background .1s;}
 .m-memo-fs-btn:active{background:var(--kakao);}
 .m-memo-fs-val{font-size:12px;font-weight:800;color:var(--text-sub);min-width:28px;text-align:center;}
+
+/* ★ PC 전용: 차량번호 크기 슬라이더 */
+.m-car-fs-ctrl{display:none;}
+@media(min-width:601px){
+  .m-car-fs-ctrl{
+    display:flex;align-items:center;gap:7px;
+    background:#F0F9FF;border:1.5px solid #BAE6FD;border-radius:10px;
+    padding:7px 11px;margin-bottom:6px;
+  }
+  .m-car-fs-label{font-size:11px;font-weight:800;color:#0369A1;white-space:nowrap;flex-shrink:0;}
+  .m-car-fs-slider{
+    flex:1;-webkit-appearance:none;appearance:none;height:5px;
+    border-radius:4px;background:#BAE6FD;outline:none;cursor:pointer;
+    accent-color:#0369A1;
+  }
+  .m-car-fs-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#0369A1;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);}
+  .m-car-fs-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#0369A1;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);}
+  .m-car-fs-val{font-size:12px;font-weight:900;color:#0369A1;min-width:30px;text-align:right;flex-shrink:0;}
+  .m-car-fs-reset{background:none;border:1.5px solid #BAE6FD;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:800;color:#0369A1;cursor:pointer;font-family:inherit;flex-shrink:0;white-space:nowrap;}
+  .m-car-fs-reset:active{background:#E0F2FE;}
+}
 .m-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:7px;}
 .mbtn{border:none;border-radius:12px;padding:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;transition:transform .1s;touch-action:manipulation;}
 .mbtn:active{transform:scale(.95);}
@@ -1015,6 +1036,8 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .slot.drag-src   { opacity:0.35; transform:scale(0.95); transition:opacity .15s,transform .15s; }
 .slot.drag-over  { outline:3px solid #10B981; outline-offset:2px;
                    background:#D1FAE5 !important; transform:scale(1.04); transition:transform .1s; }
+/* ★ 드래그 중 touch-action 전환: body 클래스 1회 토글 → 모든 슬롯 적용 (루프 reflow 제거) */
+body.dragging-slot .slot { touch-action: none; }
 #dragGhost {
   pointer-events: none; /* ★ ghost가 터치/클릭 이벤트 받지 않도록 */
   position:fixed; pointer-events:none; z-index:9999;
@@ -1548,7 +1571,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   <div class="legend-item"><div class="ld" style="background:#AAFFAA;border:2px solid #2DB400;"></div>🔑 키 불출 중</div>
   <div class="legend-item"><div class="ld" style="background:var(--contract-bg);border:2px solid var(--contract-bd);"></div>계약중</div>
   <div class="legend-item"><div class="ld" style="background:var(--product-bg);border:2px solid var(--product-bd);"></div>상품화중</div>
-  <div class="legend-item"><div class="ld" style="background:#F5F5F5;border:2px solid #D0D0D0;"></div>사용안함</div>
+  <div class="legend-item"><div class="ld" style="background:#1A1A1A;border:2px solid #000000;"></div>사용안함</div>
 </div>
 
 <!-- ★ 엔카사진 예약 모달 -->
@@ -1637,6 +1660,16 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
         <input id="mCarInput" type="text" placeholder="예) 1234 또는 가나1234"
                maxlength="20" placeholder="차량번호 뒤 네자리 입력해주세요!" onkeydown="if(event.key==='Enter')saveSlot()" />
       </div>
+    </div>
+
+    <!-- ★ PC 전용: 차량번호 크기 슬라이더 -->
+    <div class="m-car-fs-ctrl" id="mCarFsCtrl">
+      <span class="m-car-fs-label">🔡 차량번호 크기</span>
+      <input type="range" class="m-car-fs-slider" id="mCarFsSlider"
+             min="8" max="28" step="1" value="13"
+             oninput="onCarFsSlider(this.value)" />
+      <span class="m-car-fs-val" id="mCarFsVal">13px</span>
+      <button class="m-car-fs-reset" onclick="resetCarFs()">자동</button>
     </div>
 
 
@@ -2359,6 +2392,7 @@ function initSettingsBarState(){
 }
 /* ★ 기본 설정값 (최초 실행 시 자동 적용) */
 var LS_MEMO_FS='pb_memo_fs';
+var LS_CAR_FS='pb_car_fs'; /* ★ PC 차량번호 크기 사용자 설정 */
 
 /* ════════════════════════════════════════
    차주 입력 패널 (Firebase 동기화 포함)
@@ -3506,6 +3540,21 @@ function fitLayout(){
   setTimeout(_setPcScrollPadding, 80);
 
   if(typeof baseSlotH !== 'undefined') root2.style.setProperty('--slot-h', baseSlotH + 'px');
+
+  /* ★ fitLayout 계산 완료 후 사용자 차량번호 크기 재적용 (덮어쓰기 방지) */
+  if(typeof _CAR_FS_AUTO !== 'undefined'){
+    if(_CAR_FS_AUTO){
+      document.documentElement.style.removeProperty('--slot-car-fs-user');
+    } else {
+      var _savedCFs = localStorage.getItem(LS_CAR_FS);
+      if(_savedCFs && _savedCFs !== 'auto'){
+        var _v = Math.min(Math.max(parseInt(_savedCFs)||13, 8), 28);
+        document.documentElement.style.setProperty('--slot-car-fs-user', _v+'px');
+      }
+    }
+    /* 슬라이더 동기화 (자동 모드일 때 현재 계산값 반영) */
+    setTimeout(_syncCarFsSlider, 30);
+  }
 }
 
 
@@ -3592,7 +3641,7 @@ function hideTooltip(){
 /* ── 메모 글씨크기 조절 ── */
 function loadMemoFs(){
   var v=parseInt(localStorage.getItem(LS_MEMO_FS))||18;
-  v=Math.min(Math.max(v,12),32);
+  v=Math.min(Math.max(v,8),32);
   document.documentElement.style.setProperty('--memo-input-fs',v+'px');
   /* ★ PC: 슬롯 메모 표시 크기에도 반영 (모바일은 CSS에서 자동계산값 우선) */
   document.documentElement.style.setProperty('--slot-memo-fs-user',v+'px');
@@ -3601,13 +3650,82 @@ function loadMemoFs(){
 }
 function changeMemoFs(delta){
   var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||18;
-  var next=Math.min(Math.max(cur+delta,12),32);
+  var next=Math.min(Math.max(cur+delta,8),32);
   localStorage.setItem(LS_MEMO_FS, next);
   document.documentElement.style.setProperty('--memo-input-fs',next+'px');
   /* ★ PC: 슬롯 메모 표시 크기 즉시 반영 */
   document.documentElement.style.setProperty('--slot-memo-fs-user',next+'px');
   var el=document.getElementById('memoFsVal');
   if(el) el.textContent=next;
+}
+
+/* ══ PC 차량번호 크기 슬라이더 ══ */
+var _CAR_FS_AUTO = false; /* true = 자동(fitLayout 값 사용) */
+
+function loadCarFs(){
+  if(window.innerWidth < 601) return;
+  var saved = localStorage.getItem(LS_CAR_FS);
+  if(saved === null || saved === 'auto'){
+    _CAR_FS_AUTO = true;
+    _applyCarFsAuto();
+  } else {
+    _CAR_FS_AUTO = false;
+    var v = Math.min(Math.max(parseInt(saved)||13, 8), 28);
+    _applyCarFsValue(v);
+  }
+  _syncCarFsSlider();
+}
+
+function _applyCarFsValue(v){
+  document.documentElement.style.setProperty('--slot-car-fs-user', v+'px');
+}
+function _applyCarFsAuto(){
+  document.documentElement.style.removeProperty('--slot-car-fs-user');
+}
+
+function _syncCarFsSlider(){
+  var slider = document.getElementById('mCarFsSlider');
+  var valEl  = document.getElementById('mCarFsVal');
+  if(!slider) return;
+  if(_CAR_FS_AUTO){
+    /* 자동 모드: 슬라이더를 현재 fitLayout 계산값으로 표시 */
+    var computed = _getComputedCarFs();
+    slider.value = computed;
+    if(valEl) valEl.textContent = '자동(' + computed + 'px)';
+    slider.style.opacity = '0.55';
+  } else {
+    var v = Math.min(Math.max(parseInt(localStorage.getItem(LS_CAR_FS))||13, 8), 28);
+    slider.value = v;
+    if(valEl) valEl.textContent = v + 'px';
+    slider.style.opacity = '1';
+  }
+}
+
+function _getComputedCarFs(){
+  /* getComputedStyle로 실제 적용된 --slot-car-fs 읽기 */
+  var pg = document.getElementById('parkingGrid1');
+  var src = pg || document.documentElement;
+  var raw = getComputedStyle(src).getPropertyValue('--slot-car-fs').trim();
+  var n = parseInt(raw);
+  return (n && n > 0) ? n : 13;
+}
+
+function onCarFsSlider(val){
+  _CAR_FS_AUTO = false;
+  var v = Math.min(Math.max(parseInt(val)||13, 8), 28);
+  localStorage.setItem(LS_CAR_FS, v);
+  _applyCarFsValue(v);
+  var valEl = document.getElementById('mCarFsVal');
+  if(valEl) valEl.textContent = v + 'px';
+  var slider = document.getElementById('mCarFsSlider');
+  if(slider) slider.style.opacity = '1';
+}
+
+function resetCarFs(){
+  _CAR_FS_AUTO = true;
+  localStorage.setItem(LS_CAR_FS, 'auto');
+  _applyCarFsAuto();
+  _syncCarFsSlider();
 }
 
 /* ── PART 라벨 편집 ── */
@@ -5676,10 +5794,8 @@ function _dragStart(srcIdx, cx, cy) {
   var el = document.getElementById('slot_' + srcIdx);
   if (el) {
     el.classList.add('drag-src');
-    /* ★ 드래그 시작 시 모든 슬롯 touch-action:none → ghost가 손가락 따라옴 */
-    document.querySelectorAll('.slot').forEach(function(s){
-      s.style.touchAction = 'none';
-    });
+    /* ★ body 클래스 1회 토글 → CSS로 모든 슬롯 touch-action:none 적용 (루프 reflow 제거) */
+    document.body.classList.add('dragging-slot');
   }
   var w  = el ? el.offsetWidth  : 60;
   var h  = el ? el.offsetHeight : 60;
@@ -5733,8 +5849,8 @@ function _dragEnd() {
   if (_drag.ghost) { _drag.ghost.remove(); _drag.ghost = null; }
   document.querySelectorAll('.slot.drag-src').forEach(function(e){ e.classList.remove('drag-src'); });
   document.querySelectorAll('.slot.drag-over').forEach(function(e){ e.classList.remove('drag-over'); });
-  /* ★ 드래그 종료 시 touch-action 복원 → 스크롤 다시 허용 */
-  document.querySelectorAll('.slot').forEach(function(s){ s.style.touchAction = 'pan-y'; });
+  /* ★ body 클래스 제거 → touch-action:pan-y 복원 */
+  document.body.classList.remove('dragging-slot');
   /* 교환 */
   if (tgt !== null && tgt !== src) swapSlotsData(src, tgt);
 }
@@ -5843,6 +5959,7 @@ window.addEventListener('scroll', function() {
     document.querySelectorAll('.slot.drag-src,.slot.drag-over').forEach(function(e){
       e.classList.remove('drag-src','drag-over');
     });
+    document.body.classList.remove('dragging-slot'); /* ★ touch-action 복원 */
   }
 }, {passive:true});
 
@@ -6016,7 +6133,7 @@ function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 function refreshSlot(i){
   var el=document.getElementById('slot_'+i);if(!el)return;
   renderSlot(el,i); reapplyBlinks();
-  _fitSlotCarTexts(); /* ★ 차량번호 짤림 방지 */
+  _fitSlotCarTexts(el); /* ★ 해당 슬롯만 fit (전체 깜빡임 방지) */
   /* ★ FIX: 모바일/PC 구분 없이 배지 초기화 (드래그 후 배지 사라짐 방지) */
   requestAnimationFrame(function(){ _initBadgeSlider(el); });
 }
@@ -6105,10 +6222,18 @@ function _initAllBadgeSliders(){
 /* ★ 차량번호 글씨가 슬롯 폭을 넘으면 자동으로 줄여서 짤림 방지
    버그 수정: getBoundingClientRect().width 는 컨테이너(width:100%) 크기라
    항상 maxW(=컨테이너-6)보다 크므로 루프가 항상 실행되어 7px까지 줄어드는 문제.
-   → scrollWidth > clientWidth 로 실제 텍스트 넘침 여부를 판단하도록 수정. */
-function _fitSlotCarTexts(){
+   → scrollWidth > clientWidth 로 실제 텍스트 넘침 여부를 판단하도록 수정.
+   ★ FIX: 드래그 중 전체 재계산 차단 (깜빡임 원인 제거)
+          slotEl 인자가 있으면 해당 슬롯만, 없으면 전체 처리 */
+function _fitSlotCarTexts(slotEl){
+  /* 드래그 중이면 전체 재계산 건너뜀 (특정 슬롯 지정 시는 예외) */
+  if(_drag.active && !slotEl) return;
   requestAnimationFrame(function(){
-    var slots = document.querySelectorAll('.slot-car');
+    /* 드래그 중 전체 재계산 재확인 (rAF 사이에 시작될 수 있음) */
+    if(_drag.active && !slotEl) return;
+    var slots = slotEl
+      ? slotEl.querySelectorAll('.slot-car')
+      : document.querySelectorAll('.slot-car');
     for(var i=0; i<slots.length; i++){
       var el = slots[i];
       /* 인라인 fontSize 초기화: CSS 변수값으로 복원 */
@@ -6466,6 +6591,8 @@ function openModal(i){
   if(_rb) _rb.style.display=(_slotHistory[i]&&_slotHistory[i].car)?'inline-block':'none';
   document.getElementById('modalOv').classList.add('show');
   setTimeout(function(){document.getElementById('mCarInput').focus();},150);
+  /* ★ PC: 차량번호 크기 슬라이더 동기화 */
+  if(window.innerWidth >= 601 && typeof _syncCarFsSlider === 'function') _syncCarFsSlider();
 }
 function closeModal(){
   document.getElementById('modalOv').classList.remove('show');
@@ -7910,6 +8037,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   renderColHeaders();
   buildGrid();
   fitLayout();
+  loadCarFs();             /* ★ PC 차량번호 크기 사용자 설정 복원 (fitLayout 이후) */
   initColEditUI();         /* ★ 열 편집 스위치 + 색상 초기화 (내부에서 onColEditToggle 호출) */
   initColScopeBtns();      /* ★ 열 편집 범위 버튼 초기화 */
   initSettingsBarState(); /* ★ 설정바 초기 접힌 상태 복원 */
