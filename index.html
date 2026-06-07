@@ -70,6 +70,30 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .promo-edit-err{font-size:12px;font-weight:800;color:#CC0000;text-align:center;display:none;}
 .promo-edit-err.show{display:block;}
 .sync-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.09);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:800;color:var(--kakao-deep);}
+#realClock{font-size:12px;font-weight:900;color:var(--kakao-deep);letter-spacing:.5px;margin-left:2px;}
+
+/* ★ 오프라인 저장 데이터 선택 복원 팝업 */
+#offlineRestoreOv{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9800;align-items:center;justify-content:center;padding:12px;}
+#offlineRestoreOv.show{display:flex;}
+#offlineRestoreBox{background:#fff;border-radius:18px;width:min(96vw,480px);max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.45);}
+.offline-restore-head{background:linear-gradient(135deg,#1D4ED8,#3B82F6);color:#fff;padding:16px 18px 12px;border-radius:18px 18px 0 0;}
+.offline-restore-head h3{margin:0;font-size:16px;font-weight:900;letter-spacing:-.3px;}
+.offline-restore-head p{margin:5px 0 0;font-size:12px;opacity:.88;}
+#offlineRestoreList{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;}
+.offline-save-item{background:#F8FAFF;border:2px solid #BFDBFE;border-radius:13px;padding:11px 13px;cursor:pointer;transition:border-color .15s,background .15s;}
+.offline-save-item:hover,.offline-save-item:active{background:#EFF6FF;border-color:#3B82F6;}
+.offline-save-item .osi-time{font-size:13px;font-weight:900;color:#1D4ED8;margin-bottom:4px;}
+.offline-save-item .osi-summary{font-size:12px;color:#374151;font-weight:700;line-height:1.5;}
+.offline-save-item .osi-cars{display:inline-block;background:#DBEAFE;color:#1E40AF;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:900;margin-top:4px;}
+.offline-save-item.latest{border-color:#059669;background:#F0FDF4;}
+.offline-save-item.latest .osi-time{color:#059669;}
+.offline-save-item.latest .osi-cars{background:#D1FAE5;color:#065F46;}
+.offline-restore-foot{padding:10px 12px 14px;display:flex;gap:8px;border-top:1px solid #E5E7EB;}
+.offline-restore-foot button{flex:1;border:none;border-radius:11px;padding:11px 0;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;}
+.ofr-btn-sync{background:#059669;color:#fff;}
+.ofr-btn-sync:active{background:#047857;}
+.ofr-btn-cancel{background:#F3F4F6;color:#6B7280;}
+.ofr-btn-cancel:active{background:#E5E7EB;}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:#B8860B;flex-shrink:0;transition:background .3s;}
 .sync-dot.on {background:var(--green);box-shadow:0 0 0 3px rgba(45,180,0,.25);}
 .sync-dot.ing{background:#FF9500;animation:sdp .7s infinite;}
@@ -1281,6 +1305,7 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="sync-pill">
       <div class="sync-dot" id="syncDot"></div>
       <span id="syncStatus">미연결</span>
+      <span id="realClock">--:--:--</span>
     </div>
   </div>
   <!-- 2행: 멘트 + 타이틀 (가운데) -->
@@ -1971,6 +1996,21 @@ body.dragging-slot .slot { touch-action: none; }
   </div>
 </div>
 
+<!-- ★ 오프라인 저장 데이터 선택 복원 팝업 -->
+<div id="offlineRestoreOv">
+  <div id="offlineRestoreBox">
+    <div class="offline-restore-head">
+      <h3>📵 오프라인 저장 데이터 발견</h3>
+      <p>오프라인 중 저장한 데이터가 있습니다. 복원할 시점을 선택하거나 자동 동기화를 진행하세요.</p>
+    </div>
+    <div id="offlineRestoreList"></div>
+    <div class="offline-restore-foot">
+      <button class="ofr-btn-sync" onclick="_offlineRestoreAutoSync()">⚡ 자동 동기화 (최신 데이터 적용)</button>
+      <button class="ofr-btn-cancel" onclick="_closeOfflineRestorePopup()">닫기</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
@@ -1995,6 +2035,45 @@ var _fbRetryTimer  = null;
 var _fbFailStreak  = 0;    /* 연속 실패 횟수 */
 var _FB_MAX_RETRY  = 5;
 var _FB_RETRY_DELAY= 8000; /* 8초 후 재시도 */
+
+/* ★ 설정(pb_settings) 전용 재시도 큐
+   pushSettings 실패 시 오프라인 중 변경 설정을 누적 보관 → 온라인 복귀 시 자동 전송 */
+var _fbSettingsRetryQueue = [];
+var _fbSettingsRetryTimer = null;
+var _LS_PENDING_SETTINGS  = 'pb_pending_settings';
+
+function _savePendingSettings(merged){
+  try{ localStorage.setItem(_LS_PENDING_SETTINGS, JSON.stringify(merged)); }catch(e){}
+}
+function _loadPendingSettings(){
+  try{ return JSON.parse(localStorage.getItem(_LS_PENDING_SETTINGS)||'null'); }
+  catch(e){ return null; }
+}
+function _clearPendingSettings(){
+  try{ localStorage.removeItem(_LS_PENDING_SETTINGS); }catch(e){}
+}
+function _fbSettingsRetryFlush(){
+  _fbSettingsRetryTimer = null;
+  if(!fbSettingsRef) return;
+  var pending = _loadPendingSettings() || {};
+  _fbSettingsRetryQueue.forEach(function(item){ Object.assign(pending, item.upd); });
+  _fbSettingsRetryQueue = [];
+  if(!Object.keys(pending).length) return;
+  fbSettingsRef.update(pending)
+    .then(function(){
+      console.log('[설정sync] 미전송 설정 Firebase 전송 완료:', Object.keys(pending));
+      _clearPendingSettings();
+    })
+    .catch(function(e){
+      console.warn('[설정sync] 재시도 실패 — 다음 온라인 복귀 시 재시도', e);
+      _savePendingSettings(pending);
+      _fbSettingsRetryTimer = setTimeout(_fbSettingsRetryFlush, _FB_RETRY_DELAY);
+    });
+}
+function _fbSettingsRetrySchedule(){
+  if(_fbSettingsRetryTimer) return;
+  _fbSettingsRetryTimer = setTimeout(_fbSettingsRetryFlush, _FB_RETRY_DELAY);
+}
 
 function _fbSafeUpdate(updObj, label){
   if(!fbSlotsRef) return;
@@ -4103,16 +4182,20 @@ function saveSlots(pk){
     if(pk[k]===null||pk[k]===undefined){
       delete data[id];
     } else {
-      /* ★ 슬롯 단위 타임스탬프 기록 */
       data[id] = Object.assign({}, pk[k], {_ts: now});
     }
-    /* ★ 오프라인이거나 Firebase 미연결 시 dirty 목록에 슬롯 ID 누적 */
-    if(!navigator.onLine || !fbSlotsRef){
-      _markDirtySlot(id);
-    }
+    if(!navigator.onLine || !fbSlotsRef){ _markDirtySlot(id); }
   }
   _saveData(data);
-  _tsMarkLocalWrite(); /* ★ 로컬 수정 타임스탬프 기록 */
+  _tsMarkLocalWrite();
+  /* ★ 오프라인 중 저장 시 스냅샷 기록 (3초 디바운스) */
+  if(!navigator.onLine){
+    if(_offlineSaveDebounce) clearTimeout(_offlineSaveDebounce);
+    _offlineSaveDebounce = setTimeout(function(){
+      _offlineSaveDebounce = null;
+      _recordOfflineSave();
+    }, 3000);
+  }
 }
 
 /* _origSaveSlots 안전 접근자 */
@@ -7035,7 +7118,10 @@ function saveSlot(){
     _fbV7Update(fbVal);
   }
   _inspectApplyBlinks();
-  refreshSlot(activeSlot); closeModal();
+  refreshSlot(activeSlot);
+  /* ★ 차량 카운트 배지 즉시 갱신 (오프라인 포함) */
+  if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
+  closeModal();
 }
 /* ══ 미니 확인 팝업 ══ */
 var _miniConfirmType = ''; /* 'sale' | 'clear' | 'remove_col' | 'remove_row' */
@@ -7496,9 +7582,30 @@ function _ensureGridConfigInFirebase() {
 }
 
 function pushSettings(obj){
-  if(fbSettingsRef){
-    fbSettingsRef.update(obj).catch(function(e){console.warn('[설정FB저장]',e);});
+  if(!fbSettingsRef){
+    var _pend = _loadPendingSettings() || {};
+    Object.assign(_pend, obj);
+    _savePendingSettings(_pend);
+    console.log('[설정] Firebase 미연결 — 로컬 임시 보관:', Object.keys(obj));
+    return;
   }
+  fbSettingsRef.update(obj)
+    .then(function(){
+      var _pend2 = _loadPendingSettings();
+      if(_pend2){
+        Object.keys(obj).forEach(function(k){ delete _pend2[k]; });
+        if(Object.keys(_pend2).length) _savePendingSettings(_pend2);
+        else _clearPendingSettings();
+      }
+    })
+    .catch(function(e){
+      console.warn('[설정FB저장실패] 큐 적재:', Object.keys(obj), e);
+      _fbSettingsRetryQueue.push({upd: obj, retries: 0, ts: Date.now()});
+      var _pend3 = _loadPendingSettings() || {};
+      Object.assign(_pend3, obj);
+      _savePendingSettings(_pend3);
+      _fbSettingsRetrySchedule();
+    });
 }
 /* 원격 설정 수신 → 로컬 적용 */
 function applyRemoteSettings(data){
@@ -7665,6 +7772,16 @@ function setDot(c,t){
     document.getElementById('syncStatus').textContent=t;
   }
 }
+/* ★ 실시간 시계 — 1초마다 갱신 */
+(function _startRealClock(){
+  var el = document.getElementById('realClock');
+  if(!el) return;
+  function _tick(){
+    var n=new Date();
+    el.textContent=('0'+n.getHours()).slice(-2)+':'+('0'+n.getMinutes()).slice(-2)+':'+('0'+n.getSeconds()).slice(-2);
+  }
+  _tick(); setInterval(_tick, 1000);
+})();
 function showSaveMsg(ok,txt){
   var m=document.getElementById('saveMsg');
   m.textContent=txt; m.className='save-msg '+(ok?'ok':'er');
@@ -8026,11 +8143,12 @@ function connectFb(url,code){
     if(fbSettingsRef){try{fbSettingsRef.off('value');}catch(e){}}
     fbSettingsRef=fbDb.ref('kd_rooms/'+code+'/pb_settings');
     /* 설정을 once로 먼저 읽은 뒤, 슬롯 리스너를 등록 */
-    /* ★ 새기기 여부 감지 (localStorage에 슬롯 데이터 없음) */
+    /* ★ 새기기 여부 감지: localStorage에 차량 데이터가 전혀 없으면 새 기기
+       _getData()로 실제 슬롯 데이터 확인 (좌표 ID 시스템 기준) */
     var _isNewDevice = (function(){
       try {
-        var s = _getRawV7();
-        return !Object.keys(s).some(function(k){ return s[k] && s[k].car; });
+        var d = _getData();
+        return !Object.keys(d).some(function(k){ return d[k] && d[k].car; });
       } catch(e) { return true; }
     })();
 
@@ -8177,138 +8295,355 @@ function connectFb(url,code){
     },function(err){console.warn('[엔카로그동기화]',err);});
 
     setDot('on','연결됨');
-    /* ★ FIX: Firebase .info/connected 리스너 — 실제 연결 상태 정확히 반영 */
+    /* ★ Firebase 연결 완료 시 미전송 설정 즉시 전송 */
+    setTimeout(function(){
+      var _pend = _loadPendingSettings();
+      if(_pend && Object.keys(_pend).length > 0 && fbSettingsRef){
+        console.log('[연결완료] 미전송 설정 전송:', Object.keys(_pend));
+        _fbSettingsRetryFlush();
+      }
+    }, 1000);
+    /* ★ Firebase .info/connected — 실제 연결 상태 정확히 반영 */
     try{
       var _connRef = fbDb.ref('.info/connected');
-      _wasDisconn = false; /* ★ 전역 변수 사용 */
+      _wasDisconn = false;
       _connRef.on('value', function(snap){
         var isConn = snap.val();
         if(isConn){
           setDot('on','실시간 연결됨 🔥');
-          /* ★ FIX: Firebase 재연결 시 오프라인 중 저장된 데이터 즉시 업로드 */
-          if(_wasDisconn){
-            _wasDisconn = false;
-            setTimeout(function(){
-              /* 재시도 큐 처리 */
-              if(typeof _fbRetryFlush === 'function' && _fbRetryQueue && _fbRetryQueue.length > 0){
-                console.log('[Firebase재연결] 재시도 큐 처리 ('+_fbRetryQueue.length+'개)');
-                _fbRetryTimer = null;
-                _fbRetryFlush();
-              }
-              /* 로컬 최신 데이터 업로드 */
-              var _localData = _getData();
-              var _localTs3  = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
-              var _hasLocalCar3 = Object.keys(_localData).some(function(k){ return _localData[k]&&_localData[k].car; });
-              if(_hasLocalCar3 && _localTs3 > 0){
-                fbSlotsRef.once('value').then(function(snap2){
-                  var _fbTs3 = parseInt((snap2.val()||{})._localTs||'0');
-                  if(_localTs3 > _fbTs3 + 3000){
-                    console.log('[Firebase재연결] 오프라인 중 변경사항 업로드 (로컬: '+_localTs3+' > FB: '+_fbTs3+')');
-                    _fbLocalFirstMerge(_localData, _getIds(), _localTs3);
-                    showAlert('📤 오프라인 저장 데이터를 동기화했습니다');
-                    setTimeout(hideAlert, 3000);
-                  }
-                }).catch(function(){});
-              }
-            }, 2000);
-          }
+          if(_wasDisconn){ _wasDisconn = false; _handleGoOnline(); }
         } else {
           _wasDisconn = true;
           var _dot = document.getElementById('syncDot');
-          if(_dot) { _dot.className = 'sync-dot ing'; }
-          var _st = document.getElementById('syncStatus');
-          if(_st) _st.textContent = '⚡ 재연결 중...';
+          var _st  = document.getElementById('syncStatus');
+          if(_dot) _dot.className = 'sync-dot ing';
+          if(_st)  _st.textContent = '⚡ Firebase 재연결 중...';
         }
       });
     }catch(e){ console.warn('[연결상태감지]', e); }
     function _checkOnlineStatus(){
-      if(!navigator.onLine){
-        var _dot = document.getElementById('syncDot');
-        if(_dot && _dot.classList.contains('on')){ _dot.className = 'sync-dot off'; }
-        var _st = document.getElementById('syncStatus');
-        if(_st) _st.textContent = '📵 인터넷 연결 없음';
-      }
+      if(!navigator.onLine){ _handleGoOffline(); }
     }
-    window.addEventListener('offline', function(){
-      _isOffline = true;
-      _checkOnlineStatus();
-      /* ★ FIX: 오프라인 전환 시 Firebase 최신 데이터를 로컬에 즉시 스냅샷 저장
-         인터넷 끊기기 직전 최신 상태가 로컬에 보존되도록 보장 */
-      if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef && navigator.onLine === false){
-        /* 이미 끊겼으면 스킵, 아직 연결 중이면 마지막 스냅샷 시도 */
-      }
-      try{
-        /* 현재 로컬 데이터로 즉시 오프라인 스냅샷 저장 */
-        var _offSnap = {
-          ts:   Date.now(),
-          data: _getData(),
-          ids:  _getIds(),
-          numParts: NUM_PARTS,
-          colCounts: PART_COL_COUNTS ? PART_COL_COUNTS.slice() : [],
-          rowCounts: PART_ROW_COUNTS ? PART_ROW_COUNTS.slice() : []
-        };
-        localStorage.setItem('pb_offline_snapshot', JSON.stringify(_offSnap));
-        console.log('[오프라인전환] 로컬 스냅샷 저장 완료:', Object.keys(_offSnap.data).filter(function(k){return _offSnap.data[k]&&_offSnap.data[k].car;}).length+'대');
-      }catch(e){ console.warn('[오프라인스냅샷]', e); }
-    });
-    window.addEventListener('online', function(){
-      _isOffline = false;
-      var _st = document.getElementById('syncStatus');
-      if(_st) _st.textContent = '⚡ 재연결 중...';
-      /* ★ 인터넷 재연결 시 미전송 데이터 즉시 동기화 */
-      setTimeout(function(){
-        /* ① 재시도 큐 즉시 처리 (오프라인 중 실패한 Firebase 요청들) */
-        if(typeof _fbRetryFlush === 'function' && _fbRetryQueue && _fbRetryQueue.length > 0){
-          console.log('[온라인복귀] 재시도 큐 즉시 처리 ('+_fbRetryQueue.length+'개)');
-          _fbRetryTimer = null;
-          _fbRetryFlush();
-        }
-        /* ② 슬롯 단위 dirty 감지 + 타임스탬프 비교로 변경분만 업로드 */
-        if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
-          var dirty    = _getDirtySlots();
-          var hasDirty = Object.keys(dirty).length > 0;
-          var localTs  = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
-
-          if(hasDirty){
-            /* dirty 슬롯 있음 → 슬롯 단위 비교 업로드 (앱 재시작 후에도 안전) */
-            console.log('[온라인복귀] dirty 슬롯 '+Object.keys(dirty).length+'개 감지 → 슬롯단위 sync');
-            var _st2 = document.getElementById('syncStatus');
-            if(_st2) _st2.textContent = '📤 변경된 슬롯 동기화 중...';
-            _fbLocalFirstMerge(_getData(), _getIds(), localTs);
-          } else {
-            /* dirty 없음 → 기존 전체 TS 비교 */
-            fbSlotsRef.once('value').then(function(snap){
-              var fbData = snap.val() || {};
-              var _fbTs  = parseInt(fbData._localTs||'0');
-              if(_tsLocalIsNewer(_fbTs)){
-                var _localData   = _getData();
-                var _hasLocalCar = Object.keys(_localData).some(function(k){ return _localData[k]&&_localData[k].car; });
-                if(_hasLocalCar){
-                  console.log('[온라인복귀] 로컬→Firebase 동기화 실행 (TS 비교)');
-                  _fbLocalFirstMerge(_localData, _getIds(), localTs);
-                  var _st3 = document.getElementById('syncStatus');
-                  if(_st3) _st3.textContent = '📤 오프라인 데이터 업로드 중...';
-                }
-              }
-            }).catch(function(e){ console.warn('[온라인복귀] Firebase 읽기 실패', e); });
-          }
-        }
-      }, 1500); /* Firebase 재연결 안정화 대기 1.5초 */
-    });
     /* ★ Firebase pb_slots에 _gridConfig 보장 */
     setTimeout(_ensureGridConfigInFirebase, 2000);
-    /* ★ Firebase 연결 완료 후 자동 백업 실행 (하루 2회)
-       — fbDb/LS_CODE 저장 완료 보장을 위해 3초 후 실행 */
+    /* ★ Firebase 연결 완료 후 자동 백업 실행 (하루 2회) */
     setTimeout(function() {
       try {
-        performDailyAutoBackup();      /* 앱 시작 AM 백업 */
-        _checkMissedPmBackup();        /* 오후 5시 이미 지났으면 즉시 PM 백업 */
-        _schedulePmBackup();           /* 오후 5시 타이머 예약 */
+        performDailyAutoBackup();
+        _checkMissedPmBackup();
+        _schedulePmBackup();
       } catch(e) { console.warn('[BACKUP] 백업 스케줄 오류', e); }
     }, 3000);
   }catch(e){
     setDot('off','오류'); console.error('[현황판]',e);
   }
+}
+
+/* ════════════════════════════════════════
+   ★ 전역 오프라인/온라인 감지 시스템 (v2)
+   · window offline/online — 항상 동작 (connectFb 밖 전역 등록)
+   · Firebase .info/connected 와 통합
+   · _onlineSyncPending 플래그로 중복 업로드 방지
+   ════════════════════════════════════════ */
+var _onlineSyncPending = false;
+
+function _showOfflineBanner(show){
+  var dot = document.getElementById('syncDot');
+  var st  = document.getElementById('syncStatus');
+  if(!dot || !st) return;
+  if(show){ dot.className = 'sync-dot off'; st.textContent = '📵 오프라인'; }
+  else    { dot.className = 'sync-dot ing'; st.textContent = '⚡ 재연결 중...'; }
+}
+
+function _handleGoOffline(){
+  _isOffline = true;
+  /* ★ 오프라인 시작 시각 기록 — 이후 dirty 슬롯만 "변경"으로 카운트하기 위해 */
+  localStorage.setItem('pb_offline_start_ts', String(Date.now()));
+  _showOfflineBanner(true);
+  try{
+    var _offSnap = {
+      ts: Date.now(), data: _getData(), ids: _getIds(),
+      numParts: NUM_PARTS,
+      colCounts: PART_COL_COUNTS ? PART_COL_COUNTS.slice() : [],
+      rowCounts: PART_ROW_COUNTS ? PART_ROW_COUNTS.slice() : []
+    };
+    localStorage.setItem('pb_offline_snapshot', JSON.stringify(_offSnap));
+    var _carCnt = Object.keys(_offSnap.data).filter(function(k){return _offSnap.data[k]&&_offSnap.data[k].car;}).length;
+    console.log('[오프라인] 스냅샷 저장 완료 — '+_carCnt+'대');
+    showAlert('📵 오프라인 전환 — 로컬 저장 모드');
+    setTimeout(hideAlert, 3000);
+  }catch(e){ console.warn('[오프라인스냅샷]', e); }
+}
+
+function _handleGoOnline(){
+  _isOffline = false;
+  _showOfflineBanner(false);
+  /* ★ 오프라인 시작 시각 초기화 */
+  localStorage.removeItem('pb_offline_start_ts');
+  if(_onlineSyncPending) return;
+  _onlineSyncPending = true;
+
+  /* ★ 오프라인 저장 데이터 있으면 팝업 표시 후 사용자 선택 대기
+     팝업에서 선택/자동동기화 시 _onlineSyncPending=false 후 재호출됨 */
+  var _offSaves = _getOfflineSaves();
+  if(_offSaves && _offSaves.length > 0){
+    _onlineSyncPending = false; /* 팝업 대기 중 플래그 해제 — 이후 재진입 허용 */
+    setTimeout(function(){ _openOfflineRestorePopup(); }, 800);
+    return;
+  }
+
+  setTimeout(function(){
+    _onlineSyncPending = false;
+    /* ① 슬롯 재시도 큐 즉시 처리 */
+    if(typeof _fbRetryFlush === 'function' && _fbRetryQueue && _fbRetryQueue.length > 0){
+      console.log('[온라인복귀] 슬롯 재시도 큐 처리 ('+_fbRetryQueue.length+'개)');
+      _fbRetryTimer = null; _fbRetryFlush();
+    }
+    /* ② 설정 미전송 데이터 처리 */
+    var _hasPendingSettings = (
+      (_fbSettingsRetryQueue && _fbSettingsRetryQueue.length > 0) ||
+      !!_loadPendingSettings()
+    );
+    if(_hasPendingSettings){
+      console.log('[온라인복귀] 미전송 설정 데이터 감지 → 전송 시작');
+      _fbSettingsRetryFlush();
+    }
+    /* ★★ ③ Firebase 미연결 상태면 재연결 먼저 수행
+       오프라인으로 앱 시작 or 연결 끊긴 채 재시작한 경우
+       fbSlotsRef가 null이라 dirty 슬롯 업로드 불가 → connectFb 재호출로 해결
+       connectFb 내부 Firebase 수신 시 dirty/TS 비교로 자동 업로드됨 */
+    if(!fbSlotsRef || !fbConnected){
+      var _reUrl  = localStorage.getItem(LS_URL)  || (_PB_DEFAULTS && _PB_DEFAULTS.url)  || '';
+      var _reCode = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
+      if(_reUrl && _reCode && typeof connectFb === 'function'){
+        console.log('[온라인복귀] Firebase 미연결 → 재연결 시도 (dirty 슬롯 자동 처리됨)');
+        connectFb(_reUrl, _reCode);
+        return; /* connectFb → _registerSlotsOnListener → dirty 자동 처리 */
+      }
+    }
+    /* ④ 이미 연결된 경우: dirty 슬롯 또는 타임스탬프 비교로 변경분 업로드 */
+    if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
+      var dirty   = (typeof _getDirtySlots==='function') ? _getDirtySlots() : {};
+      var localTs = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
+      if(Object.keys(dirty).length > 0){
+        console.log('[온라인복귀] dirty 슬롯 '+Object.keys(dirty).length+'개 → 슬롯단위 sync');
+        var _st2 = document.getElementById('syncStatus');
+        if(_st2) _st2.textContent = '📤 변경된 슬롯 동기화 중...';
+        _fbLocalFirstMerge(_getData(), _getIds(), localTs);
+      } else {
+        fbSlotsRef.once('value').then(function(snap){
+          var _fbTs = parseInt((snap.val()||{})._localTs||'0');
+          if(_tsLocalIsNewer(_fbTs)){
+            var _ld = _getData();
+            if(Object.keys(_ld).some(function(k){ return _ld[k]&&_ld[k].car; })){
+              console.log('[온라인복귀] 로컬→Firebase 동기화 (TS 비교)');
+              var _st3 = document.getElementById('syncStatus');
+              if(_st3) _st3.textContent = '📤 오프라인 데이터 업로드 중...';
+              _fbLocalFirstMerge(_ld, _getIds(), localTs);
+            }
+          }
+        }).catch(function(e){ console.warn('[온라인복귀] Firebase 읽기 실패', e); });
+      }
+    }
+  }, 1500);
+}
+
+window.addEventListener('offline', _handleGoOffline);
+window.addEventListener('online',  _handleGoOnline);
+
+/* ════════════════════════════════════════
+   ★ 오프라인 저장 데이터 감지 & 선택 복원 시스템
+   ════════════════════════════════════════ */
+var _LS_OFFLINE_SAVES   = 'pb_offline_saves';
+var _OFFLINE_SAVES_MAX  = 10;
+var _offlineSaveDebounce = null;
+
+function _recordOfflineSave(){
+  if(navigator.onLine) return;
+  try{
+    var data  = _getData();
+
+    /* ★ 현재 그리드 범위 내 유효 슬롯 ID 목록 생성 */
+    var validIds = {};
+    for(var _vp=1; _vp<=NUM_PARTS; _vp++){
+      var _vpc = PART_COL_COUNTS[_vp-1]||COLS_PER_PART;
+      var _vpr = PART_ROW_COUNTS[_vp-1]||ROWS_PER_PART;
+      for(var _vc=1; _vc<=_vpc; _vc++){
+        for(var _vr=1; _vr<=_vpr; _vr++){
+          validIds[_coordId(_vp,_vc,_vr)] = true;
+        }
+      }
+    }
+
+    /* 유효 슬롯 중 차량 있는 것만 카운트 — extract4 기준 (연속 4자리 숫자 감지) */
+    var cars = Object.keys(data).filter(function(k){
+      return validIds[k] && data[k] && data[k].car &&
+             typeof extract4 === 'function' && extract4(data[k].car).length > 0;
+    });
+    if(!cars.length) return;
+
+    /* 변경된 슬롯 요약 — 오프라인 전환 이후 실제 저장된 슬롯만 카운트
+       ★ 슬롯 데이터의 _ts(저장 시각) 기준으로 판별 (dirty 타임스탬프보다 정확) */
+    var dirty = _getDirtySlots();
+    var _offlineStartTs = parseInt(localStorage.getItem('pb_offline_start_ts')||'0');
+    var dirtyCars = Object.keys(dirty).filter(function(k){
+      if(!validIds[k] || !data[k] || !data[k].car) return false;
+      if(typeof extract4 === 'function' && extract4(data[k].car).length === 0) return false;
+      var slotTs = parseInt((data[k]&&data[k]._ts)||'0');
+      if(_offlineStartTs && slotTs > 0) return slotTs >= _offlineStartTs;
+      return dirty[k] > 0;
+    });
+    var summary = [];
+    dirtyCars.slice(0,5).forEach(function(id){
+      var d = data[id];
+      if(d&&d.car) summary.push(d.car+(d.owner?'/'+d.owner:''));
+    });
+    if(dirtyCars.length > 5) summary.push('외 '+(dirtyCars.length-5)+'대');
+
+    /* ★ 그리드 구조 저장 */
+    var gridCfg = {
+      numParts: NUM_PARTS, colsPerPart: COLS_PER_PART, rowsPerPart: ROWS_PER_PART,
+      partColCounts: PART_COL_COUNTS ? PART_COL_COUNTS.slice() : [],
+      partRowCounts: PART_ROW_COUNTS ? PART_ROW_COUNTS.slice() : []
+    };
+    var lsGridKeys = {};
+    for(var _p=1; _p<=NUM_PARTS; _p++){
+      var _pv=localStorage.getItem(LS_PART_COLS+'_'+_p);
+      var _rv=localStorage.getItem(LS_PART_ROWS+'_'+_p);
+      if(_pv) lsGridKeys[LS_PART_COLS+'_'+_p]=_pv;
+      if(_rv) lsGridKeys[LS_PART_ROWS+'_'+_p]=_rv;
+    }
+    lsGridKeys[LS_NUM_PARTS]=String(NUM_PARTS);
+    lsGridKeys[LS_COLS_PART]=String(COLS_PER_PART);
+    lsGridKeys[LS_ROWS_PART]=String(ROWS_PER_PART);
+    var partLabels=[];
+    for(var _pl=0;_pl<NUM_PARTS;_pl++) partLabels.push(localStorage.getItem(LS_PARTS[_pl])||'');
+
+    /* ★ 유효 슬롯 데이터만 저장 */
+    var validData = {};
+    Object.keys(data).forEach(function(k){ if(validIds[k]) validData[k]=data[k]; });
+
+    var snap = {
+      ts: Date.now(), totalCars: cars.length, changed: dirtyCars.length,
+      summary: summary.join(', ') || '변경 내역 없음',
+      slotData: validData, slotIds: _getIds(),
+      localTs: parseInt(localStorage.getItem('pb_local_ts')||'0'),
+      gridCfg: gridCfg, lsGridKeys: lsGridKeys, partLabels: partLabels
+    };
+    var saves = _getOfflineSaves();
+    if(saves.length > 0 && snap.ts - saves[saves.length-1].ts < 60000){
+      saves[saves.length-1] = snap;
+    } else { saves.push(snap); }
+    if(saves.length > _OFFLINE_SAVES_MAX) saves = saves.slice(-_OFFLINE_SAVES_MAX);
+    localStorage.setItem(_LS_OFFLINE_SAVES, JSON.stringify(saves));
+    console.log('[오프라인저장] 스냅샷 기록: 총 '+cars.length+'대, 변경 '+dirtyCars.length+'대');
+  }catch(e){ console.warn('[오프라인저장기록]', e); }
+}
+function _getOfflineSaves(){
+  try{ return JSON.parse(localStorage.getItem(_LS_OFFLINE_SAVES)||'[]'); }
+  catch(e){ return []; }
+}
+function _clearOfflineSaves(){
+  try{ localStorage.removeItem(_LS_OFFLINE_SAVES); }catch(e){}
+}
+function _openOfflineRestorePopup(){
+  var saves = _getOfflineSaves();
+  if(!saves.length){ _clearOfflineSaves(); return; }
+  var listEl = document.getElementById('offlineRestoreList');
+  if(!listEl) return;
+  listEl.innerHTML = '';
+  saves = saves.slice().reverse();
+  saves.forEach(function(snap, idx){
+    var d = new Date(snap.ts);
+    var dateStr = d.getFullYear()+'년 '+('0'+(d.getMonth()+1)).slice(-2)+'월 '+('0'+d.getDate()).slice(-2)+'일';
+    var timeStr = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2);
+    var isLatest = (idx === 0);
+    var item = document.createElement('div');
+    item.className = 'offline-save-item'+(isLatest?' latest':'');
+    item.innerHTML =
+      '<div class="osi-time">'+(isLatest?'🟢 최신 — ':'')+dateStr+' '+timeStr+'</div>'+
+      '<div class="osi-summary">'+(snap.changed?'변경: <b>'+snap.changed+'대</b> — '+snap.summary:'저장 내역: '+snap.summary)+'</div>'+
+      '<span class="osi-cars">🚗 총 '+snap.totalCars+'대</span>';
+    var realIdx = saves.length-1-idx;
+    item.onclick = function(){ _restoreOfflineSave(realIdx); };
+    listEl.appendChild(item);
+  });
+  var ov = document.getElementById('offlineRestoreOv');
+  if(ov) ov.classList.add('show');
+}
+function _closeOfflineRestorePopup(){
+  var ov = document.getElementById('offlineRestoreOv');
+  if(ov) ov.classList.remove('show');
+}
+function _restoreOfflineSave(idx){
+  var saves = _getOfflineSaves().slice().reverse();
+  var snap = saves[idx];
+  if(!snap){ alert('복원 데이터를 찾을 수 없습니다.'); return; }
+  if(!confirm('이 시점의 데이터로 복원할까요?\n\n저장 시각: '+new Date(snap.ts).toLocaleString()+'\n차량 수: '+snap.totalCars+'대\n\n현재 데이터는 복원 데이터로 교체됩니다.')) return;
+  _closeOfflineRestorePopup();
+  _clearOfflineSaves();
+  try{
+    /* ★ 1단계: 그리드 구조 복원 (열·행·파트 수) */
+    if(snap.lsGridKeys){
+      Object.keys(snap.lsGridKeys).forEach(function(k){ localStorage.setItem(k, snap.lsGridKeys[k]); });
+    }
+    if(snap.gridCfg){
+      var gc = snap.gridCfg;
+      if(gc.numParts)    { NUM_PARTS=gc.numParts;        localStorage.setItem(LS_NUM_PARTS, gc.numParts); }
+      if(gc.colsPerPart) { COLS_PER_PART=gc.colsPerPart; localStorage.setItem(LS_COLS_PART, gc.colsPerPart); }
+      if(gc.rowsPerPart) { ROWS_PER_PART=gc.rowsPerPart; localStorage.setItem(LS_ROWS_PART, gc.rowsPerPart); }
+      PART_COL_COUNTS = gc.partColCounts ? gc.partColCounts.slice() : [];
+      PART_ROW_COUNTS = gc.partRowCounts ? gc.partRowCounts.slice() : [];
+    }
+    _applyPartCount(NUM_PARTS);
+    /* ★ 파트 라벨 복원 */
+    if(snap.partLabels && Array.isArray(snap.partLabels)){
+      snap.partLabels.forEach(function(lbl, i){
+        if(lbl && LS_PARTS[i]) localStorage.setItem(LS_PARTS[i], lbl);
+      });
+    }
+    /* ★ 2단계: 슬롯 데이터 복원 */
+    _saveData(snap.slotData);
+    if(snap.slotIds) _saveIds(snap.slotIds);
+    var _restoreTs = snap.localTs || snap.ts;
+    localStorage.setItem('pb_local_ts', String(_restoreTs));
+    var newDirty = {};
+    Object.keys(snap.slotData).forEach(function(id){
+      if(snap.slotData[id]&&snap.slotData[id].car) newDirty[id] = snap.ts;
+    });
+    localStorage.setItem(LS_OFFLINE_DIRTY, JSON.stringify(newDirty));
+    /* ★ 3단계: UI 완전 재구성 */
+    _applyPartViewMode();
+    _rebuildGridDOM();
+    loadHeaderMemo(); loadHeaderMemoStyle(); loadMemoFs();
+    renderColHeaders(); buildGrid(); fitLayout();
+    initColEditUI(); initColScopeBtns(); _updateGridCtrlDisp();
+    loadPartLabels();
+    setTimeout(function(){ _initAllBadgeSliders(); }, 300);
+    showAlert('✅ 복원 완료! Firebase 동기화 중...');
+    if(fbSlotsRef && fbConnected){
+      /* 이미 연결됨 → 즉시 업로드 */
+      _fbLocalFirstMerge(snap.slotData, _getIds(), _restoreTs);
+      setTimeout(function(){ hideAlert(); showAlert('✅ Firebase 동기화 완료!'); setTimeout(hideAlert,2000); }, 3000);
+    } else {
+      /* 미연결 → connectFb 재호출 → dirty 슬롯 자동 처리 */
+      var _reUrl  = localStorage.getItem(LS_URL)  || (_PB_DEFAULTS&&_PB_DEFAULTS.url)  || '';
+      var _reCode = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS&&_PB_DEFAULTS.code) || '';
+      if(_reUrl && _reCode){
+        console.log('[오프라인복원] Firebase 재연결 시도 → dirty 슬롯 자동 업로드됨');
+        setTimeout(function(){ connectFb(_reUrl, _reCode); }, 500);
+      }
+      setTimeout(hideAlert, 3000);
+    }
+  }catch(e){ alert('복원 중 오류: '+e.message); console.warn('[오프라인복원]', e); }
+}
+function _offlineRestoreAutoSync(){
+  _closeOfflineRestorePopup();
+  _clearOfflineSaves(); /* 먼저 정리 → _handleGoOnline 팝업 재진입 방지 */
+  _onlineSyncPending = false; /* 플래그 초기화 → _handleGoOnline 정상 실행 */
+  _handleGoOnline();
+  showAlert('⚡ 최신 데이터로 자동 동기화 중...');
+  setTimeout(hideAlert, 3000);
 }
 
 /* ── 마이그레이션 ── */
@@ -8379,6 +8714,19 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
     }
   }catch(e){}
   _startAutoBackup();     /* ★ 로컬 자동 백업 시작 */
+  if(!navigator.onLine && !localStorage.getItem('pb_offline_start_ts')){
+    localStorage.setItem('pb_offline_start_ts', String(Date.now()));
+  }
+  /* ★ 앱 시작 시 미전송 설정 감지 — 오프라인 중 변경 후 재시작 시 복원 */
+  setTimeout(function(){
+    try{
+      var _startPend = _loadPendingSettings();
+      if(!_startPend || !Object.keys(_startPend).length) return;
+      if(!fbSettingsRef){ console.log('[앱시작] 미전송 설정 있음 — Firebase 연결 후 자동 전송 예정'); return; }
+      console.log('[앱시작] 미전송 설정 '+Object.keys(_startPend).length+'개 감지 → 전송');
+      _fbSettingsRetryFlush();
+    }catch(e){ console.warn('[앱시작설정sync]', e); }
+  }, 4000);
   /* ★ 앱 시작 시 dirty 슬롯 감지 — 오프라인 중 종료 후 재시작해도 변경분 복원
      connectFb → Firebase 연결 완료 후 3초 뒤 실행 (리스너 안정화 대기) */
   setTimeout(function(){
@@ -8860,6 +9208,8 @@ function _collectBackupData(slotAM) {
         k !== LS_BACKUP_AM && k !== LS_BACKUP_PM &&
         k !== LS_LAST_AUTO_BACKUP_DATE &&
         k !== LS_PART_VIEW &&           /* ★ Fix BUG6: 격자/1열 모드는 기기별 독립 — 백업 제외 */
+        k !== _LS_PENDING_SETTINGS &&   /* ★ 미전송 설정 큐 — 백업 제외 (복원 시 오염 방지) */
+        k !== 'pb_offline_dirty' &&     /* ★ dirty 슬롯 큐 — 백업 제외 */
         !k.startsWith('pb_snapshot_'))  /* ★ 이전 스냅샷 제외 (용량 초과 방지) */
       data[k] = localStorage.getItem(k);
   }
@@ -9212,6 +9562,10 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
       localStorage.removeItem(dk);
     }
   }
+  /* ★ 복원 전 미전송 큐 명시적 삭제 (이전 앱 찌꺼기가 새 복원 데이터 오염 방지) */
+  _clearDirtySlots();
+  _clearPendingSettings();
+  _clearOfflineSaves();
 
   /* 2. 백업 데이터 쓰기 */
   var count = 0;
@@ -9692,6 +10046,10 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
          k!=='pb_backup_am' && k!=='pb_backup_pm' &&
          k!==LS_LAST_AUTO_BACKUP_DATE) localStorage.removeItem(k);
     }
+    /* ★ 복원 전 미전송 큐 명시적 삭제 (이전 앱 찌꺼기 오염 방지) */
+    _clearDirtySlots();
+    _clearPendingSettings();
+    _clearOfflineSaves();
     /* ★ FIX2: 현재 앱 URL/코드 보존 (복원 전 저장) */
     var savedUrlBeforeRestore  = localStorage.getItem(LS_URL)  || _PB_DEFAULTS.url  || useCode;
     var savedCodeBeforeRestore = localStorage.getItem(LS_CODE) || _PB_DEFAULTS.code || useCode;
