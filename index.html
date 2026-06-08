@@ -267,6 +267,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .col-edit-switch input:checked + .col-edit-slider:before{transform:translateX(20px);}
 .col-edit-switch input:focus + .col-edit-slider{box-shadow:0 0 0 3px rgba(16,185,129,.35);}
 /* ★ FIX: width:100% 추가 — 열 접기/펼치기 후 parking-grid가 part-body 너비를 넘쳐흐르지 않도록 */
+.grid-scroll-wrap{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;width:100%;position:relative;}
+.grid-scroll-wrap::-webkit-scrollbar{height:4px;}
+.grid-scroll-wrap::-webkit-scrollbar-thumb{background:rgba(180,140,0,.35);border-radius:4px;}
 .parking-grid{display:grid;column-gap:2px;row-gap:2px;flex-shrink:0;width:100%;}
 /* ★ 검색바 2줄 레이아웃 */
 .search-bar{flex-wrap:wrap;row-gap:4px;}
@@ -374,7 +377,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 
 .part-body{
-  overflow:hidden;
+  overflow:visible;
   transition:max-height .35s cubic-bezier(.4,0,.2,1), opacity .25s ease;
   max-height:5000px;
   opacity:1;
@@ -1603,11 +1606,13 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="part-saved-toast" id="partToast1">✅ 저장됨</div>
   </div>
   <div class="part-body" id="partBody1">
-    <div class="parking-grid" id="parkingGrid1" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
-    <div class="col-header-row">
-      <button class="row-fold-dot" id="rfL1" title="마지막 행 접기" onclick="rowFold(1)"></button>
-      <div class="col-header" id="colHeader1" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
-      <button class="row-fold-dot" id="rfR1" title="행 펼치기" onclick="rowUnfold(1)"></button>
+    <div class="grid-scroll-wrap" id="gridScrollWrap1">
+      <div class="parking-grid" id="parkingGrid1" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
+      <div class="col-header-row">
+        <button class="row-fold-dot" id="rfL1" title="마지막 행 접기" onclick="rowFold(1)"></button>
+        <div class="col-header" id="colHeader1" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
+        <button class="row-fold-dot" id="rfR1" title="행 펼치기" onclick="rowUnfold(1)"></button>
+      </div>
     </div>
   </div>
   <div class="part-wrap" style="margin-top:6px;" id="partWrap2">
@@ -1624,11 +1629,13 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="part-saved-toast" id="partToast2">✅ 저장됨</div>
   </div>
   <div class="part-body collapsed" id="partBody2">
-    <div class="parking-grid" id="parkingGrid2" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
-    <div class="col-header-row">
-      <button class="row-fold-dot" id="rfL2" title="마지막 행 접기" onclick="rowFold(2)"></button>
-      <div class="col-header" id="colHeader2" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
-      <button class="row-fold-dot" id="rfR2" title="행 펼치기" onclick="rowUnfold(2)"></button>
+    <div class="grid-scroll-wrap" id="gridScrollWrap2">
+      <div class="parking-grid" id="parkingGrid2" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
+      <div class="col-header-row">
+        <button class="row-fold-dot" id="rfL2" title="마지막 행 접기" onclick="rowFold(2)"></button>
+        <div class="col-header" id="colHeader2" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
+        <button class="row-fold-dot" id="rfR2" title="행 펼치기" onclick="rowUnfold(2)"></button>
+      </div>
     </div>
   </div>
   <div class="part-wrap" style="margin-top:6px;" id="partWrap3">
@@ -1645,11 +1652,13 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="part-saved-toast" id="partToast3">✅ 저장됨</div>
   </div>
   <div class="part-body collapsed" id="partBody3">
-    <div class="parking-grid" id="parkingGrid3" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
-    <div class="col-header-row">
-      <button class="row-fold-dot" id="rfL3" title="마지막 행 접기" onclick="rowFold(3)"></button>
-      <div class="col-header" id="colHeader3" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
-      <button class="row-fold-dot" id="rfR3" title="행 펼치기" onclick="rowUnfold(3)"></button>
+    <div class="grid-scroll-wrap" id="gridScrollWrap3">
+      <div class="parking-grid" id="parkingGrid3" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
+      <div class="col-header-row">
+        <button class="row-fold-dot" id="rfL3" title="마지막 행 접기" onclick="rowFold(3)"></button>
+        <div class="col-header" id="colHeader3" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
+        <button class="row-fold-dot" id="rfR3" title="행 펼치기" onclick="rowUnfold(3)"></button>
+      </div>
     </div>
   </div>
 
@@ -3750,10 +3759,14 @@ function fitLayout(){
          새로고침 후 접힌 열 수만큼 오른쪽에 빈 공간이 생기는 버그의 직접 원인. */
       var visCols_p = typeof _getColFold === 'function'
         ? Math.max(pc - _getColFold(p), 1) : pc;
-      pgEl.style.gridTemplateColumns='repeat('+visCols_p+',minmax(0,1fr))';
+      /* ★ 가로 스크롤: 슬롯 고정 폭으로 grid 설정 */
+      var fixedSlotW_p = slotW_p;
+      pgEl.style.gridTemplateColumns='repeat('+visCols_p+','+fixedSlotW_p+'px)';
       pgEl.style.gridTemplateRows='repeat('+pr+','+slotH_p+'px)';
+      pgEl.style.width = (fixedSlotW_p * visCols_p + 2 * (visCols_p - 1)) + 'px';
       if(chEl){
-        chEl.style.gridTemplateColumns='repeat('+visCols_p+',minmax(0,1fr))';
+        chEl.style.gridTemplateColumns='repeat('+visCols_p+','+fixedSlotW_p+'px)';
+        chEl.style.width = pgEl.style.width;
         chEl.style.setProperty('--col-hc-fs', colHcFs_p + 'px');
       }
     }
@@ -3891,7 +3904,8 @@ function fitLayout(){
     var pgA = document.getElementById('parkingGrid'+pA);
     var chA = document.getElementById('colHeader'+pA);
     if(pgA){
-      pgA.style.gridTemplateColumns = 'repeat('+dispColsA+',minmax(0,1fr))';
+      pgA.style.gridTemplateColumns = 'repeat('+dispColsA+','+pairSlotW+'px)';
+      pgA.style.width = (pairSlotW * dispColsA + 2*(dispColsA-1)) + 'px';
       var slotHA = (rowsA < maxRowsPair)
         ? Math.floor((totalGridH - 5*(rowsA-1)) / rowsA)
         : baseSlotH;
@@ -3899,7 +3913,7 @@ function fitLayout(){
       pgA.style.setProperty('--slot-h', slotHA+'px');
       pgA.style.setProperty('--slot-badge-fs', badgeFsP+'px');
     }
-    if(chA) chA.style.gridTemplateColumns='repeat('+dispColsA+',minmax(0,1fr))';
+    if(chA){ chA.style.gridTemplateColumns='repeat('+dispColsA+','+pairSlotW+'px)'; if(pgA) chA.style.width=pgA.style.width; }
 
     /* 파트B 적용 */
     if(pB){
@@ -3907,15 +3921,16 @@ function fitLayout(){
       var chB = document.getElementById('colHeader'+pB);
       if(pgB){
         /* ★ FIX: 동일하게 dispColsB 사용 */
-        pgB.style.gridTemplateColumns = 'repeat('+dispColsB+',minmax(0,1fr))';
+        pgB.style.gridTemplateColumns = 'repeat('+dispColsB+','+pairSlotW+'px)';
         var slotHB = (rowsB < maxRowsPair)
           ? Math.floor((totalGridH - 5*(rowsB-1)) / rowsB)
           : baseSlotH;
         pgB.style.gridTemplateRows = 'repeat('+rowsB+','+slotHB+'px)';
+        pgB.style.width = (pairSlotW * dispColsB + 2 * (dispColsB - 1)) + 'px';
         pgB.style.setProperty('--slot-h', slotHB+'px');
         pgB.style.setProperty('--slot-badge-fs', badgeFsP+'px');
       }
-      if(chB) chB.style.gridTemplateColumns='repeat('+dispColsB+',minmax(0,1fr))';
+      if(chB){ chB.style.gridTemplateColumns='repeat('+dispColsB+','+pairSlotW+'px)'; if(pgB) chB.style.width=pgB.style.width; }
     }
   }
 
@@ -4570,19 +4585,24 @@ function _appendPartDOM(p){
     body = wrap; /* 1파트는 gridWrap 직접 사용 */
   }
 
+  /* ★ 가로 스크롤 래퍼 */
+  var gsw2 = document.createElement('div');
+  gsw2.className = 'grid-scroll-wrap'; gsw2.id = 'gridScrollWrap'+p;
+
   /* 파킹 그리드 */
   var pg = document.createElement('div');
   pg.className = 'parking-grid';
   pg.id = 'parkingGrid'+p;
   pg.style.cssText = 'grid-template-columns:repeat('+COLS_PER_PART+',minmax(0,1fr));grid-template-rows:repeat('+ROWS_PER_PART+',var(--slot-h,70px));';
-  body.appendChild(pg);
+  gsw2.appendChild(pg);
 
   /* 열 헤더 */
   var ch = document.createElement('div');
   ch.className = 'col-header';
   ch.id = 'colHeader'+p;
   ch.style.gridTemplateColumns = 'repeat('+COLS_PER_PART+',minmax(0,1fr))';
-  body.appendChild(ch);
+  gsw2.appendChild(ch);
+  body.appendChild(gsw2);
 }
 
 /* gridWrap 전체 재구성 */
@@ -4745,15 +4765,33 @@ function _rebuildGridDOM(){
     bd.id = 'partBody'+p;
     bd.className = 'part-body' + (isOpen ? '' : ' collapsed');
 
+    /* ★ 가로 스크롤 래퍼 */
+    var gsw = document.createElement('div');
+    gsw.className = 'grid-scroll-wrap'; gsw.id = 'gridScrollWrap'+p;
+
     var pg = document.createElement('div');
     pg.className = 'parking-grid'; pg.id = 'parkingGrid'+p;
     pg.style.cssText = 'grid-template-columns:repeat('+(PART_COL_COUNTS[p-1]||COLS_PER_PART)+',minmax(0,1fr));grid-template-rows:repeat('+(PART_ROW_COUNTS[p-1]||ROWS_PER_PART)+',var(--slot-h,70px));';
-    bd.appendChild(pg);
+    gsw.appendChild(pg);
 
+    /* 열 헤더 + 행접기 점 */
+    var chr = document.createElement('div');
+    chr.className = 'col-header-row';
+    var rfL = document.createElement('button');
+    rfL.className = 'row-fold-dot'; rfL.id = 'rfL'+p; rfL.title = '마지막 행 접기';
+    (function(n){ rfL.addEventListener('click', function(){ rowFold(n); }); })(p);
+    chr.appendChild(rfL);
     var ch = document.createElement('div');
     ch.className = 'col-header'; ch.id = 'colHeader'+p;
     ch.style.gridTemplateColumns = 'repeat('+(PART_COL_COUNTS[p-1]||COLS_PER_PART)+',minmax(0,1fr))';
-    bd.appendChild(ch);
+    chr.appendChild(ch);
+    var rfR = document.createElement('button');
+    rfR.className = 'row-fold-dot'; rfR.id = 'rfR'+p; rfR.title = '행 펼치기';
+    (function(n){ rfR.addEventListener('click', function(){ rowUnfold(n); }); })(p);
+    chr.appendChild(rfR);
+    gsw.appendChild(chr);
+
+    bd.appendChild(gsw);
 
     /* ── DOM 조립 ── */
     if(gridMode){
@@ -4864,17 +4902,16 @@ function _applyColFoldLayout(p){
     }
   });
 
-  /* ⑤ 열 헤더도 동일하게 처리 */
+  /* ⑤ 열 헤더도 동일하게 처리 (fitLayout이 고정px 설정 — 여기선 display만) */
   if(ch){
-    ch.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
     var hcs = ch.querySelectorAll('.col-hc');
     hcs.forEach(function(hc, i){
       hc.style.display = (i+1 <= visCols) ? '' : 'none';
     });
   }
 
-  /* ⑥ 그리드 템플릿 columns도 visCols로 명시 (fitLayout이 이미 설정했지만 명시적으로) */
-  pg.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
+  /* ⑥ fitLayout이 고정px로 이미 설정 — 추가 명시 불필요 (주석 유지) */
+  /* pg.style.gridTemplateColumns already set by fitLayout */;
 
   /* ⑦ 버튼 상태 갱신 */
   _updateColFoldBtns(p);
@@ -4906,12 +4943,13 @@ function _applyAllColFolds(){
     var ch = document.getElementById('colHeader'+k);
     if(fk > 0){
       if(pg){
-        pg.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
+        /* ★ 열 접기: 슬롯 고정px 유지, 접힌 열만 숨김 */
+        var _sw = parseFloat(pg.style.width||'0') / (parseFloat(pg.style.gridTemplateColumns.match(/\d+/)||['0'])||1);
         var slots = pg.querySelectorAll('.slot');
         slots.forEach(function(s,i){ var col=(i%totalCols)+1; s.style.display=(col<=visCols)?'':'none'; s.style.visibility=''; });
+        /* grid columns은 fitLayout이 관리 — 여기선 숨김만 처리 */
       }
       if(ch){
-        ch.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
         var hcs = ch.querySelectorAll('.col-hc');
         hcs.forEach(function(hc,i){ hc.style.display=(i+1<=visCols)?'':'none'; });
       }
