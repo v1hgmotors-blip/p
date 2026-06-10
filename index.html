@@ -275,16 +275,31 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .col-scroll-wrap::-webkit-scrollbar{display:none;}
 /* ★ PC 열 스크롤 화살표 버튼 */
 @media(min-width:601px){
-  /* 버튼을 담는 래퍼: part-body 위에 겹쳐서 좌우 끝에 고정 */
+  /* 버튼을 담는 래퍼: 좌우 끝에 고정, 공간 차지 안 함 */
   .col-scroll-arrow-wrap{
     position:absolute;
     top:0; bottom:0;
-    width:0;           /* 공간 차지 안 함 */
+    width:0;
     z-index:30;
     pointer-events:none;
   }
-  .col-scroll-arrow-wrap-left { left:0; }
-  .col-scroll-arrow-wrap-right{ right:0; }
+  /* ── 세로/격자 공통: 버튼 위치 ── */
+  .col-scroll-arrow-wrap{
+    /* top/bottom은 JS에서 동적 설정 */
+  }
+  .col-scroll-arrow-wrap-left  { left:4px; }
+  .col-scroll-arrow-wrap-right { right:4px; }
+  /* 버튼: 래퍼 기준 완전히 안쪽 배치 */
+  .col-scroll-arrow-wrap-left  .col-scroll-arrow { transform:translate(0, -50%); }
+  .col-scroll-arrow-wrap-right .col-scroll-arrow { transform:translate(-100%, -50%); }
+
+  /* ── 격자모드: part-cell 기준 ── */
+  .part-cell .col-scroll-arrow-wrap{
+    top:var(--part-wrap-h, 44px);
+    bottom:0;
+  }
+  .part-cell .col-scroll-arrow-wrap-left  { left:4px; }
+  .part-cell .col-scroll-arrow-wrap-right { right:4px; }
 
   .col-scroll-arrow{
     display:none;
@@ -2672,7 +2687,10 @@ function togglePartGridMode(){
   _applyPartViewMode();
   fitLayout();
   /* ★ 모드 전환 후 열 스크롤 뷰포트 재적용 (DOM 새로 빌드되므로) */
-  setTimeout(function(){ _applyAllColFolds(); }, 50);
+  setTimeout(function(){
+    _applyAllColFolds();
+    if(typeof _refreshAllArrowPositions==='function') _refreshAllArrowPositions();
+  }, 50);
   /* ★ BUG FIX: 모드 전환 후 배지 슬라이더 재초기화 (DOM이 새로 빌드되므로 반드시 필요) */
   setTimeout(function(){ _initAllBadgeSliders(); }, 200);
 }
@@ -4969,6 +4987,9 @@ function _applyColScrollViewport(p, totalCols, visCols){
   var chr   = ch ? ch.parentElement : null;  /* col-header-row */
   var inner = sw.querySelector('.col-scroll-inner');
 
+  /* ★ PC 화살표 버튼: 항상 초기화 (열 접기 여부와 무관하게 DOM 준비) */
+  _initColScrollMouseDrag(sw);
+
   if(visCols < totalCols){
     /* 래퍼 실제 너비 취득 (격자모드: 셀 너비, 세로모드: 전체 너비) */
     var wrapW = sw.getBoundingClientRect().width;
@@ -4983,9 +5004,6 @@ function _applyColScrollViewport(p, totalCols, visCols){
     if(chr)  { chr.style.width   = totalW+'px'; chr.style.minWidth   = totalW+'px'; }
     if(ch)   { ch.style.width    = totalW+'px'; ch.style.minWidth    = totalW+'px'; }
     if(inner){ inner.style.width = totalW+'px'; inner.style.minWidth = totalW+'px'; }
-
-    /* ★ PC 마우스 드래그 스크롤 등록 (1회) */
-    _initColScrollMouseDrag(sw);
     sw.classList.add('has-hidden-cols');
 
   } else {
@@ -5001,44 +5019,87 @@ function _applyColScrollViewport(p, totalCols, visCols){
 
 /* ★ PC 열 스크롤: 마우스 위치 기반 화살표 버튼 + 드래그 스크롤 */
 function _initColScrollMouseDrag(sw){
-  /* 모바일에서는 실행 안 함 */
+  /* 모바일 제외 */
   if(window.innerWidth < 601){
+    var _p = sw.parentElement;
+    var _pc = _p && _p.parentElement && _p.parentElement.classList.contains('part-cell') ? _p.parentElement : _p;
     ['col-scroll-arrow-wrap-left','col-scroll-arrow-wrap-right'].forEach(function(cls){
-      var p = sw.parentElement;
-      var el = p && p.querySelector('.'+cls);
-      if(el) el.remove();
+      var el = _pc && _pc.querySelector('.'+cls); if(el) el.remove();
     });
     sw._mouseDragInited = false;
     return;
   }
-  if(sw._mouseDragInited) return;
+
+  var body      = sw.parentElement;  /* part-body */
+  var isGridCell = body && body.parentElement && body.parentElement.classList.contains('part-cell');
+  /* 세로모드: part-body 위의 part-wrap을 컨테이너로
+     (part-body의 overflow-x:hidden 에 버튼이 잘리지 않도록) */
+  var container;
+  if(isGridCell){
+    container = body.parentElement; /* part-cell */
+  } else {
+    /* 세로모드: gridWrap을 컨테이너로 사용
+       버튼 wrap 위치는 JS로 part-body rect에 맞게 동적 설정 */
+    container = body.parentElement; /* gridWrap */
+  }
+
+  /* 버튼이 이미 container에 살아있으면 스킵 */
+  if(sw._mouseDragInited){
+    /* container 재계산 (플래그 체크 시점에도 동일 로직) */
+    var _isGC = body && body.parentElement && body.parentElement.classList.contains('part-cell');
+    var _cnt  = _isGC ? body.parentElement : body.parentElement;
+    var _eL = _cnt && _cnt.querySelector('.col-scroll-arrow-wrap-left');
+    var _eR = _cnt && _cnt.querySelector('.col-scroll-arrow-wrap-right');
+    if(_eL && _eR) return;
+    /* DOM 재생성 → 기존 전역 리스너 제거 후 재등록 */
+    if(sw._removeListeners) sw._removeListeners();
+    sw._mouseDragInited = false;
+  }
   sw._mouseDragInited = true;
 
-  /* part-body(부모)를 기준 컨테이너로 */
-  var body = sw.parentElement;
-  if(body && getComputedStyle(body).position === 'static'){
-    body.style.position = 'relative';
+  /* 컨테이너 포지션 설정 */
+  if(container && getComputedStyle(container).position === 'static')
+    container.style.position = 'relative';
+  if(isGridCell){
+    container.style.overflow = 'visible';
   }
+  /* 세로/격자 모두: part-wrap 높이를 --part-wrap-h 변수로 설정 */
+  /* 버튼 wrap top/bottom 위치 설정
+     세로모드: gridWrap 기준으로 part-body의 top/bottom 계산
+     격자모드: part-cell 기준으로 part-wrap 높이 계산 */
+  function _positionWraps(){
+    if(isGridCell){
+      /* 격자모드: part-wrap 높이 기준 */
+      var _pwEl = container.querySelector('.part-wrap');
+      var _pwH = _pwEl ? (_pwEl.getBoundingClientRect().height || _pwEl.offsetHeight || 44) : 44;
+      container.style.setProperty('--part-wrap-h', Math.round(_pwH)+'px');
+      if(wrapL){ wrapL.style.top=''; wrapL.style.bottom=''; }
+      if(wrapR){ wrapR.style.top=''; wrapR.style.bottom=''; }
+    } else {
+      /* 세로모드: gridWrap 기준으로 part-body top/bottom 동적 계산 */
+      var cRect = container.getBoundingClientRect();
+      var bRect = body.getBoundingClientRect();
+      var topOff    = Math.round(bRect.top - cRect.top);
+      var bottomOff = Math.round(cRect.bottom - bRect.bottom);
+      if(wrapL){ wrapL.style.top = topOff+'px'; wrapL.style.bottom = bottomOff+'px'; wrapL.style.height='auto'; }
+      if(wrapR){ wrapR.style.top = topOff+'px'; wrapR.style.bottom = bottomOff+'px'; wrapR.style.height='auto'; }
+    }
+  }
+  _positionWraps();
 
+  /* 버튼 생성 */
   function _makeWrap(side){
-    var wrap = document.createElement('div');
-    wrap.className = 'col-scroll-arrow-wrap col-scroll-arrow-wrap-'+side;
-    if(body) body.appendChild(wrap);
-    return wrap;
+    var w = document.createElement('div');
+    w.className = 'col-scroll-arrow-wrap col-scroll-arrow-wrap-'+side;
+    container.appendChild(w);
+    return w;
   }
-  var wrapL = _makeWrap('left');
-  var wrapR = _makeWrap('right');
-
-  var btnL = document.createElement('button');
-  btnL.className = 'col-scroll-arrow';
-  btnL.innerHTML = '&#9664;';
-  btnL.title = '왼쪽 열 보기';
+  var wrapL = _makeWrap('left'),  wrapR = _makeWrap('right');
+  var btnL  = document.createElement('button');
+  btnL.className = 'col-scroll-arrow'; btnL.innerHTML = '&#9664;'; btnL.title = '왼쪽 열 보기';
   wrapL.appendChild(btnL);
-
-  var btnR = document.createElement('button');
-  btnR.className = 'col-scroll-arrow';
-  btnR.innerHTML = '&#9654;';
-  btnR.title = '오른쪽 열 보기';
+  var btnR  = document.createElement('button');
+  btnR.className = 'col-scroll-arrow'; btnR.innerHTML = '&#9654;'; btnR.title = '오른쪽 열 보기';
   wrapR.appendChild(btnR);
 
   /* 슬롯 1칸 너비 */
@@ -5050,7 +5111,7 @@ function _initColScrollMouseDrag(sw){
     return cols > 0 ? Math.round(sw.scrollWidth / cols) : 80;
   }
 
-  /* 화살표 fade 상태 갱신 */
+  /* 화살표 fade (끝 도달 시) */
   function _updateArrows(){
     var atStart = sw.scrollLeft <= 2;
     var atEnd   = sw.scrollLeft + sw.clientWidth >= sw.scrollWidth - 2;
@@ -5058,87 +5119,116 @@ function _initColScrollMouseDrag(sw){
     btnR.classList.toggle('faded', atEnd);
   }
 
-  /* 호버 자동 스크롤 (requestAnimationFrame 기반) */
-  var _hoverRaf = null;
-  var _hoverDir = 0;
-
+  /* 호버 자동 스크롤 */
+  var _hRaf = null, _hDir = 0;
   function _hoverScroll(){
-    if(_hoverDir === 0){ _hoverRaf = null; return; }
-    var speed = Math.max(3, Math.round(_slotW() * 0.05));
-    sw.scrollLeft += _hoverDir * speed;
+    if(_hDir === 0){ _hRaf = null; return; }
+    sw.scrollLeft += _hDir * Math.max(3, Math.round(_slotW() * 0.05));
     _updateArrows();
-    _hoverRaf = requestAnimationFrame(_hoverScroll);
+    _hRaf = requestAnimationFrame(_hoverScroll);
   }
-  function _startHover(dir){ _hoverDir = dir; if(!_hoverRaf) _hoverRaf = requestAnimationFrame(_hoverScroll); }
-  function _stopHover(){ _hoverDir = 0; }
+  function _startHover(d){ _hDir = d; if(!_hRaf) _hRaf = requestAnimationFrame(_hoverScroll); }
+  function _stopHover(){ _hDir = 0; }
 
   btnL.addEventListener('mouseenter', function(){ _startHover(-1); });
   btnL.addEventListener('mouseleave', _stopHover);
   btnR.addEventListener('mouseenter', function(){ _startHover(1); });
   btnR.addEventListener('mouseleave', _stopHover);
-
-  /* 클릭: 한 칸 이동 */
   btnL.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft -= _slotW(); _updateArrows(); });
   btnR.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft += _slotW(); _updateArrows(); });
 
-  /* 마우스 위치 → 버튼 표시/숨김 */
-  function _onDocMove(e){
+  /* ★ 마우스 위치 → 버튼 표시/숨김
+     - has-hidden-cols 없으면 표시 안 함
+     - 판정 영역: sw(col-scroll-wrap) BoundingRect 기준 */
+  function _onMove(e){
+    /* 열 접기 없으면 버튼 숨김 */
+    if(!sw.classList.contains('has-hidden-cols')){
+      btnL.classList.remove('visible');
+      btnR.classList.remove('visible');
+      return;
+    }
     var rect = sw.getBoundingClientRect();
-    var inside = (e.clientX >= rect.left && e.clientX <= rect.right &&
-                  e.clientY >= rect.top  && e.clientY <= rect.bottom);
+    /* 마우스가 sw 영역 안에 있는지 */
+    var inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                 e.clientY >= rect.top  && e.clientY <= rect.bottom;
     if(!inside){
       btnL.classList.remove('visible');
       btnR.classList.remove('visible');
       return;
     }
-    var cx = window.innerWidth / 2;
-    if(e.clientX > cx){
-      btnL.classList.remove('visible');
-      btnR.classList.add('visible');
+    /* 파트(sw) 중앙 기준 좌/우 */
+    var partCX = rect.left + rect.width / 2;
+    if(e.clientX > partCX){
+      btnL.classList.remove('visible'); btnR.classList.add('visible');
     } else {
-      btnR.classList.remove('visible');
-      btnL.classList.add('visible');
+      btnR.classList.remove('visible'); btnL.classList.add('visible');
     }
     _updateArrows();
   }
-  document.addEventListener('mousemove', _onDocMove);
 
   /* 드래그 스크롤 */
-  var isDragging = false, startX = 0, startSL = 0, hasMoved = false;
-  sw.addEventListener('mousedown', function(e){
-    if(e.button !== 0) return;
-    if(e.target === btnL || e.target === btnR) return;
-    isDragging = true; hasMoved = false;
-    startX = e.clientX; startSL = sw.scrollLeft;
-    sw.style.cursor = 'grabbing';
-    sw.style.userSelect = 'none';
+  var _drag = false, _sx = 0, _ssl = 0, _moved = false;
+  function _onDown(e){
+    if(e.button !== 0 || e.target === btnL || e.target === btnR) return;
+    _drag = true; _moved = false; _sx = e.clientX; _ssl = sw.scrollLeft;
+    sw.style.cursor = 'grabbing'; sw.style.userSelect = 'none';
     e.preventDefault();
-  });
-  document.addEventListener('mousemove', function(e){
-    if(!isDragging) return;
-    var dx = e.clientX - startX;
-    if(Math.abs(dx) > 3) hasMoved = true;
-    sw.scrollLeft = startSL - dx;
+  }
+  function _onDrag(e){
+    if(!_drag) return;
+    var dx = e.clientX - _sx;
+    if(Math.abs(dx) > 3) _moved = true;
+    sw.scrollLeft = _ssl - dx;
     _updateArrows();
-  });
-  document.addEventListener('mouseup', function(){
-    if(!isDragging) return;
-    isDragging = false;
-    sw.style.cursor = 'grab';
-    sw.style.userSelect = '';
-    if(hasMoved){
+    _onMove(e); /* 드래그 중에도 버튼 위치 갱신 */
+  }
+  function _onUp(){
+    if(!_drag) return;
+    _drag = false; sw.style.cursor = 'grab'; sw.style.userSelect = '';
+    if(_moved){
       var sc = function(ev){ ev.stopPropagation(); ev.preventDefault(); sw.removeEventListener('click',sc,true); };
       sw.addEventListener('click', sc, true);
     }
-  });
-  document.addEventListener('mouseleave', function(){
-    if(isDragging){ isDragging=false; sw.style.cursor='grab'; sw.style.userSelect=''; }
+  }
+  function _onLeave(){
+    if(_drag){ _drag=false; sw.style.cursor='grab'; sw.style.userSelect=''; }
     _stopHover();
-  });
+    btnL.classList.remove('visible'); btnR.classList.remove('visible');
+  }
 
-  sw.addEventListener('scroll', _updateArrows);
+  /* ★ 전역 리스너를 named 변수로 등록 → 나중에 제거 가능 */
+  document.addEventListener('mousemove', _onMove);
+  document.addEventListener('mousemove', _onDrag);
+  document.addEventListener('mouseup',   _onUp);
+  document.addEventListener('mouseleave',_onLeave);
+  sw.addEventListener('mousedown', _onDown);
+  sw.addEventListener('scroll',    _updateArrows);
   sw.style.cursor = 'grab';
   _updateArrows();
+
+  /* 리스너 제거 함수 저장 (DOM 재생성 시 호출) */
+  sw._removeListeners = function(){
+    document.removeEventListener('mousemove', _onMove);
+    document.removeEventListener('mousemove', _onDrag);
+    document.removeEventListener('mouseup',   _onUp);
+    document.removeEventListener('mouseleave',_onLeave);
+    sw.removeEventListener('mousedown', _onDown);
+    sw.removeEventListener('scroll',    _updateArrows);
+    if(wrapL.parentNode) wrapL.parentNode.removeChild(wrapL);
+    if(wrapR.parentNode) wrapR.parentNode.removeChild(wrapR);
+  };
+
+  /* ★ 버튼 top 위치 재계산 (행/열 추가·삭제 후 호출) */
+  sw._refreshArrowPos = function(){ _positionWraps(); };
+}
+
+/* ★ 모든 파트 화살표 버튼 위치 재계산 */
+function _refreshAllArrowPositions(){
+  if(window.innerWidth < 601) return;
+  for(var _p=1; _p<=NUM_PARTS; _p++){
+    var _sw = document.getElementById('colScrollWrap'+_p);
+    if(_sw && _sw._refreshArrowPos) _sw._refreshArrowPos();
+  }
 }
 /* 버튼 enabled/disabled + 카운트 표시 업데이트 */
 function _updateColFoldBtns(p){
@@ -5178,8 +5268,11 @@ function _applyAllColFolds(){
   _doApply();
   requestAnimationFrame(function(){
     _doApply();
-    /* 윈도우 리사이즈 등으로 래퍼 너비가 달라질 수 있으므로 한 프레임 더 */
-    requestAnimationFrame(function(){ _doApply(); });
+    requestAnimationFrame(function(){
+      _doApply();
+      /* ★ 행/열 변경 후 버튼 top 위치 재계산 */
+      if(typeof _refreshAllArrowPositions === 'function') _refreshAllArrowPositions();
+    });
   });
 }
 
@@ -9394,7 +9487,10 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   window.addEventListener('resize', _debouncedFitLayout);
   /* ★ 리사이즈 시 열 스크롤 뷰포트도 재계산 */
   window.addEventListener('resize', function(){
-    setTimeout(function(){ if(typeof _applyAllColFolds==='function') _applyAllColFolds(); }, 180);
+    setTimeout(function(){
+      if(typeof _applyAllColFolds==='function') _applyAllColFolds();
+      if(typeof _refreshAllArrowPositions==='function') _refreshAllArrowPositions();
+    }, 180);
   });
   window.addEventListener('orientationchange', function(){
     /* 회전 후 브라우저가 새 크기를 확정할 때까지 대기 후 재계산 */
