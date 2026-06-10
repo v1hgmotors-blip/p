@@ -210,7 +210,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 .part-cell{
   display:flex;flex-direction:column;
-  min-width:0;overflow:visible; /* ★ Fix BUG4: 격자모드 슬롯 클리핑 방지 */
+  min-width:0;overflow:hidden; /* 격자모드: 스크롤 래퍼가 clipping 없이 스크롤되도록 */
   background:rgba(255,249,219,.55);
   border:1.5px solid var(--border);
   border-radius:8px;
@@ -225,6 +225,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 .part-cell .part-body{
   overflow:visible; /* ★ Fix BUG4: 격자모드 슬롯 클리핑 방지 */
+  overflow-x:hidden; /* ★ 가로 스크롤바 숨김 (col-scroll-wrap 안에서만 스크롤) */
   transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .25s ease;
   max-height:5000px;opacity:1;
   flex:0 0 auto;   /* 내용 크기에 맞춤 — 행 높이를 임의로 늘리지 않음 */
@@ -242,10 +243,108 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .part-view-toggle-btn.active{background:var(--kakao);color:var(--kakao-deep);}
 
 /* ★ 행 접기/펼치기 빨간점 */
-.col-header-row{display:flex;align-items:center;gap:0;margin-top:3px;flex-shrink:0;}
-.row-fold-dot{width:11px;height:11px;border-radius:50%;background:#E8180C;border:none;cursor:pointer;flex-shrink:0;padding:0;touch-action:manipulation;box-shadow:0 1px 4px rgba(0,0,0,.40);transition:transform .12s,opacity .15s;}
-.row-fold-dot:active{transform:scale(.78);}
-.row-fold-dot:disabled{opacity:.28;cursor:default;}
+
+/* ════ 열 가로 스크롤 (터치 드래그) ════ */
+.col-scroll-wrap{
+  position:relative;
+  overflow-x:auto;
+  overflow-y:visible;
+  -webkit-overflow-scrolling:touch; /* iOS 관성 스크롤 */
+  width:100%;
+  box-sizing:border-box;
+  /* 스크롤바 완전 숨김 */
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+  cursor:default; /* JS에서 grab으로 덮어씀 */
+  /* touch-action 미설정 → 브라우저가 overflow 방향으로 자동 판단 */
+}
+/* ★ 숨긴 열 있을 때: 슬롯 touch-action을 pan-x pan-y로 설정
+   → 좌우(가로 스크롤)와 위아래(페이지 스크롤) 동시 허용 */
+.col-scroll-wrap.has-hidden-cols .slot{
+  touch-action:pan-x pan-y;
+}
+/* PC: 숨긴 열 있을 때 grab 커서 */
+@media(min-width:601px){
+  .col-scroll-wrap.has-hidden-cols{
+    cursor:grab;
+  }
+  .col-scroll-wrap.has-hidden-cols:active{
+    cursor:grabbing;
+  }
+}
+.col-scroll-wrap::-webkit-scrollbar{display:none;}
+/* ★ PC 열 스크롤 화살표 버튼 */
+@media(min-width:601px){
+  /* 버튼을 담는 래퍼: part-body 위에 겹쳐서 좌우 끝에 고정 */
+  .col-scroll-arrow-wrap{
+    position:absolute;
+    top:0; bottom:0;
+    width:0;           /* 공간 차지 안 함 */
+    z-index:30;
+    pointer-events:none;
+  }
+  .col-scroll-arrow-wrap-left { left:0; }
+  .col-scroll-arrow-wrap-right{ right:0; }
+
+  .col-scroll-arrow{
+    display:none;
+    position:absolute;
+    top:50%;
+    transform:translate(-50%, -50%);
+    z-index:30;
+    width:44px;
+    height:110px;
+    background:rgba(40,20,10,.82);
+    color:#FEE500;
+    border:2.5px solid rgba(254,229,0,.6);
+    border-radius:20px;
+    font-size:24px;
+    font-weight:900;
+    cursor:pointer;
+    align-items:center;
+    justify-content:center;
+    line-height:1;
+    transition:opacity .18s, background .15s, transform .12s;
+    opacity:0;
+    pointer-events:none;
+    user-select:none;
+    box-shadow:0 3px 16px rgba(0,0,0,.50);
+    white-space:nowrap;
+  }
+  .col-scroll-arrow-wrap-left  .col-scroll-arrow{ left:0; }
+  .col-scroll-arrow-wrap-right .col-scroll-arrow{ left:0; }
+
+  .col-scroll-arrow.visible{
+    display:flex;
+    opacity:.9;
+    pointer-events:auto;
+  }
+  .col-scroll-arrow.faded{
+    opacity:.25;
+    pointer-events:none;
+  }
+  .col-scroll-arrow:hover{
+    background:rgba(58,29,10,.97);
+    opacity:1;
+    border-color:#FEE500;
+  }
+  .col-scroll-arrow:active{
+    background:#3A1D00;
+  }
+}
+
+.col-scroll-inner{
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+}
+.col-scroll-inner .parking-grid,
+.col-scroll-inner .col-header-row,
+.col-scroll-inner .col-header{
+  box-sizing:border-box;
+}
+
+.col-header-row{display:flex;align-items:center;gap:0;margin-top:3px;flex-shrink:0;min-width:0;overflow:hidden;}
 .col-header{display:grid;gap:2px;flex:1;min-width:0;margin-top:0;margin-bottom:0;flex-shrink:0;}
 .col-hc{text-align:center;font-size:var(--col-hc-fs,15px);font-weight:900;color:var(--col-hc-color,#FFFFFF);background:var(--col-hc-bg,var(--kakao-dark));border-radius:5px;padding:4px 1px;cursor:pointer;position:relative;transition:background .15s;text-shadow:0 1px 0 rgba(255,255,255,.4);overflow:hidden;white-space:normal;word-break:break-all;line-height:1.2;min-width:0;display:flex;align-items:center;justify-content:center;}
 .col-hc:hover{filter:brightness(1.08);}
@@ -337,7 +436,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   background:rgba(255,255,255,.18); border:1.5px solid rgba(254,229,0,.5);
   color:var(--kakao); border-radius:7px; padding:3px 9px;
   font-size:13px; font-weight:900; cursor:pointer; font-family:inherit;
-  flex-shrink:0; margin-left:auto;
+  flex-shrink:0; margin-left:4px;
   transition:background .15s, transform .25s; touch-action:manipulation;
   line-height:1; user-select:none;
 }
@@ -375,6 +474,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 
 .part-body{
   overflow:hidden;
+  overflow-x:hidden; /* ★ 가로 스크롤바 숨김 */
   transition:max-height .35s cubic-bezier(.4,0,.2,1), opacity .25s ease;
   max-height:5000px;
   opacity:1;
@@ -435,7 +535,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 
 @media(max-width:600px){
   /* ★ 배지 z-index 버그 수정: part-body가 part-label 위에 렌더링되도록 */
-  .part-body{ position:relative; z-index:2; overflow:visible !important; }
+  .part-body{ position:relative; z-index:2; overflow-y:hidden; overflow-x:hidden !important; }
   .part-label{ position:relative; z-index:1; }
   .parking-grid{ overflow:visible !important; }
 
@@ -660,7 +760,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
    · 하단 배지(slot-badge-wrap): absolute → 메모 텍스트와 겹치지 않음
    · 슬롯 간격: 최소화 (배지 돌출 공간만 확보) */
 @media(min-width:601px){
-  /* overflow:visible → 배지가 경계선 위로 돌출 가능 */
+  /* overflow:visible → 배지(slot-num)가 경계선 위로 돌출 가능 */
   .slot, .slot.occupied {
     overflow: visible !important;
     margin-top: calc(var(--slot-num-sz, 22px) * 0.28);
@@ -698,13 +798,34 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     pointer-events: none;
     overflow: hidden;
   }
-  /* 메모: 차량번호 바로 아래 배치, 슬롯 overflow:hidden으로 자동 클리핑 */
+  /* 메모: 차량번호 바로 아래 배치 */
   .slot-car {
     padding-bottom: 2px !important;
   }
+  /* ★ PC 메모 클리핑:
+     .slot 은 overflow:visible(배지 돌출용) 유지.
+     메모는 슬롯 높이(--slot-h)를 절대 넘지 않도록
+     max-height + overflow:hidden 으로 잘라냄. */
   .slot-memo {
     flex: none !important;
     overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    /* 슬롯 높이에서 차량번호/배지 영역 제외한 나머지 높이만 사용 */
+    max-height: var(--slot-memo-max-h,
+      calc(
+        var(--slot-h, 70px)
+        - var(--slot-num-sz, 22px) * 1.0
+        - var(--slot-memo-fs, 9px) * 2.2
+        - 6px
+      )
+    ) !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    word-break: break-all !important;
+    white-space: normal !important;
   }
 }
 @keyframes blinkRainbow{
@@ -1603,11 +1724,13 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="part-saved-toast" id="partToast1">✅ 저장됨</div>
   </div>
   <div class="part-body" id="partBody1">
-    <div class="parking-grid" id="parkingGrid1" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
-    <div class="col-header-row">
-      <button class="row-fold-dot" id="rfL1" title="마지막 행 접기" onclick="rowFold(1)"></button>
-      <div class="col-header" id="colHeader1" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
-      <button class="row-fold-dot" id="rfR1" title="행 펼치기" onclick="rowUnfold(1)"></button>
+    <div class="col-scroll-wrap" id="colScrollWrap1">
+      <div class="col-scroll-inner">
+        <div class="parking-grid" id="parkingGrid1" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
+        <div class="col-header-row">
+          <div class="col-header" id="colHeader1" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="part-wrap" style="margin-top:6px;" id="partWrap2">
@@ -1624,11 +1747,13 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="part-saved-toast" id="partToast2">✅ 저장됨</div>
   </div>
   <div class="part-body collapsed" id="partBody2">
-    <div class="parking-grid" id="parkingGrid2" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
-    <div class="col-header-row">
-      <button class="row-fold-dot" id="rfL2" title="마지막 행 접기" onclick="rowFold(2)"></button>
-      <div class="col-header" id="colHeader2" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
-      <button class="row-fold-dot" id="rfR2" title="행 펼치기" onclick="rowUnfold(2)"></button>
+    <div class="col-scroll-wrap" id="colScrollWrap2">
+      <div class="col-scroll-inner">
+        <div class="parking-grid" id="parkingGrid2" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
+        <div class="col-header-row">
+          <div class="col-header" id="colHeader2" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="part-wrap" style="margin-top:6px;" id="partWrap3">
@@ -1645,11 +1770,13 @@ body.dragging-slot .slot { touch-action: none; }
     <div class="part-saved-toast" id="partToast3">✅ 저장됨</div>
   </div>
   <div class="part-body collapsed" id="partBody3">
-    <div class="parking-grid" id="parkingGrid3" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
-    <div class="col-header-row">
-      <button class="row-fold-dot" id="rfL3" title="마지막 행 접기" onclick="rowFold(3)"></button>
-      <div class="col-header" id="colHeader3" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
-      <button class="row-fold-dot" id="rfR3" title="행 펼치기" onclick="rowUnfold(3)"></button>
+    <div class="col-scroll-wrap" id="colScrollWrap3">
+      <div class="col-scroll-inner">
+        <div class="parking-grid" id="parkingGrid3" style="grid-template-columns:repeat(10,minmax(0,1fr));grid-template-rows:repeat(4,var(--slot-h,70px));"></div>
+        <div class="col-header-row">
+          <div class="col-header" id="colHeader3" style="grid-template-columns:repeat(10,minmax(0,1fr));"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2544,6 +2671,8 @@ function togglePartGridMode(){
   buildGrid();
   _applyPartViewMode();
   fitLayout();
+  /* ★ 모드 전환 후 열 스크롤 뷰포트 재적용 (DOM 새로 빌드되므로) */
+  setTimeout(function(){ _applyAllColFolds(); }, 50);
   /* ★ BUG FIX: 모드 전환 후 배지 슬라이더 재초기화 (DOM이 새로 빌드되므로 반드시 필요) */
   setTimeout(function(){ _initAllBadgeSliders(); }, 200);
 }
@@ -3567,65 +3696,7 @@ function slotToPart(idx){
   return 1;
 }
 
-/* ════════════════════════════════════════
-   ★ 행 접기/펼치기 (기기별 독립)
-   왼쪽 빨간점=마지막 행 접기 / 오른쪽=펼치기
-   pb_row_fold_p{파트} localStorage 기기별 독립 저장
-   ════════════════════════════════════════ */
-function _getRowFold(p){
-  return Math.max(0,parseInt(localStorage.getItem('pb_row_fold_p'+p)||'0'));
-}
-function _setRowFold(p,n){
-  if(n<=0) localStorage.removeItem('pb_row_fold_p'+p);
-  else     localStorage.setItem('pb_row_fold_p'+p,String(n));
-}
-function rowFold(p){
-  var rows=PART_ROW_COUNTS[p-1]||ROWS_PER_PART;
-  var n=_getRowFold(p);
-  if(n>=rows-1) return;
-  _setRowFold(p,n+1);
-  _applyRowFold(p);
-}
-function rowUnfold(p){
-  var n=_getRowFold(p);
-  if(n<=0) return;
-  _setRowFold(p,n-1);
-  _applyRowFold(p);
-}
-function _applyRowFold(p){
-  var rows=PART_ROW_COUNTS[p-1]||ROWS_PER_PART;
-  var cols=PART_COL_COUNTS[p-1]||COLS_PER_PART;
-  var folded=Math.min(_getRowFold(p),rows-1);
-  var visible=rows-folded;
-  var bL=document.getElementById('rfL'+p);
-  var bR=document.getElementById('rfR'+p);
-  if(bL) bL.disabled=(folded>=rows-1);
-  if(bR) bR.disabled=(folded<=0);
-  var pg=document.getElementById('parkingGrid'+p);
-  if(!pg) return;
-  if(folded<=0){
-    pg.querySelectorAll('.slot').forEach(function(s){s.style.display='';});
-    var cur0=pg.style.gridTemplateRows;
-    if(cur0&&cur0.indexOf('0px')!==-1){
-      var h0=cur0.match(/([0-9]+)px/);
-      if(h0) pg.style.gridTemplateRows='repeat('+rows+','+h0[1]+'px)';
-    }
-    return;
-  }
-  pg.querySelectorAll('.slot').forEach(function(s,i){
-    s.style.display=Math.floor(i/cols)<visible?'':'none';
-  });
-  var cur=pg.style.gridTemplateRows;
-  var mH=cur.match(/([0-9]+)px/);
-  if(!mH) return;
-  var slH=mH[1]+'px';
-  var tpl=[];
-  for(var r=0;r<rows;r++) tpl.push(r<visible?slH:'0px');
-  pg.style.gridTemplateRows=tpl.join(' ');
-}
-function _applyAllRowFolds(){
-  for(var i=1;i<=NUM_PARTS;i++) _applyRowFold(i);
-}
+/* 행 접기/펼치기 제거됨 */
 function fitLayout(){
   var mw = document.getElementById('mainWrap');
   /* ★ FIX: mainWrap.clientWidth는 overflow-y:auto일 때 스크롤바 너비(~15px)만큼 줄어들지만
@@ -3744,16 +3815,16 @@ function fitLayout(){
       var bdgMinH_p = carMinH_p + badgeFs_p + 4;
       pgEl.style.setProperty('--slot-badge-show', slotH_p >= bdgMinH_p ? '1' : '0');
       pgEl.style.setProperty('--slot-memo-show',  slotH_p >= bdgMinH_p + Math.ceil(memoFs_p*1.4) + 2 ? '1' : '0');
+      /* ★ PC: 메모 max-height = 슬롯높이 - 차량번호영역 - 여백 */
+      var memoMaxH_p = Math.max(Math.floor(slotH_p - numSz_p - Math.ceil(carFs_p*2.2) - 6), 0);
+      pgEl.style.setProperty('--slot-memo-max-h', memoMaxH_p + 'px');
 
-      /* ★ FIX: 열 접기 상태 반영 — fitLayout이 gridTemplateColumns를 전체 열 수로
-         덮어쓰면 _applyAllColFolds()가 설정한 visCols가 무효화됨.
-         새로고침 후 접힌 열 수만큼 오른쪽에 빈 공간이 생기는 버그의 직접 원인. */
-      var visCols_p = typeof _getColFold === 'function'
-        ? Math.max(pc - _getColFold(p), 1) : pc;
-      pgEl.style.gridTemplateColumns='repeat('+visCols_p+',minmax(0,1fr))';
+      /* ★ 스크롤 방식: 그리드는 항상 전체 열 수로 렌더링.
+         col-scroll-wrap max-width로 뷰포트 제한, 나머지는 터치 드래그 스크롤. */
+      pgEl.style.gridTemplateColumns='repeat('+pc+',minmax(0,1fr))';
       pgEl.style.gridTemplateRows='repeat('+pr+','+slotH_p+'px)';
       if(chEl){
-        chEl.style.gridTemplateColumns='repeat('+visCols_p+',minmax(0,1fr))';
+        chEl.style.gridTemplateColumns='repeat('+pc+',minmax(0,1fr))';
         chEl.style.setProperty('--col-hc-fs', colHcFs_p + 'px');
       }
     }
@@ -3891,7 +3962,7 @@ function fitLayout(){
     var pgA = document.getElementById('parkingGrid'+pA);
     var chA = document.getElementById('colHeader'+pA);
     if(pgA){
-      pgA.style.gridTemplateColumns = 'repeat('+dispColsA+',minmax(0,1fr))';
+      pgA.style.gridTemplateColumns = 'repeat('+colsA+',minmax(0,1fr))';
       var slotHA = (rowsA < maxRowsPair)
         ? Math.floor((totalGridH - 5*(rowsA-1)) / rowsA)
         : baseSlotH;
@@ -3899,7 +3970,7 @@ function fitLayout(){
       pgA.style.setProperty('--slot-h', slotHA+'px');
       pgA.style.setProperty('--slot-badge-fs', badgeFsP+'px');
     }
-    if(chA) chA.style.gridTemplateColumns='repeat('+dispColsA+',minmax(0,1fr))';
+    if(chA) chA.style.gridTemplateColumns='repeat('+colsA+',minmax(0,1fr))';
 
     /* 파트B 적용 */
     if(pB){
@@ -3907,15 +3978,20 @@ function fitLayout(){
       var chB = document.getElementById('colHeader'+pB);
       if(pgB){
         /* ★ FIX: 동일하게 dispColsB 사용 */
-        pgB.style.gridTemplateColumns = 'repeat('+dispColsB+',minmax(0,1fr))';
+        pgB.style.gridTemplateColumns = 'repeat('+colsB+',minmax(0,1fr))';
         var slotHB = (rowsB < maxRowsPair)
           ? Math.floor((totalGridH - 5*(rowsB-1)) / rowsB)
           : baseSlotH;
         pgB.style.gridTemplateRows = 'repeat('+rowsB+','+slotHB+'px)';
         pgB.style.setProperty('--slot-h', slotHB+'px');
         pgB.style.setProperty('--slot-badge-fs', badgeFsP+'px');
+        /* ★ PC 격자모드: 메모 max-height 계산 */
+        var numSzGB = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
+        var carFsGB = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
+        var memoMaxHB = Math.max(Math.floor(slotHB - numSzGB - Math.ceil(carFsGB*2.2) - 6), 0);
+        pgB.style.setProperty('--slot-memo-max-h', memoMaxHB+'px');
       }
-      if(chB) chB.style.gridTemplateColumns='repeat('+dispColsB+',minmax(0,1fr))';
+      if(chB) chB.style.gridTemplateColumns='repeat('+colsB+',minmax(0,1fr))';
     }
   }
 
@@ -4570,19 +4646,27 @@ function _appendPartDOM(p){
     body = wrap; /* 1파트는 gridWrap 직접 사용 */
   }
 
-  /* 파킹 그리드 */
+  /* 파킹 그리드 + 스크롤 래퍼 */
+  var _sw2 = document.createElement('div');
+  _sw2.className = 'col-scroll-wrap'; _sw2.id = 'colScrollWrap'+p;
+  var _swIn2 = document.createElement('div'); _swIn2.className = 'col-scroll-inner';
+
   var pg = document.createElement('div');
   pg.className = 'parking-grid';
   pg.id = 'parkingGrid'+p;
   pg.style.cssText = 'grid-template-columns:repeat('+COLS_PER_PART+',minmax(0,1fr));grid-template-rows:repeat('+ROWS_PER_PART+',var(--slot-h,70px));';
-  body.appendChild(pg);
+  _swIn2.appendChild(pg);
 
   /* 열 헤더 */
+  var _chr2 = document.createElement('div'); _chr2.className = 'col-header-row';
   var ch = document.createElement('div');
   ch.className = 'col-header';
   ch.id = 'colHeader'+p;
   ch.style.gridTemplateColumns = 'repeat('+COLS_PER_PART+',minmax(0,1fr))';
-  body.appendChild(ch);
+  _chr2.appendChild(ch); _swIn2.appendChild(_chr2);
+
+  _sw2.appendChild(_swIn2);
+  body.appendChild(_sw2);
 }
 
 /* gridWrap 전체 재구성 */
@@ -4744,15 +4828,25 @@ function _rebuildGridDOM(){
     bd.id = 'partBody'+p;
     bd.className = 'part-body' + (isOpen ? '' : ' collapsed');
 
+    /* 스크롤 래퍼 */
+    var _sw = document.createElement('div');
+    _sw.className = 'col-scroll-wrap'; _sw.id = 'colScrollWrap'+p;
+    var _swIn = document.createElement('div');
+    _swIn.className = 'col-scroll-inner';
+
     var pg = document.createElement('div');
     pg.className = 'parking-grid'; pg.id = 'parkingGrid'+p;
     pg.style.cssText = 'grid-template-columns:repeat('+(PART_COL_COUNTS[p-1]||COLS_PER_PART)+',minmax(0,1fr));grid-template-rows:repeat('+(PART_ROW_COUNTS[p-1]||ROWS_PER_PART)+',var(--slot-h,70px));';
-    bd.appendChild(pg);
+    _swIn.appendChild(pg);
 
+    var _chr = document.createElement('div'); _chr.className = 'col-header-row';
     var ch = document.createElement('div');
     ch.className = 'col-header'; ch.id = 'colHeader'+p;
     ch.style.gridTemplateColumns = 'repeat('+(PART_COL_COUNTS[p-1]||COLS_PER_PART)+',minmax(0,1fr))';
-    bd.appendChild(ch);
+    _chr.appendChild(ch); _swIn.appendChild(_chr);
+
+    _sw.appendChild(_swIn);
+    bd.appendChild(_sw);
 
     /* ── DOM 조립 ── */
     if(gridMode){
@@ -4832,53 +4926,220 @@ function colFoldShow(p){
   _applyAllColFolds();
 }
 
-/* ── 핵심: 그리드 CSS + 슬롯 display 업데이트 후 fitLayout 재계산 ── */
+/* ── 열 접기: 보이는 열 기준으로 슬롯 크기 계산 후 스크롤 뷰포트 조절 ── */
 function _applyColFoldLayout(p){
   var totalCols = PART_COL_COUNTS[p-1]||COLS_PER_PART;
-  var totalRows = PART_ROW_COUNTS[p-1]||ROWS_PER_PART;
   var visCols   = _getVisibleCols(p);
-
   var pg = document.getElementById('parkingGrid'+p);
   var ch = document.getElementById('colHeader'+p);
   if(!pg) return;
 
-  /* ① PART_COL_COUNTS를 visCols로 임시 교체 → fitLayout이 올바른 열 수로 계산 */
+  /* ① 슬롯 크기: visCols 기준 fitLayout (세로/격자 모두 보이는 열 크기 기준) */
   PART_COL_COUNTS[p-1] = visCols;
-
-  /* ② fitLayout 재계산 (슬롯 크기/폰트 자동 조정) */
   try{ fitLayout(); }catch(e){}
-
-  /* ③ 원래 열 수 복원 */
   PART_COL_COUNTS[p-1] = totalCols;
 
-  /* ④ 슬롯 display: 숨겨진 열은 display:none (레이아웃 공간 차지 안 함) */
-  var slots = pg.querySelectorAll('.slot');
-  slots.forEach(function(s, i){
-    var col = (i % totalCols) + 1;
-    if(col <= visCols){
-      s.style.display = '';
-      s.style.visibility = '';
-    } else {
-      s.style.display = 'none';
-    }
-  });
-
-  /* ⑤ 열 헤더도 동일하게 처리 */
+  /* ② 그리드: 전체 열 수 렌더링 (display:none 없음 — 스크롤로 접근) */
+  pg.style.gridTemplateColumns = 'repeat('+totalCols+',minmax(0,1fr))';
+  pg.querySelectorAll('.slot').forEach(function(s){ s.style.display=''; s.style.visibility=''; });
   if(ch){
-    ch.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
-    var hcs = ch.querySelectorAll('.col-hc');
-    hcs.forEach(function(hc, i){
-      hc.style.display = (i+1 <= visCols) ? '' : 'none';
-    });
+    ch.style.gridTemplateColumns = 'repeat('+totalCols+',minmax(0,1fr))';
+    ch.querySelectorAll('.col-hc').forEach(function(hc){ hc.style.display=''; });
   }
 
-  /* ⑥ 그리드 템플릿 columns도 visCols로 명시 (fitLayout이 이미 설정했지만 명시적으로) */
-  pg.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
+  /* ③ 스크롤 래퍼 뷰포트 (레이아웃 확정 후 픽셀 계산) */
+  requestAnimationFrame(function(){
+    _applyColScrollViewport(p, totalCols, visCols);
+  });
 
-  /* ⑦ 버튼 상태 갱신 */
+  /* ④ 버튼 상태 갱신 */
   _updateColFoldBtns(p);
 }
 
+/* 스크롤 뷰포트: 래퍼 100% 너비, parking-grid + col-header-row 동일 픽셀 너비
+   세로/격자/PC 모드 모두 동작 */
+function _applyColScrollViewport(p, totalCols, visCols){
+  var sw = document.getElementById('colScrollWrap'+p);
+  if(!sw) return;
+  sw.style.width    = '100%';
+  sw.style.maxWidth = '100%';
+
+  var pg    = document.getElementById('parkingGrid'+p);
+  var ch    = document.getElementById('colHeader'+p);
+  var chr   = ch ? ch.parentElement : null;  /* col-header-row */
+  var inner = sw.querySelector('.col-scroll-inner');
+
+  if(visCols < totalCols){
+    /* 래퍼 실제 너비 취득 (격자모드: 셀 너비, 세로모드: 전체 너비) */
+    var wrapW = sw.getBoundingClientRect().width;
+    if(!wrapW || wrapW <= 0) wrapW = sw.offsetWidth;
+    if(!wrapW || wrapW <= 0) wrapW = window.innerWidth - 16;
+
+    /* 전체 그리드 너비 = 래퍼너비 / visCols * totalCols */
+    var totalW = Math.round(wrapW / visCols * totalCols);
+
+    /* parking-grid, col-header-row, col-header, inner 동일 픽셀 너비 */
+    if(pg)   { pg.style.width    = totalW+'px'; pg.style.minWidth    = totalW+'px'; }
+    if(chr)  { chr.style.width   = totalW+'px'; chr.style.minWidth   = totalW+'px'; }
+    if(ch)   { ch.style.width    = totalW+'px'; ch.style.minWidth    = totalW+'px'; }
+    if(inner){ inner.style.width = totalW+'px'; inner.style.minWidth = totalW+'px'; }
+
+    /* ★ PC 마우스 드래그 스크롤 등록 (1회) */
+    _initColScrollMouseDrag(sw);
+    sw.classList.add('has-hidden-cols');
+
+  } else {
+    /* 전체 열 펼침: 너비 인라인 스타일 초기화 */
+    if(pg)   { pg.style.width    = ''; pg.style.minWidth    = ''; }
+    if(chr)  { chr.style.width   = ''; chr.style.minWidth   = ''; }
+    if(ch)   { ch.style.width    = ''; ch.style.minWidth    = ''; }
+    if(inner){ inner.style.width = ''; inner.style.minWidth = ''; }
+    sw.scrollLeft = 0;
+    sw.classList.remove('has-hidden-cols');
+  }
+}
+
+/* ★ PC 열 스크롤: 마우스 위치 기반 화살표 버튼 + 드래그 스크롤 */
+function _initColScrollMouseDrag(sw){
+  /* 모바일에서는 실행 안 함 */
+  if(window.innerWidth < 601){
+    ['col-scroll-arrow-wrap-left','col-scroll-arrow-wrap-right'].forEach(function(cls){
+      var p = sw.parentElement;
+      var el = p && p.querySelector('.'+cls);
+      if(el) el.remove();
+    });
+    sw._mouseDragInited = false;
+    return;
+  }
+  if(sw._mouseDragInited) return;
+  sw._mouseDragInited = true;
+
+  /* part-body(부모)를 기준 컨테이너로 */
+  var body = sw.parentElement;
+  if(body && getComputedStyle(body).position === 'static'){
+    body.style.position = 'relative';
+  }
+
+  function _makeWrap(side){
+    var wrap = document.createElement('div');
+    wrap.className = 'col-scroll-arrow-wrap col-scroll-arrow-wrap-'+side;
+    if(body) body.appendChild(wrap);
+    return wrap;
+  }
+  var wrapL = _makeWrap('left');
+  var wrapR = _makeWrap('right');
+
+  var btnL = document.createElement('button');
+  btnL.className = 'col-scroll-arrow';
+  btnL.innerHTML = '&#9664;';
+  btnL.title = '왼쪽 열 보기';
+  wrapL.appendChild(btnL);
+
+  var btnR = document.createElement('button');
+  btnR.className = 'col-scroll-arrow';
+  btnR.innerHTML = '&#9654;';
+  btnR.title = '오른쪽 열 보기';
+  wrapR.appendChild(btnR);
+
+  /* 슬롯 1칸 너비 */
+  function _slotW(){
+    var pg = sw.querySelector('.parking-grid');
+    if(!pg) return 80;
+    var m = pg.style.gridTemplateColumns.match(/repeat[(](\d+)/);
+    var cols = m ? parseInt(m[1]) : 1;
+    return cols > 0 ? Math.round(sw.scrollWidth / cols) : 80;
+  }
+
+  /* 화살표 fade 상태 갱신 */
+  function _updateArrows(){
+    var atStart = sw.scrollLeft <= 2;
+    var atEnd   = sw.scrollLeft + sw.clientWidth >= sw.scrollWidth - 2;
+    btnL.classList.toggle('faded', atStart);
+    btnR.classList.toggle('faded', atEnd);
+  }
+
+  /* 호버 자동 스크롤 (requestAnimationFrame 기반) */
+  var _hoverRaf = null;
+  var _hoverDir = 0;
+
+  function _hoverScroll(){
+    if(_hoverDir === 0){ _hoverRaf = null; return; }
+    var speed = Math.max(3, Math.round(_slotW() * 0.05));
+    sw.scrollLeft += _hoverDir * speed;
+    _updateArrows();
+    _hoverRaf = requestAnimationFrame(_hoverScroll);
+  }
+  function _startHover(dir){ _hoverDir = dir; if(!_hoverRaf) _hoverRaf = requestAnimationFrame(_hoverScroll); }
+  function _stopHover(){ _hoverDir = 0; }
+
+  btnL.addEventListener('mouseenter', function(){ _startHover(-1); });
+  btnL.addEventListener('mouseleave', _stopHover);
+  btnR.addEventListener('mouseenter', function(){ _startHover(1); });
+  btnR.addEventListener('mouseleave', _stopHover);
+
+  /* 클릭: 한 칸 이동 */
+  btnL.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft -= _slotW(); _updateArrows(); });
+  btnR.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft += _slotW(); _updateArrows(); });
+
+  /* 마우스 위치 → 버튼 표시/숨김 */
+  function _onDocMove(e){
+    var rect = sw.getBoundingClientRect();
+    var inside = (e.clientX >= rect.left && e.clientX <= rect.right &&
+                  e.clientY >= rect.top  && e.clientY <= rect.bottom);
+    if(!inside){
+      btnL.classList.remove('visible');
+      btnR.classList.remove('visible');
+      return;
+    }
+    var cx = window.innerWidth / 2;
+    if(e.clientX > cx){
+      btnL.classList.remove('visible');
+      btnR.classList.add('visible');
+    } else {
+      btnR.classList.remove('visible');
+      btnL.classList.add('visible');
+    }
+    _updateArrows();
+  }
+  document.addEventListener('mousemove', _onDocMove);
+
+  /* 드래그 스크롤 */
+  var isDragging = false, startX = 0, startSL = 0, hasMoved = false;
+  sw.addEventListener('mousedown', function(e){
+    if(e.button !== 0) return;
+    if(e.target === btnL || e.target === btnR) return;
+    isDragging = true; hasMoved = false;
+    startX = e.clientX; startSL = sw.scrollLeft;
+    sw.style.cursor = 'grabbing';
+    sw.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!isDragging) return;
+    var dx = e.clientX - startX;
+    if(Math.abs(dx) > 3) hasMoved = true;
+    sw.scrollLeft = startSL - dx;
+    _updateArrows();
+  });
+  document.addEventListener('mouseup', function(){
+    if(!isDragging) return;
+    isDragging = false;
+    sw.style.cursor = 'grab';
+    sw.style.userSelect = '';
+    if(hasMoved){
+      var sc = function(ev){ ev.stopPropagation(); ev.preventDefault(); sw.removeEventListener('click',sc,true); };
+      sw.addEventListener('click', sc, true);
+    }
+  });
+  document.addEventListener('mouseleave', function(){
+    if(isDragging){ isDragging=false; sw.style.cursor='grab'; sw.style.userSelect=''; }
+    _stopHover();
+  });
+
+  sw.addEventListener('scroll', _updateArrows);
+  sw.style.cursor = 'grab';
+  _updateArrows();
+}
 /* 버튼 enabled/disabled + 카운트 표시 업데이트 */
 function _updateColFoldBtns(p){
   var hideBtn = document.getElementById('colFoldHideBtn'+p);
@@ -4891,36 +5152,35 @@ function _updateColFoldBtns(p){
   if(cntEl)   cntEl.textContent = visCols+'/'+totalCols;
 }
 
-/* 전체 파트 적용 (초기화/로드/rebuild 시) */
+/* 전체 파트 열 스크롤 상태 적용 (세로/격자/PC 공통) */
 function _applyAllColFolds(){
-  /* ★ FIX: fitLayout() 자체가 _getColFold()로 접힘 상태를 직접 읽으므로
-     PART_COL_COUNTS 임시 교체 불필요. 바로 fitLayout 호출 후 display 처리. */
   try{ fitLayout(); }catch(e){}
-  /* 파트별 슬롯/헤더 display 처리 */
-  for(var k=1; k<=NUM_PARTS; k++){
-    var fk = _getColFold(k);
-    var totalCols = PART_COL_COUNTS[k-1]||COLS_PER_PART;
-    var visCols   = Math.max(1, totalCols - fk);
-    var pg = document.getElementById('parkingGrid'+k);
-    var ch = document.getElementById('colHeader'+k);
-    if(fk > 0){
+  function _doApply(){
+    for(var k=1; k<=NUM_PARTS; k++){
+      var totalCols = PART_COL_COUNTS[k-1]||COLS_PER_PART;
+      var visCols   = _getVisibleCols(k);
+      var pg = document.getElementById('parkingGrid'+k);
+      var ch = document.getElementById('colHeader'+k);
+      /* 전체 열 렌더링 유지 (display:none 없음) */
       if(pg){
-        pg.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
-        var slots = pg.querySelectorAll('.slot');
-        slots.forEach(function(s,i){ var col=(i%totalCols)+1; s.style.display=(col<=visCols)?'':'none'; s.style.visibility=''; });
+        pg.style.gridTemplateColumns = 'repeat('+totalCols+',minmax(0,1fr))';
+        pg.querySelectorAll('.slot').forEach(function(s){ s.style.display=''; s.style.visibility=''; });
       }
       if(ch){
-        ch.style.gridTemplateColumns = 'repeat('+visCols+',minmax(0,1fr))';
-        var hcs = ch.querySelectorAll('.col-hc');
-        hcs.forEach(function(hc,i){ hc.style.display=(i+1<=visCols)?'':'none'; });
+        ch.style.gridTemplateColumns = 'repeat('+totalCols+',minmax(0,1fr))';
+        ch.querySelectorAll('.col-hc').forEach(function(hc){ hc.style.display=''; });
       }
-    } else {
-      /* 접히지 않은 파트: 혹시 남아있는 display:none 초기화 */
-      if(pg){ var slots2=pg.querySelectorAll('.slot'); slots2.forEach(function(s){ if(s.style.display==='none') s.style.display=''; }); }
-      if(ch){ var hcs2=ch.querySelectorAll('.col-hc'); hcs2.forEach(function(hc){ if(hc.style.display==='none') hc.style.display=''; }); }
+      _applyColScrollViewport(k, totalCols, visCols);
+      _updateColFoldBtns(k);
     }
-    _updateColFoldBtns(k);
   }
+  /* 즉시 1회 + 레이아웃 확정 후 1회 더 (격자/PC 레이아웃 계산 보장) */
+  _doApply();
+  requestAnimationFrame(function(){
+    _doApply();
+    /* 윈도우 리사이즈 등으로 래퍼 너비가 달라질 수 있으므로 한 프레임 더 */
+    requestAnimationFrame(function(){ _doApply(); });
+  });
 }
 
 /* 접기/펼치기 버튼 2개 + 카운트 뱃지 생성 */
@@ -4983,8 +5243,11 @@ function addPartCol(pNum){
   PART_COL_COUNTS[pNum-1]=newC; PART_ROW_COUNTS[pNum-1]=rows;
   localStorage.setItem(LS_PART_COLS+'_'+pNum, newC);
   localStorage.setItem(LS_PART_ROWS+'_'+pNum, rows);
-  /* ★ 열 추가 시 이 파트의 열 시각 접기 리셋 */
-  _setColFold(pNum, 0);
+  /* ★ 열 추가 시 접기 상태 유지 — 새 열은 숨김 영역에 추가됨
+     기존 fold 값 그대로 → visCols 유지, 새 열은 스크롤로 접근 가능 */
+  var _curFold = _getColFold(pNum);
+  /* fold가 있으면 새 열(1개 추가)만큼 fold도 1 늘려서 visCols 동일하게 유지 */
+  if(_curFold > 0) _setColFold(pNum, _curFold + 1);
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'struct-set');
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('✅ '+pNum+'파트 '+newC+'열×'+rows+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
@@ -5035,9 +5298,14 @@ function _doRemovePartCol(pNum){
   var _cn=getColNames();
   delete _cn['p'+pNum+'c'+cur];
   saveColNames(_cn);
-  /* ★ 열 삭제 시 이 파트의 열 시각 접기 리셋 (삭제로 인해 접기 수 조정) */
+  /* ★ 열 삭제 후 visCols 유지: fold 재계산
+     삭제 전 visCols = cur - _cf
+     삭제 후 totalCols = cur-1, 새 fold = (cur-1) - visCols
+     단, visCols가 새 totalCols보다 크면 fold=0 */
   var _cf = _getColFold(pNum);
-  if(_cf > 0) _setColFold(pNum, Math.max(0, Math.min(_cf, cur-2)));
+  var _visCols = Math.max(1, cur - _cf);
+  var _newFold = Math.max(0, (cur-1) - _visCols);
+  _setColFold(pNum, _newFold);
 
   /* ③ 구조 재계산 후 화면 갱신 (_rebuildAndRefresh의 pushSettings 건너뜀) */
   _recalcPartArrays();
@@ -5079,7 +5347,6 @@ function addPartRow(pNum){
   var oldR=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
   if(oldR>=MAX_ROWS){showAlert('⚠️ 최대 '+MAX_ROWS+'행');setTimeout(hideAlert,2000);return;}
   var newR=oldR+1, cols=PART_COL_COUNTS[pNum-1]||COLS_PER_PART;
-  _setRowFold(pNum,0);
   _saveUndoSnapshot('addPartRow p'+pNum);
   /* 좌표 고정 ID: 새 행만 추가, 기존 ID 불변 */
   var ids=_getIds(); if(!ids[pNum]) ids[pNum]=[];
@@ -5112,7 +5379,6 @@ function removePartRow(pNum){
 }
 function _doRemovePartRow(pNum){
   var cur=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART, cols=PART_COL_COUNTS[pNum-1]||COLS_PER_PART;
-  _setRowFold(pNum,0);
   _saveUndoSnapshot('removePartRow p'+pNum);
   /* 마지막 행 데이터 삭제 (좌표 ID로 직접 접근) */
   var ids=_getIds(), data=_getData();
@@ -9126,6 +9392,10 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
     }, 120);
   }
   window.addEventListener('resize', _debouncedFitLayout);
+  /* ★ 리사이즈 시 열 스크롤 뷰포트도 재계산 */
+  window.addEventListener('resize', function(){
+    setTimeout(function(){ if(typeof _applyAllColFolds==='function') _applyAllColFolds(); }, 180);
+  });
   window.addEventListener('orientationchange', function(){
     /* 회전 후 브라우저가 새 크기를 확정할 때까지 대기 후 재계산 */
     setTimeout(_debouncedFitLayout, 300);
