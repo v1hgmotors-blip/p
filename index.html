@@ -721,6 +721,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     margin-top: calc(var(--slot-num-sz, 22px) * 0.28);
     --slot-badge-h: 16px;
   }
+  /* ★ 날짜 배지 없는 슬롯: 배지 공간을 메모가 사용 */
+  .slot.no-badge {
+    --slot-badge-show: 0 !important;
+  }
   /* ★ slot-car + slot-memo 영역이 슬롯 높이를 넘지 않도록
      slot 자체 height는 JS에서 --slot-h로 고정되어 있음
      flex:1인 slot-memo가 실제 슬롯 내 가용 공간만 차지하도록 */
@@ -780,35 +784,34 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
      slot-memo가 slot-car 아래 남은 공간 전부 차지 */
   .slot-memo {
     flex: 1 1 0 !important;
+    min-height: 0 !important;
     overflow: hidden !important;
     display: -webkit-box !important;
     -webkit-box-orient: vertical !important;
     -webkit-line-clamp: 4 !important;
-    /* ★ 슬롯 높이 기준 max-height
-       배지 숨김(--slot-badge-show=0)이면 배지 공간도 메모가 사용 */
-    max-height: calc(
-      var(--slot-h, 70px)
-      - var(--slot-num-sz, 22px) * 0.28
-      - var(--slot-car-h, 32px)
-      - var(--slot-badge-h, 16px) * var(--slot-badge-show, 1)
-      - 4px
-    ) !important;
+    max-height: none !important;
     max-width: 100% !important;
     width: 100% !important;
     box-sizing: border-box !important;
     word-break: break-all !important;
     white-space: normal !important;
     text-overflow: ellipsis !important;
-    align-self: flex-start !important;
+    align-self: stretch !important;
     padding-bottom: 2px !important;
   }
+
   /* 빈 슬롯(차량 없음): 메모 공간 더 넓게 */
+  /* 빈 슬롯: 차량번호 없으므로 메모 공간 더 넓게 */
+  .slot:not(.occupied) .slot-empty {
+    flex-shrink: 0 !important;
+  }
   .slot:not(.occupied) .slot-memo {
-    max-height: calc(
-      var(--slot-h, 70px)
-      - var(--slot-num-sz, 22px) * 0.28
-      - 6px
+    flex: 1 1 0 !important;
+    /* ★ 차량번호 영역 제외하고 슬롯 높이 최대 활용 */
+    max-height: var(--slot-memo-max-h-no-car,
+      calc(var(--slot-h, 70px) - var(--slot-num-sz, 22px) - 6px)
     ) !important;
+    padding-bottom: 2px !important;
   }
 
 }
@@ -3814,6 +3817,12 @@ function fitLayout(){
       var bdgMinH_p = carMinH_p + badgeFs_p + 4;
       pgEl.style.setProperty('--slot-badge-show', slotH_p >= bdgMinH_p ? '1' : '0');
       pgEl.style.setProperty('--slot-memo-show',  slotH_p >= bdgMinH_p + Math.ceil(memoFs_p*1.4) + 2 ? '1' : '0');
+      /* ★ 실제 차량번호 높이를 CSS 변수로 설정 → max-height 정확하게 계산 */
+      var carH_p = Math.ceil(carFs_p * 2.2) + 4;
+      pgEl.style.setProperty('--slot-car-h', carH_p + 'px');
+      /* ★ 배지 없는 슬롯 메모: 차량번호 영역 제외, 더 넓은 공간 */
+      var memoMaxH_noCar_p = Math.max(Math.floor(slotH_p - numSz_p - 6), 0);
+      pgEl.style.setProperty('--slot-memo-max-h-no-car', memoMaxH_noCar_p + 'px');
       /* ★ PC: 메모 max-height = 슬롯높이 - 차량번호영역 - 여백 */
       var memoMaxH_p = Math.max(Math.floor(slotH_p - numSz_p - Math.ceil(carFs_p*2.2) - 6), 0);
       pgEl.style.setProperty('--slot-memo-max-h', memoMaxH_p + 'px');
@@ -3969,6 +3978,10 @@ function fitLayout(){
       pgA.style.setProperty('--slot-h', slotHA+'px');
       pgA.style.setProperty('--slot-badge-fs', badgeFsP+'px');
       pgA.style.setProperty('--slot-badge-show', slotHA > 58 ? '1' : '0'); /* ★ 58px 이하 배지 숨김 */
+      var _numSzA = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
+      var _carFsA = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
+      pgA.style.setProperty('--slot-car-h', (Math.ceil(_carFsA*2.2)+4) + 'px');
+      pgA.style.setProperty('--slot-memo-max-h-no-car', Math.max(Math.floor(slotHA - _numSzA - 6), 0) + 'px');
     }
     if(chA) chA.style.gridTemplateColumns='repeat('+colsA+',minmax(0,1fr))';
 
@@ -3986,6 +3999,10 @@ function fitLayout(){
         pgB.style.setProperty('--slot-h', slotHB+'px');
         pgB.style.setProperty('--slot-badge-fs', badgeFsP+'px');
         pgB.style.setProperty('--slot-badge-show', slotHB > 58 ? '1' : '0'); /* ★ 58px 이하 배지 숨김 */
+        var _numSzB = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
+        var _carFsB = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
+        pgB.style.setProperty('--slot-car-h', (Math.ceil(_carFsB*2.2)+4) + 'px');
+        pgB.style.setProperty('--slot-memo-max-h-no-car', Math.max(Math.floor(slotHB - _numSzB - 6), 0) + 'px');
         /* ★ PC 격자모드: 메모 max-height 계산 */
         var numSzGB = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
         var carFsGB = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
@@ -7170,6 +7187,12 @@ function renderSlot(el,idx){
     if(d.memo) html+='<div class="slot-memo">'+esc(d.memo)+'</div>';
   }
   el.innerHTML=html;
+  /* ★ 배지 없으면 no-badge 클래스 → 메모가 배지 자리까지 확장
+     배지 종류: 날짜배지(encar.date), 상태배지(status), 성능검사배지(inspect.date) */
+  var _hasBadge = (d.encar && d.encar.date) ||
+                  (d.status && d.status !== 'none' && d.status !== '') ||
+                  (d.inspect && d.inspect.date);
+  el.classList.toggle('no-badge', !_hasBadge);
   /* ── 엔카 아이콘/배지 추가 (1회만) ── */
   var ec=d.encar||{};
   if(ec.done){
