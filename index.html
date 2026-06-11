@@ -3366,7 +3366,8 @@ function getColName(part, col){
   var key = 'p'+part+'c'+col;
   return obj[key] !== undefined ? obj[key] : col+'열';
 }
-var _localColEditTs = 0; /* ★ 로컬 편집 타임스탬프 */
+var _localColEditTs = 0; /* ★ 로컬 열이름 편집 타임스탬프 */
+var _localStructTs  = 0; /* ★ 로컬 열/행/파트 구조변경 타임스탬프 (Firebase echo 차단용) */
 function setColName(part, col, val){
   var obj = getColNames();
   obj['p'+part+'c'+col] = val;
@@ -4490,12 +4491,12 @@ function _updateGridCtrlDisp(){
   }
 }
 function _rebuildAndRefresh(){
+  _localStructTs = Date.now(); /* ★ Firebase echo 차단: 구조변경 직후 2초간 원격 gridChanged 무시 */
   _applyPartCount(NUM_PARTS); _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp();
   _updateColPartSelect();
   /* ★ FIX: 열/행 추가 후 배지 슬라이더 재초기화 — fitLayout 완료 후 실행 */
   _initAllBadgeSliders();
-  /* ★ 열 시각 접기 상태 복원 */
-  _applyAllColFolds();
+  /* ★ NOTE: _applyAllColFolds()는 buildGrid() 내부에서 이미 호출되므로 여기서 중복 호출 불필요 */
   /* ★ FIX: partColCounts/partRowCounts 포함해서 전송 — 파트별 행수 덮어쓰기 방지 */
   if(typeof pushSettings==='function'){
     var _rbPartCols={}, _rbPartRows={};
@@ -8332,8 +8333,10 @@ function pushSettings(obj){
 }
 /* 원격 설정 수신 → 로컬 적용 */
 function applyRemoteSettings(data){
-  /* ★ 로컬 열편집 직후 1초 이내 → 그리드 구조 변경 무시 */
-  var _isLocalEdit = (Date.now() - _localColEditTs < 1000);
+  /* ★ 로컬 열이름 편집 직후 1초 OR 로컬 구조변경(열/행/파트) 직후 2초 이내
+     → Firebase echo가 돌아와도 그리드 재빌드 무시 (깜박임 방지) */
+  var _isLocalEdit = (Date.now() - _localColEditTs < 1000) ||
+                     (Date.now() - _localStructTs  < 2000);
 
   /* ★ 파트/열/행 구조 동기화 (다른 기기에서 변경한 경우) */
   var gridChanged = false;
@@ -8381,7 +8384,7 @@ function applyRemoteSettings(data){
     _cleanColArrows(); /* ★ FIX: 원격 구조변경 시 기존 화살표 버튼 정리 */
     _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp();
     _initPartDragListeners();
-    _applyAllColFolds(); /* ★ FIX: 원격 구조변경 후 화살표 버튼 재초기화 (호버 버튼 미표시 버그 수정) */
+    /* ★ NOTE: _applyAllColFolds()는 buildGrid() 내부에서 이미 호출됨 */
     /* ★ 그리드 구조가 바뀐 경우 Firebase 슬롯 데이터를 즉시 한 번 더 읽어 화면 갱신 */
     if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
       fbSlotsRef.once('value', function(snap){
