@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#FEE500">
   <link rel="manifest" id="pwaManifest">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>🚗 주차위치 현황판 (2026-06-11 KST)</title>
+<title>🚗 주차위치 현황판 (2026-04-27 22:10 KST)</title>
 <style>
 /* 백업 모달 표시/숨김 */
 :root {
@@ -109,7 +109,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:80px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;}
 .settings-body.collapsed{max-height:0;opacity:0;padding-bottom:0;}
 /* ★ 메인 스크롤 래퍼 */
-#mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;display:block;min-height:0;width:100%;}
+#mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
 .s-row{display:flex;gap:4px;align-items:center;}
 .s-lbl{font-size:10px;font-weight:800;color:var(--text-sub);white-space:nowrap;flex-shrink:0;width:30px;}
 .s-fb-url{flex:1.4;min-width:0;}
@@ -249,7 +249,6 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   overflow-x:auto;
   overflow-y:visible;
   -webkit-overflow-scrolling:touch; /* iOS 관성 스크롤 */
-  overscroll-behavior-x:contain; /* ★ 가로 스크롤이 세로로 전파 방지 */
   width:100%;
   box-sizing:border-box;
   /* 스크롤바 완전 숨김 — 터치 드래그만 사용 */
@@ -714,11 +713,22 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
    · 하단 배지(slot-badge-wrap): absolute → 메모 텍스트와 겹치지 않음
    · 슬롯 간격: 최소화 (배지 돌출 공간만 확보) */
 @media(min-width:601px){
-  /* overflow:visible → 배지(slot-num)가 경계선 위로 돌출 가능 */
+  /* slot-num 배지 돌출을 위해 overflow:visible 유지하되
+     슬롯 내부 컨텐츠 넘침 방지: slot-inner로 감싸거나
+     slot-memo max-height로 제한 */
   .slot, .slot.occupied {
     overflow: visible !important;
     margin-top: calc(var(--slot-num-sz, 22px) * 0.28);
     --slot-badge-h: 16px;
+  }
+  /* ★ slot-car + slot-memo 영역이 슬롯 높이를 넘지 않도록
+     slot 자체 height는 JS에서 --slot-h로 고정되어 있음
+     flex:1인 slot-memo가 실제 슬롯 내 가용 공간만 차지하도록 */
+  .slot-car {
+    flex-shrink: 0 !important;
+  }
+  .slot-memo {
+    min-height: 0 !important; /* flex:1이 슬롯 밖으로 안 넘치도록 */
   }
   /* 그리드: 배지 돌출분만큼 상단 패딩, 행 간격은 최소화 */
   .parking-grid {
@@ -752,6 +762,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     box-sizing: border-box;
     pointer-events: none;
     overflow: hidden;
+    /* ★ --slot-badge-show=0 이면 숨김 */
+    opacity: var(--slot-badge-show, 1);
+    pointer-events: none;
+    transition: opacity .15s;
   }
   /* 메모: 차량번호 바로 아래 배치 */
   .slot-car {
@@ -770,7 +784,15 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     display: -webkit-box !important;
     -webkit-box-orient: vertical !important;
     -webkit-line-clamp: 4 !important;
-    max-height: none !important;
+    /* ★ 슬롯 높이 기준 max-height
+       배지 숨김(--slot-badge-show=0)이면 배지 공간도 메모가 사용 */
+    max-height: calc(
+      var(--slot-h, 70px)
+      - var(--slot-num-sz, 22px) * 0.28
+      - var(--slot-car-h, 32px)
+      - var(--slot-badge-h, 16px) * var(--slot-badge-show, 1)
+      - 4px
+    ) !important;
     max-width: 100% !important;
     width: 100% !important;
     box-sizing: border-box !important;
@@ -778,12 +800,15 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     white-space: normal !important;
     text-overflow: ellipsis !important;
     align-self: flex-start !important;
-    /* 하단 날짜 배지(absolute)와 겹치지 않도록 */
-    padding-bottom: calc(var(--slot-badge-h, 16px) + 2px) !important;
-  }
-  /* 빈 슬롯(차량 없음): 패딩 불필요 */
-  .slot:not(.occupied) .slot-memo {
     padding-bottom: 2px !important;
+  }
+  /* 빈 슬롯(차량 없음): 메모 공간 더 넓게 */
+  .slot:not(.occupied) .slot-memo {
+    max-height: calc(
+      var(--slot-h, 70px)
+      - var(--slot-num-sz, 22px) * 0.28
+      - 6px
+    ) !important;
   }
 
 }
@@ -1806,7 +1831,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 </div>
 
   <!-- ★ 빌드 정보 뱃지 -->
-  <div id="buildBadge">🕐 빌드: 2026-06-11 KST &nbsp;|&nbsp; 호버버튼_원격동기화_최적화</div>
+  <div id="buildBadge">🕐 빌드: 2026-04-27 22:10 KST &nbsp;|&nbsp; 한결_주차현황선택팝업</div>
 </div><!-- /mainWrap -->
 
 <!-- 편집 모달 -->
@@ -2645,6 +2670,8 @@ function togglePartGridMode(){
   buildGrid();
   _applyPartViewMode();
   fitLayout();
+  /* ★ 모드 전환 후 열 스크롤 뷰포트 재적용 (DOM 새로 빌드되므로) */
+  setTimeout(function(){ _applyAllColFolds(); }, 50);
   /* ★ BUG FIX: 모드 전환 후 배지 슬라이더 재초기화 (DOM이 새로 빌드되므로 반드시 필요) */
   setTimeout(function(){ _initAllBadgeSliders(); }, 200);
 }
@@ -3366,8 +3393,7 @@ function getColName(part, col){
   var key = 'p'+part+'c'+col;
   return obj[key] !== undefined ? obj[key] : col+'열';
 }
-var _localColEditTs = 0; /* ★ 로컬 열이름 편집 타임스탬프 */
-var _localStructTs  = 0; /* ★ 로컬 열/행/파트 구조변경 타임스탬프 (Firebase echo 차단용) */
+var _localColEditTs = 0; /* ★ 로컬 편집 타임스탬프 */
 function setColName(part, col, val){
   var obj = getColNames();
   obj['p'+part+'c'+col] = val;
@@ -3749,7 +3775,7 @@ function fitLayout(){
         var _gridPadPc = Math.ceil(_slotNumSz * 0.30);
         var _partOvhd = 66 + _gridPadPc + (pr - 1) * _rowGapPc + pr * _slotMarginPc;
         var _fitH = Math.floor((_pcAvailH - _partOvhd) / pr);
-        _fitH = Math.min(Math.max(_fitH, 28), 110); /* 최소 28px 최대 110px */
+        _fitH = Math.min(Math.max(_fitH, 58), 110); /* ★ 최소 58px 보장 (작은 화면에서 스크롤) */
         slotH_p = Math.min(naturalSlotH_p, _fitH);  /* 자연 높이와 맞춤 높이 중 작은 값 */
       }
 
@@ -3904,7 +3930,7 @@ function fitLayout(){
         var _slotMgG  = Math.ceil(_slotNumSzG * 0.28);
         var _pairOvhd = 102 + (maxRowsPair - 1) * _rowGapG + maxRowsPair * _slotMgG;
         var _fitHG = Math.floor((_availHforPair - _pairOvhd) / maxRowsPair);
-        _fitHG = Math.min(Math.max(_fitHG, 36), 100);
+        _fitHG = Math.min(Math.max(_fitHG, 58), 100); /* ★ 최소 58px 보장 */
         baseSlotH = Math.min(baseSlotH, _fitHG);
         root2.style.setProperty('--slot-car-fs', Math.min(carFsG, Math.floor(baseSlotH*0.38))+'px');
         root2.style.setProperty('--slot-memo-fs', Math.min(memoFsG, Math.floor(baseSlotH*0.17))+'px');
@@ -3942,6 +3968,7 @@ function fitLayout(){
       pgA.style.gridTemplateRows = 'repeat('+rowsA+','+slotHA+'px)';
       pgA.style.setProperty('--slot-h', slotHA+'px');
       pgA.style.setProperty('--slot-badge-fs', badgeFsP+'px');
+      pgA.style.setProperty('--slot-badge-show', slotHA > 58 ? '1' : '0'); /* ★ 58px 이하 배지 숨김 */
     }
     if(chA) chA.style.gridTemplateColumns='repeat('+colsA+',minmax(0,1fr))';
 
@@ -3958,6 +3985,7 @@ function fitLayout(){
         pgB.style.gridTemplateRows = 'repeat('+rowsB+','+slotHB+'px)';
         pgB.style.setProperty('--slot-h', slotHB+'px');
         pgB.style.setProperty('--slot-badge-fs', badgeFsP+'px');
+        pgB.style.setProperty('--slot-badge-show', slotHB > 58 ? '1' : '0'); /* ★ 58px 이하 배지 숨김 */
         /* ★ PC 격자모드: 메모 max-height 계산 */
         var numSzGB = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
         var carFsGB = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
@@ -4491,12 +4519,12 @@ function _updateGridCtrlDisp(){
   }
 }
 function _rebuildAndRefresh(){
-  _localStructTs = Date.now(); /* ★ Firebase echo 차단: 구조변경 직후 2초간 원격 gridChanged 무시 */
   _applyPartCount(NUM_PARTS); _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp();
   _updateColPartSelect();
   /* ★ FIX: 열/행 추가 후 배지 슬라이더 재초기화 — fitLayout 완료 후 실행 */
   _initAllBadgeSliders();
-  /* ★ NOTE: _applyAllColFolds()는 buildGrid() 내부에서 이미 호출되므로 여기서 중복 호출 불필요 */
+  /* ★ 열 시각 접기 상태 복원 */
+  _applyAllColFolds();
   /* ★ FIX: partColCounts/partRowCounts 포함해서 전송 — 파트별 행수 덮어쓰기 방지 */
   if(typeof pushSettings==='function'){
     var _rbPartCols={}, _rbPartRows={};
@@ -4644,6 +4672,8 @@ function _appendPartDOM(p){
 
 /* gridWrap 전체 재구성 */
 function _rebuildGridDOM(){
+  /* ★ DOM 재생성 전 호버 버튼 정리 → 재생성 후 _applyAllColFolds에서 재등록 */
+  if(typeof _cleanColArrows === 'function') _cleanColArrows();
   var wrap = document.getElementById('gridWrap');
   if(!wrap) return;
   /* innerHTML='' 대신 removeChild로 안전하게 제거 */
@@ -5120,9 +5150,6 @@ function _initColScrollArrow(sw){
   document.addEventListener('mouseleave',_onLv);
   document.addEventListener('mousedown', _onDn); /* ★ document 레벨에서 잡아야 슬롯 위도 동작 */
   sw.addEventListener('scroll', _upd);
-  /* ★ FIX: 페이지 스크롤 시 fixed 버튼 위치 재계산 */
-  var _winScrollHandler = function(){ _pos(); };
-  window.addEventListener('scroll', _winScrollHandler, {passive:true});
   sw.style.cursor = 'grab';
 
   _colArrows[swId] = {
@@ -5134,7 +5161,6 @@ function _initColScrollArrow(sw){
       document.removeEventListener('mouseleave',_onLv);
       document.removeEventListener('mousedown', _onDn);
       sw.removeEventListener('scroll', _upd);
-      window.removeEventListener('scroll', _winScrollHandler);
     }
   };
 }
@@ -7042,7 +7068,7 @@ function buildGrid(){
       elem.addEventListener('touchstart',function(e){
         lpTimer=setTimeout(function(){
           var d=getSlot(n);
-          if(d.memo){ showTooltip(elem,d.memo); }
+          if(d.memo){ showTooltip(elem,d.memo); e.preventDefault(); }
         },500);
       },{passive:true});
       elem.addEventListener('touchend',function(){
@@ -7073,8 +7099,6 @@ function buildGrid(){
   _applyAllColFolds();
   _restoreAllScrollPos(_buildGridScrollPos);
   _buildGridScrollPos = null;
-  /* ★ 차량번호 글자 크기 자동 맞춤 */
-  _fitSlotCarTexts();
 }
 
 /* ★ 차량번호 뒤 4자리 → 위2/아래2 분리 */
@@ -8265,13 +8289,11 @@ function _applyGridConfigFromSlots(data) {
   }
   if (changed) {
     _applyPartCount(NUM_PARTS);
-    _cleanColArrows(); /* ★ FIX: FB gridConfig 변경 시 기존 화살표 버튼 정리 */
     _rebuildGridDOM();
     renderColHeaders();
     fitLayout();
     _updateGridCtrlDisp();
     _initPartDragListeners(); /* ★ Bug2 fix: buildGrid 없는 경로에도 리스너 재등록 */
-    _applyAllColFolds(); /* ★ FIX: 화살표 버튼 재초기화 */
   }
   return changed;
 }
@@ -8333,10 +8355,8 @@ function pushSettings(obj){
 }
 /* 원격 설정 수신 → 로컬 적용 */
 function applyRemoteSettings(data){
-  /* ★ 로컬 열이름 편집 직후 1초 OR 로컬 구조변경(열/행/파트) 직후 2초 이내
-     → Firebase echo가 돌아와도 그리드 재빌드 무시 (깜박임 방지) */
-  var _isLocalEdit = (Date.now() - _localColEditTs < 1000) ||
-                     (Date.now() - _localStructTs  < 2000);
+  /* ★ 로컬 열편집 직후 1초 이내 → 그리드 구조 변경 무시 */
+  var _isLocalEdit = (Date.now() - _localColEditTs < 1000);
 
   /* ★ 파트/열/행 구조 동기화 (다른 기기에서 변경한 경우) */
   var gridChanged = false;
@@ -8381,20 +8401,16 @@ function applyRemoteSettings(data){
   } /* end !_isLocalEdit */
   if(gridChanged){
     _applyPartCount(NUM_PARTS);
-    _cleanColArrows(); /* ★ FIX: 원격 구조변경 시 기존 화살표 버튼 정리 */
     _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp();
-    _initPartDragListeners();
-    /* ★ NOTE: _applyAllColFolds()는 buildGrid() 내부에서 이미 호출됨 */
     /* ★ 그리드 구조가 바뀐 경우 Firebase 슬롯 데이터를 즉시 한 번 더 읽어 화면 갱신 */
     if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
       fbSlotsRef.once('value', function(snap){
         var sd = snap.val();
         if(!sd || sd._cleared) return;
         var slots2={};
-        for(var k in sd){ if(k.charAt(0)!=='_' && sd[k]!==null) slots2[k]=sd[k]; }
+        for(var k in sd){ if(k!=='_cleared' && k!=='_gridConfig' && sd[k]!==null) slots2[k]=sd[k]; }
         saveSlots(slots2);
         buildGrid();
-        _initAllBadgeSliders();
         if(typeof _encarUpdateCount==='function') _encarUpdateCount();
         if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
       }).catch(function(){});
@@ -9403,7 +9419,6 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   loadMemoFs();
   renderColHeaders();
   buildGrid();
-  _initAllBadgeSliders(); /* ★ 초기 배지 슬라이더 */
   fitLayout();
   loadCarFs();             /* ★ PC 차량번호 크기 사용자 설정 복원 (fitLayout 이후) */
   initColEditUI();         /* ★ 열 편집 스위치 + 색상 초기화 (내부에서 onColEditToggle 호출) */
@@ -9478,15 +9493,18 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
       _fitLayoutTimer = null;
       fitLayout();
       _setPcScrollPadding();
-      /* ★ 리사이즈 후 열 스크롤 화살표 버튼 재초기화 */
-      setTimeout(function(){
-        _cleanColArrows();
-        if(typeof _applyAllColFolds==='function') _applyAllColFolds();
-      }, 60);
     }, 120);
   }
   window.addEventListener('resize', _debouncedFitLayout);
+  /* ★ 리사이즈 시 열 스크롤 뷰포트도 재계산 */
+  window.addEventListener('resize', function(){
+    setTimeout(function(){
+      _cleanColArrows();
+      if(typeof _applyAllColFolds==='function') _applyAllColFolds();
+    }, 180);
+  });
   window.addEventListener('orientationchange', function(){
+    /* 회전 후 브라우저가 새 크기를 확정할 때까지 대기 후 재계산 */
     setTimeout(_debouncedFitLayout, 300);
   });
   /* ★ FIX: 저장값으로 입력란 채우기 — 없으면 _PB_DEFAULTS 기본값 표시 */
@@ -9533,7 +9551,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   if(!('serviceWorker' in navigator)) return;
   if(location.protocol === 'file:') return;
 
-  var CACHE_VER = 'parking-sw-v4';
+  var CACHE_VER = 'parking-sw-v3';
   var APP_URL   = location.href.split('?')[0].split('#')[0];
   var FB_URLS   = [
     'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
