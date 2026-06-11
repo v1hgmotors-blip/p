@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#FEE500">
   <link rel="manifest" id="pwaManifest">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>🚗 주차위치 현황판 (2026-04-27 22:10 KST)</title>
+<title>🚗 주차위치 현황판 (2026-06-11 KST)</title>
 <style>
 /* 백업 모달 표시/숨김 */
 :root {
@@ -109,7 +109,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:80px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;}
 .settings-body.collapsed{max-height:0;opacity:0;padding-bottom:0;}
 /* ★ 메인 스크롤 래퍼 */
-#mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
+#mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;display:block;min-height:0;width:100%;}
 .s-row{display:flex;gap:4px;align-items:center;}
 .s-lbl{font-size:10px;font-weight:800;color:var(--text-sub);white-space:nowrap;flex-shrink:0;width:30px;}
 .s-fb-url{flex:1.4;min-width:0;}
@@ -225,7 +225,6 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 .part-cell .part-body{
   overflow:visible; /* ★ Fix BUG4: 격자모드 슬롯 클리핑 방지 */
-  overflow-x:hidden; /* ★ 가로 스크롤바 숨김 (col-scroll-wrap 안에서만 스크롤) */
   transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .25s ease;
   max-height:5000px;opacity:1;
   flex:0 0 auto;   /* 내용 크기에 맞춤 — 행 높이를 임의로 늘리지 않음 */
@@ -250,104 +249,14 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   overflow-x:auto;
   overflow-y:visible;
   -webkit-overflow-scrolling:touch; /* iOS 관성 스크롤 */
+  overscroll-behavior-x:contain; /* ★ 가로 스크롤이 세로로 전파 방지 */
   width:100%;
   box-sizing:border-box;
-  /* 스크롤바 완전 숨김 */
+  /* 스크롤바 완전 숨김 — 터치 드래그만 사용 */
   scrollbar-width:none;
   -ms-overflow-style:none;
-  cursor:default; /* JS에서 grab으로 덮어씀 */
-  /* touch-action 미설정 → 브라우저가 overflow 방향으로 자동 판단 */
-}
-/* ★ 숨긴 열 있을 때: 슬롯 touch-action을 pan-x pan-y로 설정
-   → 좌우(가로 스크롤)와 위아래(페이지 스크롤) 동시 허용 */
-.col-scroll-wrap.has-hidden-cols .slot{
-  touch-action:pan-x pan-y;
-}
-/* PC: 숨긴 열 있을 때 grab 커서 */
-@media(min-width:601px){
-  .col-scroll-wrap.has-hidden-cols{
-    cursor:grab;
-  }
-  .col-scroll-wrap.has-hidden-cols:active{
-    cursor:grabbing;
-  }
 }
 .col-scroll-wrap::-webkit-scrollbar{display:none;}
-/* ★ PC 열 스크롤 화살표 버튼 */
-@media(min-width:601px){
-  /* 버튼을 담는 래퍼: 좌우 끝에 고정, 공간 차지 안 함 */
-  .col-scroll-arrow-wrap{
-    position:absolute;
-    top:0; bottom:0;
-    width:0;
-    z-index:30;
-    pointer-events:none;
-  }
-  /* ── 세로/격자 공통: 버튼 위치 ── */
-  .col-scroll-arrow-wrap{
-    /* top/bottom은 JS에서 동적 설정 */
-  }
-  .col-scroll-arrow-wrap-left  { left:4px; }
-  .col-scroll-arrow-wrap-right { right:4px; }
-  /* 버튼: 래퍼 기준 완전히 안쪽 배치 */
-  .col-scroll-arrow-wrap-left  .col-scroll-arrow { transform:translate(0, -50%); }
-  .col-scroll-arrow-wrap-right .col-scroll-arrow { transform:translate(-100%, -50%); }
-
-  /* ── 격자모드: part-cell 기준 ── */
-  .part-cell .col-scroll-arrow-wrap{
-    top:var(--part-wrap-h, 44px);
-    bottom:0;
-  }
-  .part-cell .col-scroll-arrow-wrap-left  { left:4px; }
-  .part-cell .col-scroll-arrow-wrap-right { right:4px; }
-
-  .col-scroll-arrow{
-    display:none;
-    position:absolute;
-    top:50%;
-    transform:translate(-50%, -50%);
-    z-index:30;
-    width:44px;
-    height:110px;
-    background:rgba(40,20,10,.82);
-    color:#FEE500;
-    border:2.5px solid rgba(254,229,0,.6);
-    border-radius:20px;
-    font-size:24px;
-    font-weight:900;
-    cursor:pointer;
-    align-items:center;
-    justify-content:center;
-    line-height:1;
-    transition:opacity .18s, background .15s, transform .12s;
-    opacity:0;
-    pointer-events:none;
-    user-select:none;
-    box-shadow:0 3px 16px rgba(0,0,0,.50);
-    white-space:nowrap;
-  }
-  .col-scroll-arrow-wrap-left  .col-scroll-arrow{ left:0; }
-  .col-scroll-arrow-wrap-right .col-scroll-arrow{ left:0; }
-
-  .col-scroll-arrow.visible{
-    display:flex;
-    opacity:.9;
-    pointer-events:auto;
-  }
-  .col-scroll-arrow.faded{
-    opacity:.25;
-    pointer-events:none;
-  }
-  .col-scroll-arrow:hover{
-    background:rgba(58,29,10,.97);
-    opacity:1;
-    border-color:#FEE500;
-  }
-  .col-scroll-arrow:active{
-    background:#3A1D00;
-  }
-}
-
 .col-scroll-inner{
   display:block;
   width:100%;
@@ -359,7 +268,37 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   box-sizing:border-box;
 }
 
-.col-header-row{display:flex;align-items:center;gap:0;margin-top:3px;flex-shrink:0;min-width:0;overflow:hidden;}
+
+/* ★ PC 열 스크롤 화살표 버튼 */
+@media(min-width:601px){
+  .col-scroll-arrow{
+    display:none;
+    position:fixed;
+    z-index:9990;
+    width:44px;
+    height:110px;
+    background:rgba(40,20,10,.85);
+    color:#FEE500;
+    border:2.5px solid rgba(254,229,0,.6);
+    border-radius:20px;
+    font-size:24px;
+    font-weight:900;
+    cursor:pointer;
+    align-items:center;
+    justify-content:center;
+    line-height:1;
+    transition:opacity .18s, background .15s;
+    opacity:0;
+    pointer-events:none;
+    user-select:none;
+    box-shadow:0 3px 16px rgba(0,0,0,.50);
+  }
+  .col-scroll-arrow.visible{ display:flex; opacity:.9; pointer-events:auto; }
+  .col-scroll-arrow.faded  { opacity:.25; pointer-events:none; }
+  .col-scroll-arrow:hover  { background:rgba(58,29,10,.97); opacity:1; border-color:#FEE500; }
+  .col-scroll-arrow:active { background:#3A1D00; }
+}
+.col-header-row{display:flex;align-items:center;gap:0;margin-top:3px;flex-shrink:0;min-width:0;}
 .col-header{display:grid;gap:2px;flex:1;min-width:0;margin-top:0;margin-bottom:0;flex-shrink:0;}
 .col-hc{text-align:center;font-size:var(--col-hc-fs,15px);font-weight:900;color:var(--col-hc-color,#FFFFFF);background:var(--col-hc-bg,var(--kakao-dark));border-radius:5px;padding:4px 1px;cursor:pointer;position:relative;transition:background .15s;text-shadow:0 1px 0 rgba(255,255,255,.4);overflow:hidden;white-space:normal;word-break:break-all;line-height:1.2;min-width:0;display:flex;align-items:center;justify-content:center;}
 .col-hc:hover{filter:brightness(1.08);}
@@ -489,7 +428,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 
 .part-body{
   overflow:hidden;
-  overflow-x:hidden; /* ★ 가로 스크롤바 숨김 */
+  overflow-x:visible;
   transition:max-height .35s cubic-bezier(.4,0,.2,1), opacity .25s ease;
   max-height:5000px;
   opacity:1;
@@ -537,7 +476,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .part-saved-toast.show{opacity:1;}
 
 /* ══ 주차 칸 ══ */
-.slot{background:var(--card-empty);border:2px solid var(--border);border-radius:11px;display:flex;flex-direction:column;align-items:center;padding:0 0 3px;cursor:pointer;position:relative;overflow:visible;touch-action:pan-y;user-select:none;height:var(--slot-h,70px);box-shadow:var(--shadow);transition:border-color .15s,background .15s;}
+.slot{background:var(--card-empty);border:2px solid var(--border);border-radius:11px;display:flex;flex-direction:column;align-items:center;padding:0 0 3px;cursor:pointer;position:relative;overflow:visible;touch-action:pan-x pan-y;user-select:none;height:var(--slot-h,70px);box-shadow:var(--shadow);transition:border-color .15s,background .15s;}
 .slot:active{transform:scale(.93);}
 .slot-num{min-width:var(--slot-num-sz,22px);width:auto;height:var(--slot-num-sz,22px);border-radius:999px;background:#2DB400;color:#fff;font-size:var(--slot-num-fs,13px);font-weight:900;display:flex;align-items:center;justify-content:center;position:absolute;top:-6px;left:50%;transform:translateX(-50%);border:2.5px solid rgba(255,255,255,.95);box-shadow:0 2px 6px rgba(0,0,0,.45);transition:background .2s,color .2s;z-index:10;letter-spacing:-0.3px;padding:0 4px;white-space:nowrap;overflow:visible;}
 
@@ -550,7 +489,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 
 @media(max-width:600px){
   /* ★ 배지 z-index 버그 수정: part-body가 part-label 위에 렌더링되도록 */
-  .part-body{ position:relative; z-index:2; overflow-y:hidden; overflow-x:hidden !important; }
+  .part-body{ position:relative; z-index:2; overflow-y:hidden; overflow-x:visible !important; }
   .part-label{ position:relative; z-index:1; }
   .parking-grid{ overflow:visible !important; }
 
@@ -779,6 +718,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   .slot, .slot.occupied {
     overflow: visible !important;
     margin-top: calc(var(--slot-num-sz, 22px) * 0.28);
+    --slot-badge-h: 16px;
   }
   /* 그리드: 배지 돌출분만큼 상단 패딩, 행 간격은 최소화 */
   .parking-grid {
@@ -821,27 +761,31 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
      .slot 은 overflow:visible(배지 돌출용) 유지.
      메모는 슬롯 높이(--slot-h)를 절대 넘지 않도록
      max-height + overflow:hidden 으로 잘라냄. */
+  /* ★ PC 메모: flex:1로 남은 공간 자동 차지
+     slot-num/slot-badge-wrap은 absolute → 공간 미차지
+     slot-memo가 slot-car 아래 남은 공간 전부 차지 */
   .slot-memo {
-    flex: none !important;
+    flex: 1 1 0 !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
     display: -webkit-box !important;
     -webkit-box-orient: vertical !important;
-    /* 슬롯 높이에서 차량번호/배지 영역 제외한 나머지 높이만 사용 */
-    max-height: var(--slot-memo-max-h,
-      calc(
-        var(--slot-h, 70px)
-        - var(--slot-num-sz, 22px) * 1.0
-        - var(--slot-memo-fs, 9px) * 2.2
-        - 6px
-      )
-    ) !important;
+    -webkit-line-clamp: 4 !important;
+    max-height: none !important;
     max-width: 100% !important;
     width: 100% !important;
     box-sizing: border-box !important;
     word-break: break-all !important;
     white-space: normal !important;
+    text-overflow: ellipsis !important;
+    align-self: flex-start !important;
+    /* 하단 날짜 배지(absolute)와 겹치지 않도록 */
+    padding-bottom: calc(var(--slot-badge-h, 16px) + 2px) !important;
   }
+  /* 빈 슬롯(차량 없음): 패딩 불필요 */
+  .slot:not(.occupied) .slot-memo {
+    padding-bottom: 2px !important;
+  }
+
 }
 @keyframes blinkRainbow{
   0%  {background:#FFF0F0;border-color:#EF4444;box-shadow:0 0 0 3px rgba(239,68,68,.4);}
@@ -1252,6 +1196,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
                    background:#D1FAE5 !important; transform:scale(1.04); transition:transform .1s; }
 /* ★ 드래그 중 touch-action 전환: body 클래스 1회 토글 → 모든 슬롯 적용 (루프 reflow 제거) */
 body.dragging-slot .slot { touch-action: none; }
+body.dragging-slot #mainWrap { overflow-y:hidden !important; }
+/* 드래그 중 col-scroll-wrap: touch 차단, overflow-x는 auto 유지(JS로 스크롤) */
+body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 #dragGhost {
   pointer-events: none; /* ★ ghost가 터치/클릭 이벤트 받지 않도록 */
   position:fixed; pointer-events:none; z-index:9999;
@@ -1859,7 +1806,7 @@ body.dragging-slot .slot { touch-action: none; }
 </div>
 
   <!-- ★ 빌드 정보 뱃지 -->
-  <div id="buildBadge">🕐 빌드: 2026-04-27 22:10 KST &nbsp;|&nbsp; 한결_주차현황선택팝업</div>
+  <div id="buildBadge">🕐 빌드: 2026-06-11 KST &nbsp;|&nbsp; 호버버튼_원격동기화_최적화</div>
 </div><!-- /mainWrap -->
 
 <!-- 편집 모달 -->
@@ -2281,7 +2228,18 @@ function _fbSafeUpdate(updObj, label){
     });
 }
 
-function _fbSafeSet(dataObj, label){
+var _fbSafeSetTimer=null,_fbSafeSetLast=null;
+function _fbSafeSet(dataObj,label){
+  if(!fbSlotsRef) return;
+  if(label&&label.indexOf('struct')!==-1){_doFbSafeSet(dataObj,label);return;}
+  _fbSafeSetLast={dataObj:dataObj,label:label};
+  clearTimeout(_fbSafeSetTimer);
+  _fbSafeSetTimer=setTimeout(function(){
+    if(_fbSafeSetLast)_doFbSafeSet(_fbSafeSetLast.dataObj,_fbSafeSetLast.label);
+    _fbSafeSetLast=null;
+  },300);
+}
+function _doFbSafeSet(dataObj,label){
   if(!fbSlotsRef) return;
   fbSlotsRef.set(dataObj)
     .then(function(){
@@ -2681,16 +2639,12 @@ function isPartGridMode(){ return localStorage.getItem(LS_PART_VIEW)==='grid'; }
 function togglePartGridMode(){
   var next = isPartGridMode() ? 'single' : 'grid';
   localStorage.setItem(LS_PART_VIEW, next);  /* ★ localStorage만 — Firebase 동기화 없음 (기기별 독립) */
+  _cleanColArrows();
   _rebuildGridDOM();
   renderColHeaders();
   buildGrid();
   _applyPartViewMode();
   fitLayout();
-  /* ★ 모드 전환 후 열 스크롤 뷰포트 재적용 (DOM 새로 빌드되므로) */
-  setTimeout(function(){
-    _applyAllColFolds();
-    if(typeof _refreshAllArrowPositions==='function') _refreshAllArrowPositions();
-  }, 50);
   /* ★ BUG FIX: 모드 전환 후 배지 슬라이더 재초기화 (DOM이 새로 빌드되므로 반드시 필요) */
   setTimeout(function(){ _initAllBadgeSliders(); }, 200);
 }
@@ -4987,9 +4941,6 @@ function _applyColScrollViewport(p, totalCols, visCols){
   var chr   = ch ? ch.parentElement : null;  /* col-header-row */
   var inner = sw.querySelector('.col-scroll-inner');
 
-  /* ★ PC 화살표 버튼: 항상 초기화 (열 접기 여부와 무관하게 DOM 준비) */
-  _initColScrollMouseDrag(sw);
-
   if(visCols < totalCols){
     /* 래퍼 실제 너비 취득 (격자모드: 셀 너비, 세로모드: 전체 너비) */
     var wrapW = sw.getBoundingClientRect().width;
@@ -5004,8 +4955,7 @@ function _applyColScrollViewport(p, totalCols, visCols){
     if(chr)  { chr.style.width   = totalW+'px'; chr.style.minWidth   = totalW+'px'; }
     if(ch)   { ch.style.width    = totalW+'px'; ch.style.minWidth    = totalW+'px'; }
     if(inner){ inner.style.width = totalW+'px'; inner.style.minWidth = totalW+'px'; }
-    sw.classList.add('has-hidden-cols');
-
+    sw.classList.add('has-hidden-cols'); /* ★ 호버 버튼 표시용 */
   } else {
     /* 전체 열 펼침: 너비 인라인 스타일 초기화 */
     if(pg)   { pg.style.width    = ''; pg.style.minWidth    = ''; }
@@ -5015,221 +4965,10 @@ function _applyColScrollViewport(p, totalCols, visCols){
     sw.scrollLeft = 0;
     sw.classList.remove('has-hidden-cols');
   }
+  /* ★ PC: 화살표 버튼 초기화 */
+  if(window.innerWidth >= 601) _initColScrollArrow(sw);
 }
 
-/* ★ PC 열 스크롤: 마우스 위치 기반 화살표 버튼 + 드래그 스크롤 */
-function _initColScrollMouseDrag(sw){
-  /* 모바일 제외 */
-  if(window.innerWidth < 601){
-    var _p = sw.parentElement;
-    var _pc = _p && _p.parentElement && _p.parentElement.classList.contains('part-cell') ? _p.parentElement : _p;
-    ['col-scroll-arrow-wrap-left','col-scroll-arrow-wrap-right'].forEach(function(cls){
-      var el = _pc && _pc.querySelector('.'+cls); if(el) el.remove();
-    });
-    sw._mouseDragInited = false;
-    return;
-  }
-
-  var body      = sw.parentElement;  /* part-body */
-  var isGridCell = body && body.parentElement && body.parentElement.classList.contains('part-cell');
-  /* 세로모드: part-body 위의 part-wrap을 컨테이너로
-     (part-body의 overflow-x:hidden 에 버튼이 잘리지 않도록) */
-  var container;
-  if(isGridCell){
-    container = body.parentElement; /* part-cell */
-  } else {
-    /* 세로모드: gridWrap을 컨테이너로 사용
-       버튼 wrap 위치는 JS로 part-body rect에 맞게 동적 설정 */
-    container = body.parentElement; /* gridWrap */
-  }
-
-  /* 버튼이 이미 container에 살아있으면 스킵 */
-  if(sw._mouseDragInited){
-    /* container 재계산 (플래그 체크 시점에도 동일 로직) */
-    var _isGC = body && body.parentElement && body.parentElement.classList.contains('part-cell');
-    var _cnt  = _isGC ? body.parentElement : body.parentElement;
-    var _eL = _cnt && _cnt.querySelector('.col-scroll-arrow-wrap-left');
-    var _eR = _cnt && _cnt.querySelector('.col-scroll-arrow-wrap-right');
-    if(_eL && _eR) return;
-    /* DOM 재생성 → 기존 전역 리스너 제거 후 재등록 */
-    if(sw._removeListeners) sw._removeListeners();
-    sw._mouseDragInited = false;
-  }
-  sw._mouseDragInited = true;
-
-  /* 컨테이너 포지션 설정 */
-  if(container && getComputedStyle(container).position === 'static')
-    container.style.position = 'relative';
-  if(isGridCell){
-    container.style.overflow = 'visible';
-  }
-  /* 세로/격자 모두: part-wrap 높이를 --part-wrap-h 변수로 설정 */
-  /* 버튼 wrap top/bottom 위치 설정
-     세로모드: gridWrap 기준으로 part-body의 top/bottom 계산
-     격자모드: part-cell 기준으로 part-wrap 높이 계산 */
-  function _positionWraps(){
-    if(isGridCell){
-      /* 격자모드: part-wrap 높이 기준 */
-      var _pwEl = container.querySelector('.part-wrap');
-      var _pwH = _pwEl ? (_pwEl.getBoundingClientRect().height || _pwEl.offsetHeight || 44) : 44;
-      container.style.setProperty('--part-wrap-h', Math.round(_pwH)+'px');
-      if(wrapL){ wrapL.style.top=''; wrapL.style.bottom=''; }
-      if(wrapR){ wrapR.style.top=''; wrapR.style.bottom=''; }
-    } else {
-      /* 세로모드: gridWrap 기준으로 part-body top/bottom 동적 계산 */
-      var cRect = container.getBoundingClientRect();
-      var bRect = body.getBoundingClientRect();
-      var topOff    = Math.round(bRect.top - cRect.top);
-      var bottomOff = Math.round(cRect.bottom - bRect.bottom);
-      if(wrapL){ wrapL.style.top = topOff+'px'; wrapL.style.bottom = bottomOff+'px'; wrapL.style.height='auto'; }
-      if(wrapR){ wrapR.style.top = topOff+'px'; wrapR.style.bottom = bottomOff+'px'; wrapR.style.height='auto'; }
-    }
-  }
-  _positionWraps();
-
-  /* 버튼 생성 */
-  function _makeWrap(side){
-    var w = document.createElement('div');
-    w.className = 'col-scroll-arrow-wrap col-scroll-arrow-wrap-'+side;
-    container.appendChild(w);
-    return w;
-  }
-  var wrapL = _makeWrap('left'),  wrapR = _makeWrap('right');
-  var btnL  = document.createElement('button');
-  btnL.className = 'col-scroll-arrow'; btnL.innerHTML = '&#9664;'; btnL.title = '왼쪽 열 보기';
-  wrapL.appendChild(btnL);
-  var btnR  = document.createElement('button');
-  btnR.className = 'col-scroll-arrow'; btnR.innerHTML = '&#9654;'; btnR.title = '오른쪽 열 보기';
-  wrapR.appendChild(btnR);
-
-  /* 슬롯 1칸 너비 */
-  function _slotW(){
-    var pg = sw.querySelector('.parking-grid');
-    if(!pg) return 80;
-    var m = pg.style.gridTemplateColumns.match(/repeat[(](\d+)/);
-    var cols = m ? parseInt(m[1]) : 1;
-    return cols > 0 ? Math.round(sw.scrollWidth / cols) : 80;
-  }
-
-  /* 화살표 fade (끝 도달 시) */
-  function _updateArrows(){
-    var atStart = sw.scrollLeft <= 2;
-    var atEnd   = sw.scrollLeft + sw.clientWidth >= sw.scrollWidth - 2;
-    btnL.classList.toggle('faded', atStart);
-    btnR.classList.toggle('faded', atEnd);
-  }
-
-  /* 호버 자동 스크롤 */
-  var _hRaf = null, _hDir = 0;
-  function _hoverScroll(){
-    if(_hDir === 0){ _hRaf = null; return; }
-    sw.scrollLeft += _hDir * Math.max(3, Math.round(_slotW() * 0.05));
-    _updateArrows();
-    _hRaf = requestAnimationFrame(_hoverScroll);
-  }
-  function _startHover(d){ _hDir = d; if(!_hRaf) _hRaf = requestAnimationFrame(_hoverScroll); }
-  function _stopHover(){ _hDir = 0; }
-
-  btnL.addEventListener('mouseenter', function(){ _startHover(-1); });
-  btnL.addEventListener('mouseleave', _stopHover);
-  btnR.addEventListener('mouseenter', function(){ _startHover(1); });
-  btnR.addEventListener('mouseleave', _stopHover);
-  btnL.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft -= _slotW(); _updateArrows(); });
-  btnR.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft += _slotW(); _updateArrows(); });
-
-  /* ★ 마우스 위치 → 버튼 표시/숨김
-     - has-hidden-cols 없으면 표시 안 함
-     - 판정 영역: sw(col-scroll-wrap) BoundingRect 기준 */
-  function _onMove(e){
-    /* 열 접기 없으면 버튼 숨김 */
-    if(!sw.classList.contains('has-hidden-cols')){
-      btnL.classList.remove('visible');
-      btnR.classList.remove('visible');
-      return;
-    }
-    var rect = sw.getBoundingClientRect();
-    /* 마우스가 sw 영역 안에 있는지 */
-    var inside = e.clientX >= rect.left && e.clientX <= rect.right &&
-                 e.clientY >= rect.top  && e.clientY <= rect.bottom;
-    if(!inside){
-      btnL.classList.remove('visible');
-      btnR.classList.remove('visible');
-      return;
-    }
-    /* 파트(sw) 중앙 기준 좌/우 */
-    var partCX = rect.left + rect.width / 2;
-    if(e.clientX > partCX){
-      btnL.classList.remove('visible'); btnR.classList.add('visible');
-    } else {
-      btnR.classList.remove('visible'); btnL.classList.add('visible');
-    }
-    _updateArrows();
-  }
-
-  /* 드래그 스크롤 */
-  var _drag = false, _sx = 0, _ssl = 0, _moved = false;
-  function _onDown(e){
-    if(e.button !== 0 || e.target === btnL || e.target === btnR) return;
-    _drag = true; _moved = false; _sx = e.clientX; _ssl = sw.scrollLeft;
-    sw.style.cursor = 'grabbing'; sw.style.userSelect = 'none';
-    e.preventDefault();
-  }
-  function _onDrag(e){
-    if(!_drag) return;
-    var dx = e.clientX - _sx;
-    if(Math.abs(dx) > 3) _moved = true;
-    sw.scrollLeft = _ssl - dx;
-    _updateArrows();
-    _onMove(e); /* 드래그 중에도 버튼 위치 갱신 */
-  }
-  function _onUp(){
-    if(!_drag) return;
-    _drag = false; sw.style.cursor = 'grab'; sw.style.userSelect = '';
-    if(_moved){
-      var sc = function(ev){ ev.stopPropagation(); ev.preventDefault(); sw.removeEventListener('click',sc,true); };
-      sw.addEventListener('click', sc, true);
-    }
-  }
-  function _onLeave(){
-    if(_drag){ _drag=false; sw.style.cursor='grab'; sw.style.userSelect=''; }
-    _stopHover();
-    btnL.classList.remove('visible'); btnR.classList.remove('visible');
-  }
-
-  /* ★ 전역 리스너를 named 변수로 등록 → 나중에 제거 가능 */
-  document.addEventListener('mousemove', _onMove);
-  document.addEventListener('mousemove', _onDrag);
-  document.addEventListener('mouseup',   _onUp);
-  document.addEventListener('mouseleave',_onLeave);
-  sw.addEventListener('mousedown', _onDown);
-  sw.addEventListener('scroll',    _updateArrows);
-  sw.style.cursor = 'grab';
-  _updateArrows();
-
-  /* 리스너 제거 함수 저장 (DOM 재생성 시 호출) */
-  sw._removeListeners = function(){
-    document.removeEventListener('mousemove', _onMove);
-    document.removeEventListener('mousemove', _onDrag);
-    document.removeEventListener('mouseup',   _onUp);
-    document.removeEventListener('mouseleave',_onLeave);
-    sw.removeEventListener('mousedown', _onDown);
-    sw.removeEventListener('scroll',    _updateArrows);
-    if(wrapL.parentNode) wrapL.parentNode.removeChild(wrapL);
-    if(wrapR.parentNode) wrapR.parentNode.removeChild(wrapR);
-  };
-
-  /* ★ 버튼 top 위치 재계산 (행/열 추가·삭제 후 호출) */
-  sw._refreshArrowPos = function(){ _positionWraps(); };
-}
-
-/* ★ 모든 파트 화살표 버튼 위치 재계산 */
-function _refreshAllArrowPositions(){
-  if(window.innerWidth < 601) return;
-  for(var _p=1; _p<=NUM_PARTS; _p++){
-    var _sw = document.getElementById('colScrollWrap'+_p);
-    if(_sw && _sw._refreshArrowPos) _sw._refreshArrowPos();
-  }
-}
 /* 버튼 enabled/disabled + 카운트 표시 업데이트 */
 function _updateColFoldBtns(p){
   var hideBtn = document.getElementById('colFoldHideBtn'+p);
@@ -5240,6 +4979,200 @@ function _updateColFoldBtns(p){
   if(hideBtn) hideBtn.disabled = (visCols <= 1);
   if(showBtn) showBtn.disabled = (visCols >= totalCols);
   if(cntEl)   cntEl.textContent = visCols+'/'+totalCols;
+}
+
+
+/* ★ PC 열 스크롤 화살표 버튼 초기화 */
+var _colArrows = {}; /* swId → {btnL, btnR, listeners} */
+
+function _initColScrollArrow(sw){
+  var swId = sw.id;
+  if(!swId) return;
+
+  /* 이미 버튼이 살아있으면 스킵 */
+  var prev = _colArrows[swId];
+  if(prev && document.body.contains(prev.btnL)) return;
+
+  /* 기존 버튼/리스너 정리 */
+  if(prev){
+    if(prev.btnL && prev.btnL.parentNode) prev.btnL.parentNode.removeChild(prev.btnL);
+    if(prev.btnR && prev.btnR.parentNode) prev.btnR.parentNode.removeChild(prev.btnR);
+    if(prev.rmv) prev.rmv();
+  }
+
+  /* 버튼 생성 */
+  var btnL = document.createElement('button');
+  btnL.className = 'col-scroll-arrow'; btnL.innerHTML = '&#9664;'; btnL.title = '왼쪽 열 보기';
+  var btnR = document.createElement('button');
+  btnR.className = 'col-scroll-arrow'; btnR.innerHTML = '&#9654;'; btnR.title = '오른쪽 열 보기';
+  document.body.appendChild(btnL);
+  document.body.appendChild(btnR);
+
+  /* 버튼 위치: sw BoundingRect 기준 fixed */
+  function _pos(){
+    var r = sw.getBoundingClientRect();
+    var my = r.top + r.height/2;
+    btnL.style.left = (r.left + 4) + 'px';
+    btnL.style.top  = my + 'px';
+    btnL.style.transform = 'translateY(-50%)';
+    btnR.style.left = (r.right - 48) + 'px';
+    btnR.style.top  = my + 'px';
+    btnR.style.transform = 'translateY(-50%)';
+  }
+
+  /* fade (끝 도달) */
+  function _upd(){
+    btnL.classList.toggle('faded', sw.scrollLeft <= 2);
+    btnR.classList.toggle('faded', sw.scrollLeft + sw.clientWidth >= sw.scrollWidth - 2);
+  }
+
+  /* 슬롯 1칸 너비 */
+  function _slotW(){
+    var pg = sw.querySelector('.parking-grid');
+    if(!pg) return 80;
+    var m = pg.style.gridTemplateColumns.match(/repeat\((\d+)/);
+    var c = m ? parseInt(m[1]) : 1;
+    return c > 0 ? Math.round(sw.scrollWidth / c) : 80;
+  }
+
+  /* 호버 자동 스크롤 */
+  var _hRaf=null, _hDir=0;
+  function _hScroll(){
+    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; return; }
+    if(!_hDir){ _hRaf=null; return; }
+    sw.scrollLeft += _hDir * Math.max(3, Math.round(_slotW()*0.05));
+    _upd();
+    _hRaf = requestAnimationFrame(_hScroll);
+  }
+  btnL.addEventListener('mouseenter', function(){ _pos(); _hDir=-1; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
+  btnL.addEventListener('mouseleave', function(){ _hDir=0; });
+  btnR.addEventListener('mouseenter', function(){ _pos(); _hDir=1;  if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
+  btnR.addEventListener('mouseleave', function(){ _hDir=0; });
+  btnL.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft -= _slotW(); _upd(); });
+  btnR.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft += _slotW(); _upd(); });
+
+  /* 마우스 이동: 버튼 표시/숨김 */
+  function _onMv(e){
+    if(document.body.classList.contains('dragging-slot')){
+      btnL.classList.remove('visible'); btnR.classList.remove('visible'); return;
+    }
+    if(!sw.classList.contains('has-hidden-cols')){
+      btnL.classList.remove('visible'); btnR.classList.remove('visible'); return;
+    }
+    var r = sw.getBoundingClientRect();
+    if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom){
+      btnL.classList.remove('visible'); btnR.classList.remove('visible'); return;
+    }
+    _pos(); _upd();
+    if(e.clientX > r.left + r.width/2){
+      btnL.classList.remove('visible'); btnR.classList.add('visible');
+    } else {
+      btnR.classList.remove('visible'); btnL.classList.add('visible');
+    }
+  }
+
+  /* 드래그 스크롤 */
+  var _dg=false, _sx=0, _ssl=0, _mv=false, _prevX=undefined;
+  function _onDn(e){
+    if(document.body.classList.contains('dragging-slot')) return;
+    if(e.button) return;
+    if(e.target===btnL||e.target===btnR) return;
+    /* sw 영역 안에서 발생한 mousedown인지 확인 */
+    var _r = sw.getBoundingClientRect();
+    if(e.clientX < _r.left || e.clientX > _r.right ||
+       e.clientY < _r.top  || e.clientY > _r.bottom) return;
+    _dg=true; _mv=false; _sx=e.clientX; _ssl=sw.scrollLeft; _prevX=e.clientX;
+    sw.style.cursor='grabbing'; sw.style.userSelect='none';
+    e.preventDefault();
+  }
+  function _onDg(e){
+    if(document.body.classList.contains('dragging-slot')) return;
+    if(!_dg) return;
+    var dx = e.clientX - _sx;
+    if(Math.abs(dx) > 3) _mv = true;
+    /* ★ 매 mousemove 마다 이전 위치 대비 이동량으로 즉시 반영 */
+    var moveDelta = _prevX !== undefined ? (_prevX - e.clientX) * 3 : 0;
+    sw.scrollLeft += moveDelta;
+    _prevX = e.clientX;
+    _upd(); _onMv(e);
+  }
+  function _onUp(){
+    if(!_dg) return; _dg=false; sw.style.cursor='grab'; sw.style.userSelect='';
+    if(_mv){
+      /* ★ document 레벨에서 다음 click 이벤트 1회 차단 */
+      var s=function(ev){
+        ev.stopPropagation(); ev.preventDefault();
+        document.removeEventListener('click',s,true);
+      };
+      document.addEventListener('click',s,true);
+    }
+    _prevX=undefined;
+  }
+  function _onLv(){
+    if(_dg){_dg=false;sw.style.cursor='grab';sw.style.userSelect='';}
+    _hDir=0; btnL.classList.remove('visible'); btnR.classList.remove('visible');
+  }
+
+  document.addEventListener('mousemove', _onMv);
+  document.addEventListener('mousemove', _onDg);
+  document.addEventListener('mouseup',   _onUp);
+  document.addEventListener('mouseleave',_onLv);
+  document.addEventListener('mousedown', _onDn); /* ★ document 레벨에서 잡아야 슬롯 위도 동작 */
+  sw.addEventListener('scroll', _upd);
+  /* ★ FIX: 페이지 스크롤 시 fixed 버튼 위치 재계산 */
+  var _winScrollHandler = function(){ _pos(); };
+  window.addEventListener('scroll', _winScrollHandler, {passive:true});
+  sw.style.cursor = 'grab';
+
+  _colArrows[swId] = {
+    btnL: btnL, btnR: btnR,
+    rmv: function(){
+      document.removeEventListener('mousemove', _onMv);
+      document.removeEventListener('mousemove', _onDg);
+      document.removeEventListener('mouseup',   _onUp);
+      document.removeEventListener('mouseleave',_onLv);
+      document.removeEventListener('mousedown', _onDn);
+      sw.removeEventListener('scroll', _upd);
+      window.removeEventListener('scroll', _winScrollHandler);
+    }
+  };
+}
+
+/* 모드 전환/리빌드 시 기존 버튼 정리 */
+function _cleanColArrows(){
+  Object.keys(_colArrows).forEach(function(k){
+    var a = _colArrows[k];
+    if(a.btnL && a.btnL.parentNode) a.btnL.parentNode.removeChild(a.btnL);
+    if(a.btnR && a.btnR.parentNode) a.btnR.parentNode.removeChild(a.btnR);
+    if(a.rmv) a.rmv();
+    delete _colArrows[k];
+  });
+}
+
+
+/* ★ 모든 파트 col-scroll-wrap scrollLeft 저장 */
+function _saveAllScrollPos(){
+  var pos = {};
+  for(var _p=1; _p<=NUM_PARTS; _p++){
+    var sw = document.getElementById('colScrollWrap'+_p);
+    if(sw) pos[_p] = sw.scrollLeft;
+  }
+  return pos;
+}
+
+/* ★ 저장된 scrollLeft 복원 (rAF 3중으로 _applyAllColFolds 완료 후 실행) */
+function _restoreAllScrollPos(pos){
+  if(!pos) return;
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        for(var _p in pos){
+          var sw = document.getElementById('colScrollWrap'+_p);
+          if(sw && pos[_p] > 0) sw.scrollLeft = pos[_p];
+        }
+      });
+    });
+  });
 }
 
 /* 전체 파트 열 스크롤 상태 적용 (세로/격자/PC 공통) */
@@ -5268,11 +5201,8 @@ function _applyAllColFolds(){
   _doApply();
   requestAnimationFrame(function(){
     _doApply();
-    requestAnimationFrame(function(){
-      _doApply();
-      /* ★ 행/열 변경 후 버튼 top 위치 재계산 */
-      if(typeof _refreshAllArrowPositions === 'function') _refreshAllArrowPositions();
-    });
+    /* 윈도우 리사이즈 등으로 래퍼 너비가 달라질 수 있으므로 한 프레임 더 */
+    requestAnimationFrame(function(){ _doApply(); });
   });
 }
 
@@ -5336,13 +5266,20 @@ function addPartCol(pNum){
   PART_COL_COUNTS[pNum-1]=newC; PART_ROW_COUNTS[pNum-1]=rows;
   localStorage.setItem(LS_PART_COLS+'_'+pNum, newC);
   localStorage.setItem(LS_PART_ROWS+'_'+pNum, rows);
-  /* ★ 열 추가 시 접기 상태 유지 — 새 열은 숨김 영역에 추가됨
-     기존 fold 값 그대로 → visCols 유지, 새 열은 스크롤로 접근 가능 */
-  var _curFold = _getColFold(pNum);
-  /* fold가 있으면 새 열(1개 추가)만큼 fold도 1 늘려서 visCols 동일하게 유지 */
-  if(_curFold > 0) _setColFold(pNum, _curFold + 1);
+  /* ★ 열 추가 시 접기 상태 유지 */
+  var _cf=_getColFold(pNum); if(_cf>0) _setColFold(pNum,_cf+1);
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'struct-set');
+  _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
+  /* ★ 새로 추가된 열(맨 오른쪽)이 화면에 보이도록 스크롤 */
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        var sw = document.getElementById('colScrollWrap'+pNum);
+        if(sw) sw.scrollLeft = sw.scrollWidth;
+      });
+    });
+  });
   showAlert('✅ '+pNum+'파트 '+newC+'열×'+rows+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
 }
 function removePartCol(pNum){
@@ -5391,20 +5328,32 @@ function _doRemovePartCol(pNum){
   var _cn=getColNames();
   delete _cn['p'+pNum+'c'+cur];
   saveColNames(_cn);
-  /* ★ 열 삭제 후 visCols 유지: fold 재계산
+  /* ★ 열 삭제 후 visCols(보이는 열 수) 유지
      삭제 전 visCols = cur - _cf
-     삭제 후 totalCols = cur-1, 새 fold = (cur-1) - visCols
-     단, visCols가 새 totalCols보다 크면 fold=0 */
+     삭제 후 새 fold = (cur-1) - visCols (단, 0 이상) */
   var _cf = _getColFold(pNum);
-  var _visCols = Math.max(1, cur - _cf);
-  var _newFold = Math.max(0, (cur-1) - _visCols);
-  _setColFold(pNum, _newFold);
+  if(_cf > 0){
+    var _visCols = Math.max(1, cur - _cf);
+    var _newFold = Math.max(0, (cur-1) - _visCols);
+    _setColFold(pNum, _newFold);
+  }
 
   /* ③ 구조 재계산 후 화면 갱신 (_rebuildAndRefresh의 pushSettings 건너뜀) */
+  _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();
   _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
   _updateGridCtrlDisp(); _updateColPartSelect(); _initAllBadgeSliders();
   _applyAllColFolds();
+  /* ★ 삭제 후 새 마지막 열이 화면에 보이도록 스크롤
+     _applyAllColFolds의 rAF 2중 루프가 끝난 후 실행되도록 3중 rAF */
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        var sw = document.getElementById('colScrollWrap'+pNum);
+        if(sw) sw.scrollLeft = sw.scrollWidth;
+      });
+    });
+  });
 
   /* ④ Firebase에 한 번만 업로드 (타임스탬프 갱신 포함) */
   var _colTs = Date.now();
@@ -5447,6 +5396,7 @@ function addPartRow(pNum){
   _saveIds(ids);
   PART_ROW_COUNTS[pNum-1]=newR; localStorage.setItem(LS_PART_ROWS+'_'+pNum, newR);
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'addPartRow');
+  _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('✅ '+pNum+'파트 '+cols+'열×'+newR+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
 }
@@ -5484,6 +5434,7 @@ function _doRemovePartRow(pNum){
   _saveIds(ids); _saveData(data);
   PART_ROW_COUNTS[pNum-1]=cur-1; localStorage.setItem(LS_PART_ROWS+'_'+pNum, cur-1);
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'removePartRow');
+  _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
 }
@@ -6758,7 +6709,7 @@ var _drag = {
   timer:   null,       /* 롱프레스 타이머 */
   startX:  0,
   startY:  0,
-  moved:   false       /* 드래그 이동 여부 (클릭 구분) */
+  moved: false
 };
 
 /* ── 슬롯 데이터 교환 + 저장 ── */
@@ -6820,36 +6771,40 @@ function _dragStart(srcIdx, cx, cy) {
   var el = document.getElementById('slot_' + srcIdx);
   if (el) {
     el.classList.add('drag-src');
-    /* ★ body 클래스 1회 토글 → CSS로 모든 슬롯 touch-action:none 적용 (루프 reflow 제거) */
     document.body.classList.add('dragging-slot');
   }
-  var w  = el ? el.offsetWidth  : 60;
-  var h  = el ? el.offsetHeight : 60;
+  var w = el ? el.offsetWidth  : 60;
+  var h = el ? el.offsetHeight : 60;
   _dragCreateGhost(srcIdx, w, h);
   _dragMoveGhost(cx, cy);
-  /* 진동 (모바일) */
   if (navigator.vibrate) navigator.vibrate(40);
 }
+
 
 /* ── 드래그 이동 중 ── */
 function _dragMove(cx, cy) {
   if (!_drag.active) return;
   _dragMoveGhost(cx, cy);
-  /* 현재 좌표 아래 슬롯 찾기 */
+
+  /* ghost 숨기고 현재 좌표 아래 요소 탐색 */
   var ghost = _drag.ghost;
   if (ghost) ghost.style.display = 'none';
   var el = document.elementFromPoint(cx, cy);
   if (ghost) ghost.style.display = '';
+
   /* 가장 가까운 .slot 찾기 */
   var slotEl = el;
   while (slotEl && !slotEl.id.startsWith('slot_')) {
     slotEl = slotEl.parentElement;
   }
+
   var newOver = slotEl ? parseInt(slotEl.id.replace('slot_','')) : null;
   if (isNaN(newOver)) newOver = null;
   if (newOver === _drag.srcIdx) newOver = null;
+
+  /* ★ 열 범위 체크 없음 - 화면에 보이는 슬롯이면 모두 허용 */
+
   if (newOver !== _drag.overIdx) {
-    /* 이전 over 제거 */
     if (_drag.overIdx !== null) {
       var prev = document.getElementById('slot_' + _drag.overIdx);
       if (prev) prev.classList.remove('drag-over');
@@ -6865,51 +6820,96 @@ function _dragMove(cx, cy) {
 /* ── 드래그 종료 ── */
 function _dragEnd() {
   if (!_drag.active) return;
-  var src  = _drag.srcIdx;
-  var tgt  = _drag.overIdx;
-  /* 정리 */
+  var src = _drag.srcIdx;
+  var tgt = _drag.overIdx;
   _drag.active  = false;
   _drag.srcIdx  = null;
   _drag.overIdx = null;
-  _dragStopAutoScroll(); /* ★ 자동 스크롤 정지 */
+  _dragStopAutoScroll();
   if (_drag.ghost) { _drag.ghost.remove(); _drag.ghost = null; }
   document.querySelectorAll('.slot.drag-src').forEach(function(e){ e.classList.remove('drag-src'); });
   document.querySelectorAll('.slot.drag-over').forEach(function(e){ e.classList.remove('drag-over'); });
-  /* ★ body 클래스 제거 → touch-action:pan-y 복원 */
   document.body.classList.remove('dragging-slot');
-  /* 교환 */
   if (tgt !== null && tgt !== src) swapSlotsData(src, tgt);
 }
 
 
-/* ★ 드래그 중 자동 스크롤 */
-var _dragScrollTimer = null;
-var _dragScrollDir   = 0; /* -1: 위, 1: 아래, 0: 정지 */
-var _dragScrollSpeed = 6;
-var _dragScrollEdge  = 60; /* px */
 
-function _dragAutoScroll(cy) {
+/* ★ 드래그 중 자동 스크롤 */
+var _dragScrollRaf    = null; /* requestAnimationFrame handle */
+var _dragScrollDir    = 0;
+var _dragScrollDirX   = 0;
+var _dragScrollSpeed  = 6;
+var _dragScrollSpeedX = 1;
+var _dragScrollEdge   = 60;
+/* _dragScrollEdgeX는 동적으로 계산 (sw 너비의 절반) */
+var _dragScrollTimer  = null; /* 하위 호환용 */
+var _dragScrollEdgeX  = 95;
+
+/* 드래그 자동 스크롤 - touchmove/mousemove 마다 호출
+   cx, cy = 현재 터치/마우스 좌표 */
+var _drag_cx = 0, _drag_cy = 0; /* 최신 좌표 저장 */
+
+function _dragAutoScroll(cy, cx) {
+  _drag_cy = cy;
+  _drag_cx = (cx !== undefined) ? cx : _drag_cx;
+  /* rAF 루프가 없으면 시작 */
+  if (!_dragScrollRaf) _dragScrollRaf = requestAnimationFrame(_dragScrollStep);
+}
+
+function _dragScrollStep() {
+  if (!_drag.active) { _dragScrollRaf = null; return; }
+
+  var cy = _drag_cy, cx = _drag_cx;
   var wh = window.innerHeight;
-  if (cy < _dragScrollEdge) {
-    _dragScrollDir = -1;
-  } else if (cy > wh - _dragScrollEdge) {
-    _dragScrollDir = 1;
-  } else {
-    _dragScrollDir = 0;
+
+  /* 위아래 페이지 스크롤 */
+  if      (cy < _dragScrollEdge)    _dragScrollDir = -1;
+  else if (cy > wh-_dragScrollEdge) _dragScrollDir =  1;
+  else                               _dragScrollDir =  0;
+
+  /* 좌우 열 스크롤:
+     소스 슬롯의 파트를 찾아 해당 sw 스크롤
+     접기/펴기 상관없이 항상 동작 */
+  _dragScrollDirX = 0;
+  var _activeSw = null;
+  var _srcEl = document.getElementById('slot_' + _drag.srcIdx);
+  if (_srcEl) {
+    var _sw = _srcEl.closest('.col-scroll-wrap');
+    if (_sw) {
+      /* 스크롤 가능한 경우만 (접힘 상태) */
+      var _canScrollR = _sw.scrollWidth > _sw.clientWidth + 1;
+      if (_canScrollR) {
+        _activeSw = _sw;
+        var _r = _sw.getBoundingClientRect();
+        var _rightEdge = _r.left + _r.width * 0.75; /* 75% 지점 넘으면 오른쪽 스크롤 */
+        var _leftEdge  = _r.left + _r.width * 0.30; /* 30% 이하면 왼쪽 스크롤 */
+        if (cx > _rightEdge && _sw.scrollLeft < _sw.scrollWidth - _sw.clientWidth - 1) {
+          _dragScrollDirX = 1;  /* 오른쪽 */
+        } else if (cx < _leftEdge && _sw.scrollLeft > 0) {
+          _dragScrollDirX = -1; /* 왼쪽 */
+        }
+      }
+    }
   }
-  if (_dragScrollDir !== 0 && !_dragScrollTimer) {
-    _dragScrollTimer = setInterval(function() {
-      var wrap = document.getElementById('mainWrap');
-      if (wrap) wrap.scrollBy(0, _dragScrollDir * _dragScrollSpeed);
-    }, 16);
-  } else if (_dragScrollDir === 0) {
-    _dragStopAutoScroll();
+
+  /* 실행 */
+  if (_dragScrollDir !== 0) {
+    var wrap = document.getElementById('mainWrap');
+    if (wrap) wrap.scrollBy(0, _dragScrollDir * _dragScrollSpeed);
   }
+  if (_dragScrollDirX !== 0 && _activeSw) {
+    _activeSw.scrollLeft += _dragScrollDirX * _dragScrollSpeedX;
+  }
+
+  _dragScrollRaf = requestAnimationFrame(_dragScrollStep);
 }
 
 function _dragStopAutoScroll() {
+  if (_dragScrollRaf)   { cancelAnimationFrame(_dragScrollRaf); _dragScrollRaf = null; }
   if (_dragScrollTimer) { clearInterval(_dragScrollTimer); _dragScrollTimer = null; }
-  _dragScrollDir = 0;
+  _dragScrollDir  = 0;
+  _dragScrollDirX = 0;
 }
 
 /* ── 슬롯에 드래그 이벤트 등록 ── */
@@ -6939,7 +6939,7 @@ function addDragListeners(el, idx) {
       /* ★ 드래그 중: 기본 스크롤 차단 + ghost 이동 + 자동스크롤 */
       e.preventDefault();
       _dragMove(t.clientX, t.clientY);
-      _dragAutoScroll(t.clientY);
+      _dragAutoScroll(t.clientY, t.clientX);
     }
     /* 드래그 비활성 상태: 기본 스크롤 허용 (passive 효과) */
   }, {passive: false});
@@ -6970,7 +6970,7 @@ function addDragListeners(el, idx) {
 window.addEventListener('mousemove', function(e) {
   if (!_drag.active) return;
   _dragMove(e.clientX, e.clientY);
-  _dragAutoScroll(e.clientY); /* ★ PC 마우스 드래그 자동스크롤 */
+  _dragAutoScroll(e.clientY, e.clientX); /* ★ PC 마우스 드래그 자동스크롤 */
 });
 window.addEventListener('mouseup', function(e) {
   clearTimeout(_drag.timer);
@@ -7019,7 +7019,9 @@ function updatePartCarCountBadges(){
   } catch(e){}
 }
 
+var _buildGridScrollPos = null;
 function buildGrid(){
+  _buildGridScrollPos = _saveAllScrollPos();
   for(var p=1;p<=NUM_PARTS;p++){
     var g=document.getElementById('parkingGrid'+p);
     if(g) g.innerHTML='';
@@ -7039,7 +7041,7 @@ function buildGrid(){
       elem.addEventListener('touchstart',function(e){
         lpTimer=setTimeout(function(){
           var d=getSlot(n);
-          if(d.memo){ showTooltip(elem,d.memo); e.preventDefault(); }
+          if(d.memo){ showTooltip(elem,d.memo); }
         },500);
       },{passive:true});
       elem.addEventListener('touchend',function(){
@@ -7066,8 +7068,12 @@ function buildGrid(){
   /* ★ FIX: buildGrid 내 badge 초기화 제거 — 호출부에서 명시적으로 관리 */
   /* ★ 차량 카운트 배지 갱신 */
   updateCarCountBadge();
-  /* ★ 열 시각 접기 상태 복원 */
+  /* ★ 열 시각 접기 상태 복원 + 스크롤 위치 복원 */
   _applyAllColFolds();
+  _restoreAllScrollPos(_buildGridScrollPos);
+  _buildGridScrollPos = null;
+  /* ★ 차량번호 글자 크기 자동 맞춤 */
+  _fitSlotCarTexts();
 }
 
 /* ★ 차량번호 뒤 4자리 → 위2/아래2 분리 */
@@ -7165,28 +7171,8 @@ function refreshSlot(i){
   _fitSlotCarTexts(el);
   /* ★ FIX: 모바일/PC 구분 없이 배지 초기화 (드래그 후 배지 사라짐 방지) */
   requestAnimationFrame(function(){ _initBadgeSlider(el); });
-  /* ★ FIX: 열 접기 상태 재적용 — Firebase 실시간 업데이트로 renderSlot이 호출되면
-     인라인 style이 초기화되어 숨겨야 할 열의 슬롯이 다시 나타날 수 있음 */
-  try{
-    var _part = slotToPart(i);
-    if(_part >= 1 && typeof _getColFold === 'function' && _getColFold(_part) > 0){
-      var _pg = document.getElementById('parkingGrid'+_part);
-      if(_pg){
-        var _totalCols = PART_COL_COUNTS[_part-1]||COLS_PER_PART;
-        var _visCols   = Math.max(_totalCols - _getColFold(_part), 1);
-        /* 이 슬롯의 열 번호 계산 */
-        var _slots = _pg.querySelectorAll('.slot');
-        var _slotIdx = -1;
-        for(var _si=0; _si<_slots.length; _si++){
-          if(_slots[_si].id === 'slot_'+i){ _slotIdx = _si; break; }
-        }
-        if(_slotIdx >= 0){
-          var _col = (_slotIdx % _totalCols) + 1;
-          el.style.display = (_col <= _visCols) ? '' : 'none';
-        }
-      }
-    }
-  }catch(e){}
+    /* 열 숨김은 col-scroll-wrap 스크롤 방식으로 처리 */
+  if(el.style.display === 'none') el.style.display = '';
 }
 
 /* ★ PC 배지 슬라이더 */
@@ -8278,11 +8264,13 @@ function _applyGridConfigFromSlots(data) {
   }
   if (changed) {
     _applyPartCount(NUM_PARTS);
+    _cleanColArrows(); /* ★ FIX: FB gridConfig 변경 시 기존 화살표 버튼 정리 */
     _rebuildGridDOM();
     renderColHeaders();
     fitLayout();
     _updateGridCtrlDisp();
     _initPartDragListeners(); /* ★ Bug2 fix: buildGrid 없는 경로에도 리스너 재등록 */
+    _applyAllColFolds(); /* ★ FIX: 화살표 버튼 재초기화 */
   }
   return changed;
 }
@@ -8390,16 +8378,20 @@ function applyRemoteSettings(data){
   } /* end !_isLocalEdit */
   if(gridChanged){
     _applyPartCount(NUM_PARTS);
+    _cleanColArrows(); /* ★ FIX: 원격 구조변경 시 기존 화살표 버튼 정리 */
     _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp();
+    _initPartDragListeners();
+    _applyAllColFolds(); /* ★ FIX: 원격 구조변경 후 화살표 버튼 재초기화 (호버 버튼 미표시 버그 수정) */
     /* ★ 그리드 구조가 바뀐 경우 Firebase 슬롯 데이터를 즉시 한 번 더 읽어 화면 갱신 */
     if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
       fbSlotsRef.once('value', function(snap){
         var sd = snap.val();
         if(!sd || sd._cleared) return;
         var slots2={};
-        for(var k in sd){ if(k!=='_cleared' && k!=='_gridConfig' && sd[k]!==null) slots2[k]=sd[k]; }
+        for(var k in sd){ if(k.charAt(0)!=='_' && sd[k]!==null) slots2[k]=sd[k]; }
         saveSlots(slots2);
         buildGrid();
+        _initAllBadgeSliders();
         if(typeof _encarUpdateCount==='function') _encarUpdateCount();
         if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
       }).catch(function(){});
@@ -9408,6 +9400,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   loadMemoFs();
   renderColHeaders();
   buildGrid();
+  _initAllBadgeSliders(); /* ★ 초기 배지 슬라이더 */
   fitLayout();
   loadCarFs();             /* ★ PC 차량번호 크기 사용자 설정 복원 (fitLayout 이후) */
   initColEditUI();         /* ★ 열 편집 스위치 + 색상 초기화 (내부에서 onColEditToggle 호출) */
@@ -9482,18 +9475,15 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
       _fitLayoutTimer = null;
       fitLayout();
       _setPcScrollPadding();
+      /* ★ 리사이즈 후 열 스크롤 화살표 버튼 재초기화 */
+      setTimeout(function(){
+        _cleanColArrows();
+        if(typeof _applyAllColFolds==='function') _applyAllColFolds();
+      }, 60);
     }, 120);
   }
   window.addEventListener('resize', _debouncedFitLayout);
-  /* ★ 리사이즈 시 열 스크롤 뷰포트도 재계산 */
-  window.addEventListener('resize', function(){
-    setTimeout(function(){
-      if(typeof _applyAllColFolds==='function') _applyAllColFolds();
-      if(typeof _refreshAllArrowPositions==='function') _refreshAllArrowPositions();
-    }, 180);
-  });
   window.addEventListener('orientationchange', function(){
-    /* 회전 후 브라우저가 새 크기를 확정할 때까지 대기 후 재계산 */
     setTimeout(_debouncedFitLayout, 300);
   });
   /* ★ FIX: 저장값으로 입력란 채우기 — 없으면 _PB_DEFAULTS 기본값 표시 */
@@ -9540,7 +9530,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   if(!('serviceWorker' in navigator)) return;
   if(location.protocol === 'file:') return;
 
-  var CACHE_VER = 'parking-sw-v3';
+  var CACHE_VER = 'parking-sw-v4';
   var APP_URL   = location.href.split('?')[0].split('#')[0];
   var FB_URLS   = [
     'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js',
