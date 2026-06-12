@@ -5354,15 +5354,15 @@ function removePartCol(pNum){
 }
 function _doRemovePartCol(pNum){
   var cur=PART_COL_COUNTS[pNum-1]||COLS_PER_PART, rows=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
+  if(cur<=1){showAlert('⚠️ 최소 1열');setTimeout(hideAlert,2000);return;}
   _saveUndoSnapshot('removePartCol p'+pNum);
 
-  /* ① 마지막 열 데이터 삭제 (좌표 ID로 직접 접근) */
+  /* ① 마지막 열 데이터 삭제 */
   var ids=_getIds(), data=_getData();
   for(var r2=0; r2<rows; r2++){
     var rid = _coordId(pNum, cur, r2+1);
     delete data[rid];
   }
-  /* _ids 배열에서 마지막 열 항목 제거 */
   var newIds=[];
   for(var r3=0; r3<rows; r3++){
     for(var c3=1; c3<cur; c3++){
@@ -5373,14 +5373,14 @@ function _doRemovePartCol(pNum){
   _saveIds(ids); _saveData(data);
 
   /* ② 열 수 / 열이름 로컬 업데이트 */
-  PART_COL_COUNTS[pNum-1]=cur-1;
-  localStorage.setItem(LS_PART_COLS+'_'+pNum, cur-1);
   var _cn=getColNames();
   delete _cn['p'+pNum+'c'+cur];
   saveColNames(_cn);
-  /* ★ 열 삭제 후 visCols(보이는 열 수) 유지
-     삭제 전 visCols = cur - _cf
-     삭제 후 새 fold = (cur-1) - visCols (단, 0 이상) */
+
+  PART_COL_COUNTS[pNum-1]=cur-1;
+  localStorage.setItem(LS_PART_COLS+'_'+pNum, cur-1);
+
+  /* ★ 열 삭제 후 visCols 유지 */
   var _cf = _getColFold(pNum);
   if(_cf > 0){
     var _visCols = Math.max(1, cur - _cf);
@@ -5388,14 +5388,14 @@ function _doRemovePartCol(pNum){
     _setColFold(pNum, _newFold);
   }
 
-  /* ③ 구조 재계산 후 화면 갱신 (_rebuildAndRefresh의 pushSettings 건너뜀) */
-  _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
-  _recalcPartArrays();
-  _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout();
-  _updateGridCtrlDisp(); _updateColPartSelect(); _initAllBadgeSliders();
-  _applyAllColFolds();
-  /* ★ 삭제 후 새 마지막 열이 화면에 보이도록 스크롤
-     _applyAllColFolds의 rAF 2중 루프가 끝난 후 실행되도록 3중 rAF */
+  /* ③ Firebase 전송 + 화면 갱신 (addPartCol과 동일한 구조 → 1번만 갱신) */
+  _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
+  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'removePartCol');
+  if(typeof pushSettings==='function') pushSettings({colNames:_cn});
+  _cleanColArrows();
+  _recalcPartArrays(); _rebuildAndRefresh(); _pushGridStructure();
+
+  /* ★ 삭제 후 마지막 열이 보이도록 스크롤 */
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){
@@ -5404,33 +5404,6 @@ function _doRemovePartCol(pNum){
       });
     });
   });
-
-  /* ④ Firebase에 한 번만 업로드 (타임스탬프 갱신 포함) */
-  var _colTs = Date.now();
-  localStorage.setItem('pb_grid_cfg_ts', String(_colTs));
-  if(fbSlotsRef){
-    _fbSafeSet(Object.assign({}, _getData(), {
-      _ids: _getIds(),
-      _gridConfig: _getGridConfig(),
-      _localTs: _tsNow()
-    }), 'removePartCol');
-  }
-  /* ⑤ pb_settings에 구조 + 열이름 한 번에 전송 */
-  if(typeof pushSettings==='function'){
-    var _pCols={}, _pRows={};
-    for(var _p=1;_p<=NUM_PARTS;_p++){
-      _pCols[String(_p)] = PART_COL_COUNTS[_p-1]||COLS_PER_PART;
-      _pRows[String(_p)] = PART_ROW_COUNTS[_p-1]||ROWS_PER_PART;
-    }
-    pushSettings({
-      numParts:      NUM_PARTS,
-      colsPerPart:   COLS_PER_PART,
-      rowsPerPart:   ROWS_PER_PART,
-      partColCounts: _pCols,
-      partRowCounts: _pRows,
-      colNames:      _cn
-    });
-  }
 
   showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'열 — 총 '+TOTAL+'칸');
   setTimeout(hideAlert,2000);
