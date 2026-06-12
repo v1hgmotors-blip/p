@@ -3783,9 +3783,13 @@ function fitLayout(){
         var _slotMarginPc = Math.ceil(_slotNumSz * 0.28);
         var _gridPadPc = Math.ceil(_slotNumSz * 0.30);
         var _partOvhd = 66 + _gridPadPc + (pr - 1) * _rowGapPc + pr * _slotMarginPc;
-        var _fitH = Math.floor((_pcAvailH - _partOvhd) / pr);
-        _fitH = Math.min(Math.max(_fitH, 58), 110); /* ★ 최소 58px 보장 (작은 화면에서 스크롤) */
-        slotH_p = Math.min(naturalSlotH_p, _fitH);  /* 자연 높이와 맞춤 높이 중 작은 값 */
+        /* ★ 4행 기준 슬롯 높이 계산 → 5행 이상은 4행 크기 고정 + 스크롤 */
+        var _baseRows = Math.min(pr, 4);
+        var _partOvhd4 = 66 + _gridPadPc + (_baseRows - 1) * _rowGapPc + _baseRows * _slotMarginPc;
+        var _fitH = Math.floor((_pcAvailH - _partOvhd4) / _baseRows);
+        _fitH = Math.min(Math.max(_fitH, 58), 110);
+        /* ★ 5행 이상: 4행 계산값 그대로 사용 (naturalSlotH_p 무시) */
+        slotH_p = (pr > 4) ? _fitH : Math.min(naturalSlotH_p, _fitH);
       }
 
       /* ★ 폰트 크기: slotW 기반 + slotH 상한 보정 */
@@ -3821,7 +3825,7 @@ function fitLayout(){
       /* ★ 우선순위: 차량번호 > 배지 > 메모 */
       var carMinH_p = numSz_p + Math.ceil(carFs_p * 2.2) + 4;
       var bdgMinH_p = carMinH_p + badgeFs_p + 4;
-      pgEl.style.setProperty('--slot-badge-show', (slotH_p > 58 && slotH_p >= bdgMinH_p) ? '1' : '0'); /* ★ 58px 이하 + 최소높이 미달 시 숨김 */
+      pgEl.style.setProperty('--slot-badge-show', slotH_p > 58 ? '1' : '0'); /* ★ 58px 초과면 배지 표시 (세로/격자 동일 기준) */
       pgEl.style.setProperty('--slot-memo-show',  slotH_p >= bdgMinH_p + Math.ceil(memoFs_p*1.4) + 2 ? '1' : '0');
       /* ★ 실제 차량번호 높이를 CSS 변수로 설정 → max-height 정확하게 계산 */
       var carH_p = Math.ceil(carFs_p * 2.2) + 4;
@@ -3944,8 +3948,11 @@ function fitLayout(){
         var _rowGapG = Math.ceil(_slotNumSzG * 0.29) + 5;
         var _slotMgG  = Math.ceil(_slotNumSzG * 0.28);
         var _pairOvhd = 102 + (maxRowsPair - 1) * _rowGapG + maxRowsPair * _slotMgG;
-        var _fitHG = Math.floor((_availHforPair - _pairOvhd) / maxRowsPair);
-        _fitHG = Math.min(Math.max(_fitHG, 58), 100); /* ★ 최소 58px 보장 */
+        /* ★ 4행 기준 슬롯 높이 → 5행 이상은 4행 크기 유지 + 스크롤 */
+        var _baseRowsG = Math.min(maxRowsPair, 4);
+        var _pairOvhd4G = 102 + (_baseRowsG - 1) * _rowGapG + _baseRowsG * _slotMgG;
+        var _fitHG = Math.floor((_availHforPair - _pairOvhd4G) / _baseRowsG);
+        _fitHG = Math.min(Math.max(_fitHG, 58), 100);
         baseSlotH = Math.min(baseSlotH, _fitHG);
         root2.style.setProperty('--slot-car-fs', Math.min(carFsG, Math.floor(baseSlotH*0.38))+'px');
         root2.style.setProperty('--slot-memo-fs', Math.min(memoFsG, Math.floor(baseSlotH*0.17))+'px');
@@ -5418,6 +5425,7 @@ function addPartRow(pNum){
   for(var cc=0; cc<cols; cc++) ids[pNum].push(_coordId(pNum, cc+1, newR));
   _saveIds(ids);
   PART_ROW_COUNTS[pNum-1]=newR; localStorage.setItem(LS_PART_ROWS+'_'+pNum, newR);
+  _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'addPartRow');
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
@@ -5456,6 +5464,7 @@ function _doRemovePartRow(pNum){
   if(ids[pNum]) ids[pNum]=ids[pNum].slice(0, (cur-1)*cols);
   _saveIds(ids); _saveData(data);
   PART_ROW_COUNTS[pNum-1]=cur-1; localStorage.setItem(LS_PART_ROWS+'_'+pNum, cur-1);
+  _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
   if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'removePartRow');
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
