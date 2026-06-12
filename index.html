@@ -797,6 +797,12 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     white-space: normal !important;
     text-overflow: ellipsis !important;
     align-self: stretch !important;
+    /* ★ 배지(absolute) 공간 확보 - 메모와 겹침 방지 */
+    padding-bottom: calc(var(--slot-badge-h, 16px) + 2px) !important;
+  }
+  /* ★ 배지 없는 슬롯: padding 불필요 → 메모가 하단까지 사용 */
+  .slot.no-badge .slot-memo,
+  .slot:not(.occupied) .slot-memo {
     padding-bottom: 2px !important;
   }
 
@@ -3815,7 +3821,7 @@ function fitLayout(){
       /* ★ 우선순위: 차량번호 > 배지 > 메모 */
       var carMinH_p = numSz_p + Math.ceil(carFs_p * 2.2) + 4;
       var bdgMinH_p = carMinH_p + badgeFs_p + 4;
-      pgEl.style.setProperty('--slot-badge-show', slotH_p >= bdgMinH_p ? '1' : '0');
+      pgEl.style.setProperty('--slot-badge-show', (slotH_p > 58 && slotH_p >= bdgMinH_p) ? '1' : '0'); /* ★ 58px 이하 + 최소높이 미달 시 숨김 */
       pgEl.style.setProperty('--slot-memo-show',  slotH_p >= bdgMinH_p + Math.ceil(memoFs_p*1.4) + 2 ? '1' : '0');
       /* ★ 실제 차량번호 높이를 CSS 변수로 설정 → max-height 정확하게 계산 */
       var carH_p = Math.ceil(carFs_p * 2.2) + 4;
