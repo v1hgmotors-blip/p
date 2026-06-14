@@ -128,13 +128,19 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 /* ══ 차량 검색 바 ══ */
 .search-bar{background:#FFF3CC;border-bottom:2px solid var(--border);padding:4px 8px 5px;display:flex;flex-direction:column;gap:4px;align-items:stretch;flex-shrink:0;z-index:90;box-shadow:0 2px 6px rgba(180,140,0,.15);}
 .search-bar .s-lbl{font-size:14px;font-weight:900;color:var(--text-sub);white-space:nowrap;flex-shrink:0;width:auto;}
-.search-wrap{flex:1;position:relative;display:flex;align-items:center;}
-.search-input{width:100%;background:#FFF;border:2px solid var(--border);border-radius:8px;color:var(--text-main);font-size:17px;font-weight:800;padding:5px 32px 5px 9px;outline:none;font-family:inherit;transition:border-color .2s;letter-spacing:0;direction:ltr;unicode-bidi:normal;}
+@media(max-width:600px){
+  .search-bar .s-lbl{display:none;}
+}
+.search-wrap{flex:1 1 50px;position:relative;display:flex;align-items:center;min-width:30px;}
+.search-input{width:100%;background:#FFF;border:2px solid var(--border);border-radius:8px;color:var(--text-main);font-size:14px;font-weight:800;padding:5px 24px 5px 6px;outline:none;font-family:inherit;transition:border-color .2s;letter-spacing:0;direction:ltr;unicode-bidi:normal;min-width:0;}
 .search-input:focus{border-color:#E8B800;}
 .search-input::placeholder{color:#C8B060;font-size:11px;font-weight:500;letter-spacing:0;}
 .search-clear-btn{position:absolute;right:6px;background:none;border:none;font-size:14px;cursor:pointer;color:#B8A000;padding:2px;display:none;line-height:1;}
 .search-clear-btn.visible{display:block;}
-.search-result{font-size:11px;font-weight:800;white-space:nowrap;flex-shrink:0;padding:4px 8px;border-radius:7px;min-width:52px;text-align:center;}
+.search-result{font-size:11px;font-weight:800;white-space:nowrap;flex-shrink:1;padding:4px 8px;border-radius:7px;min-width:0;text-align:center;}
+@media(max-width:600px){
+  .search-result.idle{padding:0;width:0;min-width:0;overflow:hidden;border:none;}
+}
 .search-result.found{background:#E8FFE0;color:#1A7A00;border:1.5px solid #AAE0AA;}
 .search-result.notfound{background:#FFEEEE;color:#C03030;border:1.5px solid #FFAAAA;}
 .search-result.idle{background:transparent;color:transparent;border:1.5px solid transparent;}
@@ -239,6 +245,14 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .part-cell .part-save-btn{padding:1px 5px;font-size:10px;}
 /* 격자 모드 전환 버튼 */
 .part-view-toggle-btn{display:inline-flex;align-items:center;gap:4px;background:var(--kakao-deep);color:var(--kakao);border:2px solid var(--kakao);border-radius:20px;padding:5px 13px;font-size:12px;font-weight:900;cursor:pointer;touch-action:manipulation;white-space:nowrap;flex-shrink:0;}
+@media(max-width:600px){
+  .part-view-toggle-btn{padding:4px 8px;font-size:10px;}
+}
+.drag-lock-toggle-btn{display:inline-flex;align-items:center;gap:2px;border-radius:16px;padding:4px 8px;font-size:10px;font-weight:900;cursor:pointer;touch-action:manipulation;white-space:nowrap;flex-shrink:0;border:2px solid #94A3B8;background:#F1F5F9;color:#64748B;transition:background .2s,border-color .2s,color .2s;}
+@media(max-width:600px){
+  .drag-lock-toggle-btn{padding:4px 6px;font-size:9px;}
+}
+.drag-lock-toggle-btn.active{background:#1D4ED8;color:#fff;border-color:#1D4ED8;}
 .part-view-toggle-btn.active{background:var(--kakao);color:var(--kakao-deep);}
 
 /* ★ 행 접기/펼치기 빨간점 */
@@ -326,9 +340,15 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .search-row2{display:flex;gap:5px;align-items:center;width:100%;flex-wrap:wrap;}
 /* ★ 열 편집 스위치 컨테이너 */
 .col-edit-wrap{display:flex;align-items:center;gap:3px;flex-shrink:0;flex-wrap:nowrap;max-width:calc(100% - 30px);overflow:hidden;}
+@media(max-width:600px){
+  .col-edit-wrap{max-width:none;}
+}
 .col-hc-color-picker{width:24px;height:24px;border:none;padding:0;border-radius:5px;cursor:pointer;background:none;flex-shrink:0;}
 .col-edit-toggle-group{display:flex;align-items:center;gap:4px;}
 .col-edit-label{font-size:10px;font-weight:900;color:#7A5500;white-space:nowrap;line-height:1.2;letter-spacing:-.2px;}
+@media(max-width:600px){
+  .col-edit-label{font-size:10px;}
+}
 /* ★ 파트/초기화 버튼 그룹 */
 .ctrl-btn-group{display:flex;gap:5px;align-items:center;flex:1;justify-content:flex-end;}
 
@@ -1591,6 +1611,8 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()">✕</button>
     </div>
     <div class="search-result idle" id="searchResult">　</div>
+    <!-- ★ 드래그 잠금 사용 여부 토글 — 기기별 독립 저장 -->
+    <button class="drag-lock-toggle-btn" id="dragLockToggleBtn" onclick="toggleDragLockEnabled()" title="드래그 이동 잠금 기능 사용 여부 (이 기기에만 적용)">🔓 잠금해제중</button>
     <!-- ★ 파트 배치 전환 버튼 (격자 ↔ 세로) — 기기별 독립 저장 -->
     <button class="part-view-toggle-btn" id="partViewToggleBtn" onclick="togglePartGridMode()" title="파트 배치 변경 (이 기기에만 적용)">⬛ 세로</button>
     <!-- 열 편집 슬라이드 스위치 + 컬러피커 -->
@@ -1629,6 +1651,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="col-scope-btn" id="colUndoBtn" onclick="undoColEdit()" title="열 편집 이전 상태로 되돌리기" style="background:#6B7280;color:#fff;border-color:#6B7280;opacity:0.4;">↩️ 되돌리기</button>
     </div>
     <button class="btn-reset-all" onclick="openResetConfirm()">🗑️ 전체초기화</button>
+    <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
     <div class="ctrl-btn-group" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
       <div class="ctrl-section">
@@ -2090,6 +2113,57 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div class="reset-pw-btns">
       <button class="reset-pw-cancel" onclick="closeChangePw()">취소</button>
       <button class="reset-pw-confirm" onclick="confirmChangePw()" style="background:#1D4ED8;">✅ 변경</button>
+    </div>
+  </div>
+</div>
+
+<!-- 드래그 잠금 비밀번호 모달 -->
+<div class="reset-pw-ov" id="dragLockPwOv" style="z-index:7050;">
+  <div class="reset-pw-card">
+    <div class="reset-pw-icon">🔒</div>
+    <div class="reset-pw-title" style="color:#1D4ED8;">드래그 이동 잠금 해제</div>
+    <div class="reset-pw-desc">
+      주차칸 차량번호를 드래그로 이동하려면<br>
+      <strong style="color:#1D4ED8;">비밀번호</strong>를 입력하세요<br>
+      <span style="font-size:11px;color:#888;">(입력 후 5분간 유지됩니다)</span>
+    </div>
+    <input class="reset-pw-input" id="dragLockPwInput" type="password"
+           inputmode="numeric" maxlength="20"
+           placeholder="비밀번호"
+           style="border-color:#93C5FD;color:#1D4ED8;background:#EFF6FF;"
+           onkeydown="if(event.key==='Enter')confirmDragLockPw()" />
+    <div class="reset-pw-error" id="dragLockPwError">❌ 비밀번호가 틀렸습니다</div>
+    <div class="reset-pw-btns">
+      <button class="reset-pw-cancel" onclick="closeDragLockPw()">취소</button>
+      <button class="reset-pw-confirm" onclick="confirmDragLockPw()" style="background:#1D4ED8;">🔓 확인</button>
+    </div>
+    <div class="reset-pw-change-link" onclick="openChangeDragPw()">🔧 비밀번호 변경</div>
+  </div>
+</div>
+
+<!-- 드래그 잠금 비밀번호 변경 모달 -->
+<div class="reset-pw-ov" id="changeDragPwOv" style="z-index:7150;">
+  <div class="reset-pw-card">
+    <div class="reset-pw-icon">🔧</div>
+    <div class="reset-pw-title" style="color:#1D4ED8;">드래그 잠금 비밀번호 변경</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="font-size:11px;font-weight:800;color:#555;">현재 비밀번호</div>
+      <input class="reset-pw-input" id="changeDragPwCur" type="password" placeholder="현재 비밀번호"
+             style="border-color:#93C5FD;color:#1D4ED8;background:#EFF6FF;"
+             onkeydown="if(event.key==='Enter')document.getElementById('changeDragPwNew').focus()" />
+      <div style="font-size:11px;font-weight:800;color:#555;margin-top:4px;">새 비밀번호</div>
+      <input class="reset-pw-input" id="changeDragPwNew" type="password" placeholder="새 비밀번호"
+             style="border-color:#93C5FD;color:#1D4ED8;background:#EFF6FF;"
+             onkeydown="if(event.key==='Enter')document.getElementById('changeDragPwNew2').focus()" />
+      <div style="font-size:11px;font-weight:800;color:#555;margin-top:4px;">새 비밀번호 확인</div>
+      <input class="reset-pw-input" id="changeDragPwNew2" type="password" placeholder="새 비밀번호 확인"
+             style="border-color:#93C5FD;color:#1D4ED8;background:#EFF6FF;"
+             onkeydown="if(event.key==='Enter')confirmChangeDragPw()" />
+    </div>
+    <div class="reset-pw-error" id="changeDragPwError">❌ 오류가 발생했습니다</div>
+    <div class="reset-pw-btns">
+      <button class="reset-pw-cancel" onclick="closeChangeDragPw()">취소</button>
+      <button class="reset-pw-confirm" onclick="confirmChangeDragPw()" style="background:#1D4ED8;">✅ 변경</button>
     </div>
   </div>
 </div>
@@ -2696,6 +2770,8 @@ function _applyPartViewMode(){
     wrap.classList.remove('part-grid-mode');
     if(btn){ btn.textContent='⬛ 세로'; btn.classList.remove('active'); }
   }
+  /* ★ 드래그 잠금 사용 토글 버튼 상태 갱신 */
+  if(typeof _updateDragLockToggleBtn === 'function') _updateDragLockToggleBtn();
 }
 var LS_SLOT_DATA='pb_slot_data';
 var LS_SLOTS_V5_LEGACY='pb_slots_v5'; /* 구버전 마이그레이션용 */
@@ -6796,6 +6872,12 @@ function _dragMoveGhost(cx, cy) {
 
 /* ── 드래그 시작 ── */
 function _dragStart(srcIdx, cx, cy) {
+  /* ★ 드래그 잠금 체크: 잠금 기능이 켜져 있고 미해제 상태면 비밀번호 모달 표시 */
+  if (_isDragLockEnabled() && !_dragUnlocked) {
+    if (navigator.vibrate) navigator.vibrate(15);
+    openDragLockConfirm();
+    return;
+  }
   _drag.active  = true;
   _drag.srcIdx  = srcIdx;
   _drag.overIdx = null;
@@ -6862,6 +6944,8 @@ function _dragEnd() {
   document.querySelectorAll('.slot.drag-src').forEach(function(e){ e.classList.remove('drag-src'); });
   document.querySelectorAll('.slot.drag-over').forEach(function(e){ e.classList.remove('drag-over'); });
   document.body.classList.remove('dragging-slot');
+  /* ★ 드래그 조작 시 5분 타이머 연장 */
+  if(_dragUnlocked) _startDragUnlockTimer();
   if (tgt !== null && tgt !== src) swapSlotsData(src, tgt);
 }
 
@@ -8187,6 +8271,139 @@ function confirmChangePw(){
   localStorage.setItem(LS_RESET_PW, nw);
   closeChangePw();
   showAlert('✅ 비밀번호가 변경되었습니다');
+  setTimeout(hideAlert, 2000);
+}
+
+/* ── 드래그 잠금 (차량번호 데이터 이동 보호) ── */
+var LS_DRAG_PW = 'pb_drag_pw';
+var LS_DRAG_LOCK_ENABLED = 'pb_drag_lock_enabled'; /* ★ 잠금 기능 사용 여부 (기기별) */
+var DEFAULT_DRAG_PW = '0000';
+var _dragUnlocked = false;
+var _dragUnlockTimer = null;
+var DRAG_UNLOCK_MS = 5 * 60 * 1000; /* 5분 */
+
+function _getDragPw(){
+  return localStorage.getItem(LS_DRAG_PW) || DEFAULT_DRAG_PW;
+}
+
+/* ★ 드래그 잠금 기능 사용 여부 (기본값: 사용 안 함) */
+function _isDragLockEnabled(){
+  return localStorage.getItem(LS_DRAG_LOCK_ENABLED) === '1';
+}
+
+/* 토글 버튼 클릭 */
+function toggleDragLockEnabled(){
+  var enabled = _isDragLockEnabled();
+  localStorage.setItem(LS_DRAG_LOCK_ENABLED, enabled ? '0' : '1');
+  _updateDragLockToggleBtn();
+  if(!enabled){
+    _dragUnlocked = false;
+    clearTimeout(_dragUnlockTimer);
+    showAlert('🔒 드래그 잠금 기능이 켜졌습니다');
+  } else {
+    showAlert('🔓 드래그 잠금 기능이 꺼졌습니다');
+  }
+  setTimeout(hideAlert, 2000);
+}
+
+/* 버튼 표시 갱신 */
+function _updateDragLockToggleBtn(){
+  var btn = document.getElementById('dragLockToggleBtn');
+  if(!btn) return;
+  if(_isDragLockEnabled()){
+    btn.textContent = '🔒 잠금사용중';
+    btn.classList.add('active');
+  } else {
+    btn.textContent = '🔓 잠금해제중';
+    btn.classList.remove('active');
+  }
+}
+
+/* 잠금 해제 상태 시작/연장 (5분 타이머) */
+function _startDragUnlockTimer(){
+  _dragUnlocked = true;
+  clearTimeout(_dragUnlockTimer);
+  _dragUnlockTimer = setTimeout(function(){
+    _dragUnlocked = false;
+  }, DRAG_UNLOCK_MS);
+}
+
+/* 잠금 모달 열기 */
+function openDragLockConfirm(){
+  var el = document.getElementById('dragLockPwInput');
+  if(el){ el.value=''; }
+  var err = document.getElementById('dragLockPwError');
+  if(err) err.classList.remove('show');
+  document.getElementById('dragLockPwOv').classList.add('show');
+  setTimeout(function(){ if(el) el.focus(); }, 150);
+}
+
+function closeDragLockPw(){
+  document.getElementById('dragLockPwOv').classList.remove('show');
+}
+
+function confirmDragLockPw(){
+  var pw = document.getElementById('dragLockPwInput').value;
+  if(pw !== _getDragPw()){
+    var err = document.getElementById('dragLockPwError');
+    err.classList.add('show');
+    var inp = document.getElementById('dragLockPwInput');
+    inp.value = '';
+    inp.focus();
+    inp.style.animation = 'none';
+    setTimeout(function(){ inp.style.animation = 'shakePw .35s ease'; }, 10);
+    return;
+  }
+  closeDragLockPw();
+  _startDragUnlockTimer();
+  showAlert('🔓 드래그 이동 잠금 해제 (5분간 유지)');
+  setTimeout(hideAlert, 2000);
+}
+
+/* ── 드래그 잠금 비밀번호 변경 ── */
+function openChangeDragPw(){
+  ['changeDragPwCur','changeDragPwNew','changeDragPwNew2'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value='';
+  });
+  var err = document.getElementById('changeDragPwError');
+  if(err) err.classList.remove('show');
+  document.getElementById('changeDragPwOv').classList.add('show');
+  setTimeout(function(){ document.getElementById('changeDragPwCur').focus(); }, 150);
+}
+
+function closeChangeDragPw(){
+  document.getElementById('changeDragPwOv').classList.remove('show');
+}
+
+function confirmChangeDragPw(){
+  var cur  = document.getElementById('changeDragPwCur').value;
+  var nw   = document.getElementById('changeDragPwNew').value;
+  var nw2  = document.getElementById('changeDragPwNew2').value;
+  var err  = document.getElementById('changeDragPwError');
+
+  if(cur !== _getDragPw()){
+    err.textContent = '❌ 현재 비밀번호가 틀렸습니다';
+    err.classList.add('show');
+    document.getElementById('changeDragPwCur').value='';
+    document.getElementById('changeDragPwCur').focus();
+    return;
+  }
+  if(nw.length < 4){
+    err.textContent = '❌ 새 비밀번호는 4자리 이상이어야 합니다';
+    err.classList.add('show');
+    document.getElementById('changeDragPwNew').focus();
+    return;
+  }
+  if(nw !== nw2){
+    err.textContent = '❌ 새 비밀번호가 일치하지 않습니다';
+    err.classList.add('show');
+    document.getElementById('changeDragPwNew2').value='';
+    document.getElementById('changeDragPwNew2').focus();
+    return;
+  }
+  localStorage.setItem(LS_DRAG_PW, nw);
+  closeChangeDragPw();
+  showAlert('✅ 드래그 잠금 비밀번호가 변경되었습니다');
   setTimeout(hideAlert, 2000);
 }
 
