@@ -168,7 +168,18 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   0%,100%{font-size:var(--slot-num-fs,13px);min-width:var(--slot-num-sz,22px);width:auto;height:var(--slot-num-sz,22px);background:#E8B800;color:#3A1D1D;}
   50%    {font-size:min(28px, 7vw);width:min(60px,14vw);height:min(60px,14vw);background:#E8B800;color:#3A1D1D;}
 }
-.slot.blink-search{border-color:#E8B800!important;border-width:3px!important;animation:blinkSearch .7s ease-in-out infinite;z-index:11;overflow:visible!important;}
+.slot.blink-search{border-color:#E8B800!important;border-width:3px!important;animation:blinkSearch 1.8s ease-in-out infinite;z-index:11;overflow:visible!important;}
+.blink-search .slot-car{animation:carPulse 1.8s ease-in-out infinite;}
+@keyframes carPulse{
+  0%,100%{transform:scale(1);}
+  50%    {transform:scale(1.18);}
+}
+/* ★ 차주 이름 검색: 테두리만 깜박임 (빨강색, 배경/텍스트 변화 없음) */
+.blink-search-name{border-color:#E02020!important;border-width:3px!important;animation:blinkBorderOnly 1.8s ease-in-out infinite;z-index:11;overflow:visible!important;}
+@keyframes blinkBorderOnly{
+  0%,100%{box-shadow:0 0 0 4px rgba(224,32,32,.5);}
+  50%    {box-shadow:0 0 0 7px rgba(224,32,32,.65);}
+}
 .slot.blink-search .slot-car{animation:blinkSearchCar .7s ease-in-out infinite!important;white-space:nowrap;}
 .slot.blink-search .slot-num{animation:blinkSearchNum .7s ease-in-out infinite!important;}
 /* ★ slot-num 인라인 편집 커서 */
@@ -7425,25 +7436,36 @@ function doSearch(){
   if(!kw){ clearSearch(); return; }
   searchActive=true;
   var slots=getSlots();
-  var hits=[];
+  var hits=[];       /* 차량번호 매칭 (기존: 차량번호 확대/축소 + 테두리) */
+  var hitsName=[];   /* 차주 이름 매칭 (테두리만 깜박) */
   for(var i=0;i<TOTAL;i++){
     var d=slots[i]||{};
-    if(!d.disabled&&d.car&&match4(kw,d.car)) hits.push(i);
+    if(d.disabled) continue;
+    var carMatch   = d.car && match4(kw,d.car);
+    var ownerMatch = d.owner && d.owner.indexOf(kw) !== -1;
+    if(carMatch) hits.push(i);
+    else if(ownerMatch) hitsName.push(i);
   }
+  var allHits = hits.concat(hitsName);
   for(var i=0;i<TOTAL;i++){
     var el=document.getElementById('slot_'+i);if(!el)continue;
     if(hits.includes(i)){
       el.classList.add('blink-search');
-      expandPart(slotToPart(i));
+      el.classList.remove('blink-search-name');
+    } else if(hitsName.includes(i)){
+      el.classList.add('blink-search-name');
+      el.classList.remove('blink-search');
     } else {
       el.classList.remove('blink-search');
+      el.classList.remove('blink-search-name');
     }
   }
+  if(allHits.length>0) expandPart(slotToPart(allHits[0]));
   var r=document.getElementById('searchResult');
-  if(hits.length>0){
-    r.textContent=hits.length+'칸 발견';
+  if(allHits.length>0){
+    r.textContent=allHits.length+'칸 발견';
     r.className='search-result found';
-    var firstEl=document.getElementById('slot_'+hits[0]);
+    var firstEl=document.getElementById('slot_'+allHits[0]);
     if(firstEl) firstEl.scrollIntoView({behavior:'smooth',block:'center'});
   } else {
     r.textContent='없음';
@@ -7459,6 +7481,7 @@ function clearSearch(){
   for(var i=0;i<TOTAL;i++){
     var el=document.getElementById('slot_'+i);if(!el)continue;
     el.classList.remove('blink-search');
+    el.classList.remove('blink-search-name');
   }
 }
 
