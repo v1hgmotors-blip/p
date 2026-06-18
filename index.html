@@ -5225,6 +5225,8 @@ function _initColScrollArrow(sw){
     if(document.body.classList.contains('dragging-slot')) return;
     if(e.button) return;
     if(e.target===btnL||e.target===btnR) return;
+    /* ★ 모달(팝업)이 열려있으면 드래그 스크롤 시작 안 함 — input 클릭 방해 방지 */
+    if(document.querySelector('[class$="-ov"].show, [class*="-ov "].show')) return;
     /* sw 영역 안에서 발생한 mousedown인지 확인 */
     var _r = sw.getBoundingClientRect();
     if(e.clientX < _r.left || e.clientX > _r.right ||
