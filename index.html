@@ -1165,6 +1165,14 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 
 /* ══ 저장소 모드 시작 팝업 ══ */
 .storage-init-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);}
+/* ── 전체초기화 진행중 로딩 오버레이 ── */
+.reset-loading-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99998;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);}
+.reset-loading-ov.show{display:flex;}
+.reset-loading-card{background:#FFF;border-radius:20px;padding:32px 26px;width:min(300px,90vw);box-shadow:0 8px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;}
+.reset-loading-spinner{width:44px;height:44px;border:5px solid #FFE600;border-top-color:#C03030;border-radius:50%;animation:resetSpin .8s linear infinite;}
+@keyframes resetSpin{to{transform:rotate(360deg);}}
+.reset-loading-title{font-size:15px;font-weight:900;color:#C03030;}
+.reset-loading-desc{font-size:12px;color:#666;line-height:1.6;}
 .storage-init-ov.show{display:flex;}
 .storage-init-card{background:#fff;border-radius:22px;padding:28px 22px 22px;width:min(380px,95vw);box-shadow:0 12px 48px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:14px;animation:siPop .3s cubic-bezier(.34,1.56,.64,1);}
 @keyframes siPop{from{transform:scale(.75) translateY(20px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
@@ -1641,6 +1649,16 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <input type="color" id="colPartColorPicker" value="#F2D900"
              title="선택한 파트의 열 배경색"
              oninput="applyColPartColor(this.value)"
+             class="col-hc-color-picker"
+             style="display:none;" />
+      <input type="color" id="colHcTextColorPicker" value="#FFFFFF"
+             title="전체 열 글씨색 변경"
+             oninput="applyColHcTextColor(this.value)"
+             class="col-hc-color-picker"
+             style="display:none;" />
+      <input type="color" id="colPartTextColorPicker" value="#FFFFFF"
+             title="선택한 파트의 열 글씨색"
+             oninput="applyColPartTextColor(this.value)"
              class="col-hc-color-picker"
              style="display:none;" />
       <div class="col-edit-toggle-group">
@@ -2176,6 +2194,15 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="reset-pw-cancel" onclick="closeChangeDragPw()">취소</button>
       <button class="reset-pw-confirm" onclick="confirmChangeDragPw()" style="background:#1D4ED8;">✅ 변경</button>
     </div>
+  </div>
+</div>
+
+<!-- 전체초기화 진행중 로딩 오버레이 -->
+<div class="reset-loading-ov" id="resetLoadingOv">
+  <div class="reset-loading-card">
+    <div class="reset-loading-spinner"></div>
+    <div class="reset-loading-title">초기화 진행 중...</div>
+    <div class="reset-loading-desc">삭제 완료까지 잠시 기다려주세요<br>완료 전 새로고침하지 마세요</div>
   </div>
 </div>
 
@@ -3359,6 +3386,13 @@ function _syncAllSettingsToFirebase(){
   /* 열 색상 */
   var colColor = localStorage.getItem(LS_COL_HC_COLOR);
   if(colColor) allSettings.colHcColor = colColor;
+  /* ★ 열 헤더 글씨색 */
+  var colTextColor = localStorage.getItem(LS_COL_HC_TEXT_COLOR);
+  if(colTextColor) allSettings.colHcTextColor = colTextColor;
+  var partTextColorsStr = localStorage.getItem(LS_COL_PART_TEXT_COLORS);
+  if(partTextColorsStr){
+    try{ allSettings.colPartTextColors = JSON.parse(partTextColorsStr); }catch(e){}
+  }
   /* 단기 설정 */
   allSettings.numParts = NUM_PARTS;
   allSettings.colsPerPart = COLS_PER_PART;
@@ -3419,9 +3453,13 @@ function onColEditToggle(on){
     var sel = document.getElementById('colPartSelect');
     var pp = document.getElementById('colPartColorPicker');
     var gp = document.getElementById('colHcColorPicker');
+    var ptp = document.getElementById('colPartTextColorPicker');
+    var gtp = document.getElementById('colHcTextColorPicker');
     if(sel) sel.value = '';
     if(pp) pp.style.display = 'none';
     if(gp) gp.style.display = '';
+    if(ptp) ptp.style.display = 'none';
+    if(gtp) gtp.style.display = '';
   }
   /* 피커·파트셀렉트 표시/숨김 */
   var _hp = document.getElementById('colHcColorPicker');
@@ -3430,6 +3468,11 @@ function onColEditToggle(on){
   if(_sp){ _sp.style.display = on ? '' : 'none'; if(!on) _sp.value=''; }
   var _pp = document.getElementById('colPartColorPicker');
   if(_pp && !on) _pp.style.display = 'none';
+  /* ★ 글씨색 피커 표시/숨김 */
+  var _htp = document.getElementById('colHcTextColorPicker');
+  if(_htp) _htp.style.display = on ? '' : 'none';
+  var _ptp = document.getElementById('colPartTextColorPicker');
+  if(_ptp && !on) _ptp.style.display = 'none';
   /* ★ 열편집 ON → ctrlRow 자동 펼침 + 버튼 보이도록 스크롤 */
   if(on){
     var ctrlWrap = document.getElementById('ctrlRowWrap');
@@ -3450,14 +3493,28 @@ function onColEditToggle(on){
 }
 function applyColHcColor(color){
   document.documentElement.style.setProperty('--col-hc-bg', color);
-  /* 텍스트 색상 자동 조정 (밝으면 어두운 글자) */
-  var r=parseInt(color.slice(1,3),16),g=parseInt(color.slice(3,5),16),b=parseInt(color.slice(5,7),16);
-  var lum = (0.299*r + 0.587*g + 0.114*b)/255;
-  /* ★ FIX: 밝은 배경→어두운 글자, 어두운 배경→흰색 글자 (기본값 흰색) */
-  var tc = lum > 0.6 ? '#3A1D1D' : '#FFFFFF';
-  document.documentElement.style.setProperty('--col-hc-color', tc);
+  /* ★ 사용자가 글씨색을 직접 지정한 적 없으면 자동 명암 대비 계산 */
+  if(!localStorage.getItem(LS_COL_HC_TEXT_COLOR)){
+    var r=parseInt(color.slice(1,3),16),g=parseInt(color.slice(3,5),16),b=parseInt(color.slice(5,7),16);
+    var lum = (0.299*r + 0.587*g + 0.114*b)/255;
+    var tc = lum > 0.6 ? '#3A1D1D' : '#FFFFFF';
+    document.documentElement.style.setProperty('--col-hc-color', tc);
+  }
   localStorage.setItem(LS_COL_HC_COLOR, color);
   pushSettings({'colHcColor': color});
+}
+
+/* ★ 열 헤더 글씨색 — 전체 (사용자 직접 지정, 배경 자동계산 덮어씀) */
+var LS_COL_HC_TEXT_COLOR = 'pb_col_hc_text_color';
+function applyColHcTextColor(color){
+  document.documentElement.style.setProperty('--col-hc-color', color);
+  localStorage.setItem(LS_COL_HC_TEXT_COLOR, color);
+  pushSettings({'colHcTextColor': color});
+}
+function _loadColHcTextColor(){
+  var c = localStorage.getItem(LS_COL_HC_TEXT_COLOR);
+  if(c) document.documentElement.style.setProperty('--col-hc-color', c);
+  return c;
 }
 function initColEditUI(){
   var tog = document.getElementById('colEditToggle');
@@ -3476,6 +3533,17 @@ function initColEditUI(){
   applyColHcColor(saved);
   var picker = document.getElementById('colHcColorPicker');
   if(picker) picker.value = saved;
+  /* ★ 저장된 글씨색 복원 (배경색 적용 후 — 자동계산 결과를 덮어씀) */
+  var savedText = _loadColHcTextColor();
+  var textPicker = document.getElementById('colHcTextColorPicker');
+  if(textPicker) textPicker.value = savedText || '#FFFFFF';
+  /* ★ 파트별 배경색 + 글씨색 복원 */
+  var partColors = getColPartColors();
+  for(var pk in partColors){
+    var pNum = pk.replace('p','');
+    document.querySelectorAll('.col-hc[data-part="'+pNum+'"]').forEach(function(h){ h.style.background = partColors[pk]; });
+  }
+  _applyAllColPartTextColors();
 }
 /* PART_COL_COUNTS[p-1] = 해당 파트 열 수 */
 
@@ -3596,6 +3664,35 @@ function getColPartColors(){
   catch(e){ return {}; }
 }
 
+/* ★ 파트별 열 헤더 글씨색 */
+var LS_COL_PART_TEXT_COLORS = 'pb_col_part_text_colors';
+function getColPartTextColors(){
+  try{ return JSON.parse(localStorage.getItem(LS_COL_PART_TEXT_COLORS)||'{}'); }
+  catch(e){ return {}; }
+}
+function applyColPartTextColor(color){
+  var sel = document.getElementById('colPartSelect');
+  if(!sel||!sel.value) return;
+  var part = parseInt(sel.value);
+  var colors = getColPartTextColors();
+  colors['p'+part] = color;
+  localStorage.setItem(LS_COL_PART_TEXT_COLORS, JSON.stringify(colors));
+  var headers = document.querySelectorAll('.col-hc[data-part="'+part+'"]');
+  headers.forEach(function(h){ h.style.color = color; });
+  if(getColEditScope()==='all'){
+    var upd = {}; upd['colPartTextColors/p'+part] = color;
+    pushSettings(upd);
+  }
+}
+function _applyAllColPartTextColors(){
+  var colors = getColPartTextColors();
+  for(var key in colors){
+    var part = key.replace('p','');
+    var headers = document.querySelectorAll('.col-hc[data-part="'+part+'"]');
+    headers.forEach(function(h){ h.style.color = colors[key]; });
+  }
+}
+
 function _updateColPartSelect(){
   var sel = document.getElementById('colPartSelect');
   if(!sel) return;
@@ -3611,17 +3708,25 @@ function onColPartSelectChange(){
   var sel = document.getElementById('colPartSelect');
   var picker = document.getElementById('colPartColorPicker');
   var globalPicker = document.getElementById('colHcColorPicker');
+  var textPicker = document.getElementById('colPartTextColorPicker');
+  var globalTextPicker = document.getElementById('colHcTextColorPicker');
   if(!sel||!picker) return;
   var part = sel.value;
   if(!part){
     picker.style.display = 'none';
     if(globalPicker) globalPicker.style.display = '';
+    if(textPicker) textPicker.style.display = 'none';
+    if(globalTextPicker) globalTextPicker.style.display = '';
     return;
   }
   if(globalPicker) globalPicker.style.display = 'none';
   picker.style.display = '';
+  if(globalTextPicker) globalTextPicker.style.display = 'none';
+  if(textPicker) textPicker.style.display = '';
   var saved = getColPartColors()['p'+part];
   picker.value = saved || (localStorage.getItem(LS_COL_HC_COLOR)||'#F2D900');
+  var savedText = getColPartTextColors()['p'+part];
+  if(textPicker) textPicker.value = savedText || (_loadColHcTextColor() || '#FFFFFF');
 }
 
 function applyColPartColor(color){
@@ -5090,10 +5195,12 @@ function _applyColScrollViewport(p, totalCols, visCols){
   var inner = sw.querySelector('.col-scroll-inner');
 
   if(visCols < totalCols){
-    /* 래퍼 실제 너비 취득 (격자모드: 셀 너비, 세로모드: 전체 너비) */
-    var wrapW = sw.getBoundingClientRect().width;
+    /* 래퍼 실제 너비 취득 - clientWidth로 스크롤바/소수점 오차 제거 */
+    var wrapW = sw.clientWidth;
+    if(!wrapW || wrapW <= 0) wrapW = sw.getBoundingClientRect().width;
     if(!wrapW || wrapW <= 0) wrapW = sw.offsetWidth;
     if(!wrapW || wrapW <= 0) wrapW = window.innerWidth - 16;
+    wrapW = Math.floor(wrapW); /* ★ 소수점 버림으로 totalW 초과 방지 */
 
     /* 전체 그리드 너비 = 래퍼너비 / visCols * totalCols */
     var totalW = Math.round(wrapW / visCols * totalCols);
@@ -8118,6 +8225,9 @@ function confirmResetPw(){
 /* ── 전체초기화 2차 확인 팝업 ── */
 function closeResetConfirm(){document.getElementById('resetConfirmOv').classList.remove('show');}
 function confirmClearAll(){
+  /* ★ 2차 확인 팝업 닫기 */
+  var _rcOv = document.getElementById('resetConfirmOv');
+  if(_rcOv) _rcOv.classList.remove('show');
   /* ── 1. Firebase 리스너 전부 해제 ── */
   try{ if(fbRef)         fbRef.off('value'); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
@@ -8169,16 +8279,31 @@ function confirmClearAll(){
   /* ── 7. sessionStorage 초기화 → 새로고침 후 재연결 허용 ── */
   try { sessionStorage.removeItem('pb_fb_restore_checked'); } catch(e) {}
 
-  /* ── 8. 기본값(하드코딩)으로 Firebase 자동 연결
-         — 연결 후 백업목록에서 복원 가능하도록 ── */
+  /* ── 8. ★ Firebase kd_rooms/{code} 데이터 전체 삭제를 먼저 완료한 후 재연결
+         (기존: 삭제와 재연결이 동시 실행되어 레이스컨디션으로 이전 데이터가 다시 보이는 버그)
+         ★ 삭제 진행 중 로딩 오버레이로 새로고침 방지 안내  */
   localStorage.setItem(LS_URL,  _PB_DEFAULTS.url);
   localStorage.setItem(LS_CODE, _PB_DEFAULTS.code);
   if(urlEl)  urlEl.value = _PB_DEFAULTS.url;
   if(codeEl) codeEl.value= _PB_DEFAULTS.code;
-  setDot('ing','연결 중...');
-  connectFb(_PB_DEFAULTS.url, _PB_DEFAULTS.code);
+  setDot('ing','초기화 중...');
 
-  /* ★ Firebase kd_rooms/{code} 데이터 전체 삭제 */
+  var _resetLoadingEl = document.getElementById('resetLoadingOv');
+  if(_resetLoadingEl) _resetLoadingEl.classList.add('show');
+
+  /* ★ 삭제 진행 중 새로고침/닫기 시도 시 경고 */
+  var _resetBeforeUnload = function(e){ e.preventDefault(); e.returnValue=''; return ''; };
+  window.addEventListener('beforeunload', _resetBeforeUnload);
+
+  function _finishReset(){
+    window.removeEventListener('beforeunload', _resetBeforeUnload);
+    if(_resetLoadingEl) _resetLoadingEl.classList.remove('show');
+    setDot('ing','연결 중...');
+    connectFb(_PB_DEFAULTS.url, _PB_DEFAULTS.code);
+    showAlert('✅ 초기화 완료! Firebase 데이터도 삭제됨');
+    setTimeout(hideAlert, 5000);
+  }
+
   try {
     var fbApp2 = firebase.initializeApp(
       { databaseURL: _PB_DEFAULTS.url },
@@ -8187,11 +8312,15 @@ function confirmClearAll(){
     var fbDb2 = firebase.database(fbApp2);
     fbDb2.ref('kd_rooms/' + _PB_DEFAULTS.code).set(null).then(function(){
       console.log('[RESET] Firebase 데이터 삭제 완료');
-    }).catch(function(e){ console.warn('[RESET] Firebase 삭제 실패:', e); });
-  } catch(e){ console.warn('[RESET] Firebase 초기화 오류:', e); }
-
-  showAlert('✅ 초기화 완료! Firebase 데이터도 삭제됨');
-  setTimeout(hideAlert, 5000);
+      _finishReset();
+    }).catch(function(e){
+      console.warn('[RESET] Firebase 삭제 실패:', e);
+      _finishReset();
+    });
+  } catch(e){
+    console.warn('[RESET] Firebase 초기화 오류:', e);
+    _finishReset();
+  }
 }
 
 
@@ -8307,6 +8436,7 @@ function confirmChangePw(){
 /* ── 드래그 잠금 (차량번호 데이터 이동 보호) ── */
 var LS_DRAG_PW = 'pb_drag_pw';
 var LS_DRAG_LOCK_ENABLED = 'pb_drag_lock_enabled'; /* ★ 잠금 기능 사용 여부 (기기별) */
+
 var DEFAULT_DRAG_PW = '0000';
 var _dragUnlocked = false;
 var _dragUnlockTimer = null;
@@ -8705,6 +8835,34 @@ function applyRemoteSettings(data){
     applyColHcColor(data.colHcColor);
     var picker = document.getElementById('colHcColorPicker');
     if(picker) picker.value = data.colHcColor;
+  }
+  /* ★ 열 헤더 글씨색 (전체) */
+  if(data.colHcTextColor){
+    localStorage.setItem(LS_COL_HC_TEXT_COLOR, data.colHcTextColor);
+    document.documentElement.style.setProperty('--col-hc-color', data.colHcTextColor);
+    var tpicker = document.getElementById('colHcTextColorPicker');
+    if(tpicker) tpicker.value = data.colHcTextColor;
+  }
+  /* ★ 파트별 열 헤더 글씨색 */
+  if(data.colPartTextColors && typeof data.colPartTextColors === 'object'){
+    try{
+      var _rcvT = data.colPartTextColors;
+      var _curT = getColPartTextColors();
+      var _changedT = false;
+      Object.keys(_rcvT).forEach(function(k){
+        if(_rcvT[k] && _curT[k] !== _rcvT[k]){ _curT[k] = _rcvT[k]; _changedT = true; }
+      });
+      if(_changedT){
+        localStorage.setItem(LS_COL_PART_TEXT_COLORS, JSON.stringify(_curT));
+        _applyAllColPartTextColors();
+        var _selT = document.getElementById('colPartSelect');
+        var _pkT  = document.getElementById('colPartTextColorPicker');
+        if(_selT && _selT.value && _pkT){
+          var _savedT = _curT['p'+_selT.value];
+          if(_savedT) _pkT.value = _savedT;
+        }
+      }
+    }catch(e){ console.warn('[colPartTextColors 동기화]', e); }
   }
   /* ★ FIX: 파트별 열 컬러 실시간 동기화 */
   if(data.colPartColors && typeof data.colPartColors === 'object'){
