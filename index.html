@@ -7442,6 +7442,14 @@ function _initBadgeSlider(slotEl){
 
   var wrap = document.createElement('div');
   wrap.className = 'slot-badge-wrap ' + (badges.length === 1 ? 'single' : 'multi');
+  /* ★ PC에서 배지가 flex 흐름에 끼어드는 순간 방지 — 즉시 absolute 고정 */
+  if(window.innerWidth >= 601){
+    wrap.style.position = 'absolute';
+    wrap.style.bottom   = '2px';
+    wrap.style.left     = '0';
+    wrap.style.right    = '0';
+    wrap.style.marginTop = '0';
+  }
   badges.forEach(function(b){
     b.parentNode && b.parentNode.removeChild(b);
     var item = document.createElement('div');
@@ -8819,15 +8827,26 @@ function applyRemoteSettings(data){
       }
     }
   }
-  /* 열 이름 */
+  /* 열 이름 — ★ 전체 덮어쓰기 대신 merge로 기존 열 이름 보존 */
   if(data.colNames){
-    localStorage.setItem(LS_COL_NAMES,JSON.stringify(data.colNames));
-    renderColHeaders();
-    /* ★ 다른 기기에서 변경된 경우에만 알림 (로컬 편집 후 500ms 이내는 무시) */
-    if(Date.now() - _localColEditTs > 500){
-      showAlert('🔄 다른 기기에서 열 이름이 업데이트됐습니다');
-      setTimeout(hideAlert, 2000);
-    }
+    try{
+      var _localNames = getColNames(); /* 현재 로컬 열 이름 */
+      var _remoteNames = data.colNames;
+      var _merged = Object.assign({}, _localNames); /* 로컬 기반 */
+      /* 원격 값으로 업데이트 (빈 문자열이면 로컬 유지) */
+      Object.keys(_remoteNames).forEach(function(k){
+        if(_remoteNames[k] !== undefined && _remoteNames[k] !== null){
+          _merged[k] = _remoteNames[k];
+        }
+      });
+      localStorage.setItem(LS_COL_NAMES, JSON.stringify(_merged));
+      renderColHeaders();
+      /* ★ 다른 기기에서 변경된 경우에만 알림 (로컬 편집 후 500ms 이내는 무시) */
+      if(Date.now() - _localColEditTs > 500){
+        showAlert('🔄 다른 기기에서 열 이름이 업데이트됐습니다');
+        setTimeout(hideAlert, 2000);
+      }
+    }catch(e){ console.warn('[colNames merge 오류]', e); }
   }
   /* 열 헤더 색상 */
   if(data.colHcColor){
