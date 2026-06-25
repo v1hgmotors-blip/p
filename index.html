@@ -329,6 +329,37 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .col-hc.editing{background:#FFF8CC;padding:0;}
 /* 키불출 열 헤더 깜박 */
 .col-hc.blink-dispatch-col{animation:blinkColHeader .7s ease-in-out infinite!important;}
+/* ── 키반납 확인 배지 ── */
+.key-returned-badge{
+  position:absolute;
+  top:-10px; right:-10px;
+  background:#16A34A;
+  color:#fff;
+  font-size:9px;
+  font-weight:900;
+  border-radius:10px;
+  padding:2px 5px;
+  white-space:nowrap;
+  z-index:30;
+  border:2px solid #fff;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);
+  cursor:pointer;
+  animation:returnBadgePop .4s cubic-bezier(.34,1.56,.64,1);
+  line-height:1.3;
+  pointer-events:auto;
+}
+@keyframes returnBadgePop{
+  0%{transform:scale(0);opacity:0;}
+  100%{transform:scale(1);opacity:1;}
+}
+/* 키반납 팝업 */
+.key-return-popup-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
+.key-return-popup-ov.show{display:flex;}
+.key-return-popup-card{background:#fff;border-radius:18px;padding:24px 20px 18px;width:min(320px,92vw);box-shadow:0 8px 40px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px;border:3px solid #16A34A;}
+.key-return-popup-icon{font-size:32px;text-align:center;}
+.key-return-popup-title{font-size:16px;font-weight:900;color:#16A34A;text-align:center;}
+.key-return-popup-body{font-size:13px;color:#333;line-height:1.8;background:#F0FDF4;border-radius:10px;padding:10px 12px;border:1.5px solid #BBF7D0;}
+.key-return-popup-btn{background:#16A34A;color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:900;cursor:pointer;width:100%;}
 @keyframes blinkColHeader{
   0%,100%{background:var(--col-hc-bg,var(--kakao-dark));color:var(--col-hc-color,#FFFFFF);box-shadow:0 0 0 2px rgba(45,180,0,.5);}
   50%    {background:#2DB400;color:#fff;box-shadow:0 0 0 5px rgba(45,180,0,.35);text-shadow:0 0 6px rgba(255,255,255,.7);}
@@ -2203,6 +2234,18 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div class="reset-loading-spinner"></div>
     <div class="reset-loading-title">초기화 진행 중...</div>
     <div class="reset-loading-desc">삭제 완료까지 잠시 기다려주세요<br>완료 전 새로고침하지 마세요</div>
+  </div>
+</div>
+
+<!-- 키반납 확인 팝업 -->
+<div class="key-return-popup-ov" id="keyReturnPopupOv" onclick="if(event.target===this)closeKeyReturnPopup()">
+  <div class="key-return-popup-card">
+    <div class="key-return-popup-icon">🔑✅</div>
+    <div class="key-return-popup-title">키 반납 완료</div>
+    <div class="key-return-popup-body" id="keyReturnPopupBody">
+      차량번호: -<br>딜러: -<br>반납시각: -
+    </div>
+    <button class="key-return-popup-btn" onclick="closeKeyReturnPopup()">확인</button>
   </div>
 </div>
 
@@ -5348,7 +5391,7 @@ function _initColScrollArrow(sw){
     var dx = e.clientX - _sx;
     if(Math.abs(dx) > 3) _mv = true;
     /* ★ 매 mousemove 마다 이전 위치 대비 이동량으로 즉시 반영 */
-    var moveDelta = _prevX !== undefined ? (_prevX - e.clientX) * 3 : 0;
+    var moveDelta = _prevX !== undefined ? (_prevX - e.clientX) * 5 : 0; /* ★ PC 드래그 스크롤 속도 3→5 */
     sw.scrollLeft += moveDelta;
     _prevX = e.clientX;
     _upd(); _onMv(e);
@@ -7705,6 +7748,79 @@ function reapplyBlinks(){
   });
 }
 
+/* ── 🔑 키반납 배지 ── */
+var _returnedBadgeMap = {}; /* slotIdx → {entry} */
+
+function _showReturnBadge(slotIdx, entry){
+  var el = document.getElementById('slot_'+slotIdx);
+  if(!el) return;
+  /* 기존 배지 제거 */
+  _removeReturnBadge(slotIdx);
+  var badge = document.createElement('div');
+  badge.className = 'key-returned-badge';
+  badge.id = 'returnBadge_'+slotIdx;
+  badge.textContent = '🔑반납';
+  badge.onclick = function(e){
+    e.stopPropagation();
+    _openKeyReturnPopup(slotIdx, entry);
+  };
+  el.appendChild(badge);
+  _returnedBadgeMap[slotIdx] = { entry: entry };
+}
+
+function _removeReturnBadge(slotIdx){
+  var prev = document.getElementById('returnBadge_'+slotIdx);
+  if(prev) prev.remove();
+  if(_returnedBadgeMap[slotIdx]){
+    delete _returnedBadgeMap[slotIdx];
+  }
+}
+
+function _removeAllReturnBadges(){
+  Object.keys(_returnedBadgeMap).forEach(function(idx){ _removeReturnBadge(idx); });
+}
+
+function _openKeyReturnPopup(slotIdx, entry){
+  var d = getSlot(slotIdx) || {};
+  var body = document.getElementById('keyReturnPopupBody');
+  if(body){
+    body.innerHTML =
+      '🚗 차량번호: <strong>'+(d.car||entry.car||'-')+'</strong><br>'+
+      '👤 딜러: <strong>'+(entry.name||'-')+'</strong><br>'+
+      (entry.pr ? '🏢 소속: <strong>'+entry.pr+'</strong><br>' : '')+
+      '📞 전화: <strong>'+(entry.phone||'-')+'</strong><br>'+
+      '🕐 반납시각: <strong>'+(entry.returnedAt||entry.timestamp||'-')+'</strong>';
+  }
+  document.getElementById('keyReturnPopupOv').classList.add('show');
+  /* 배지 제거 (확인함) */
+  _removeReturnBadge(slotIdx);
+}
+
+function closeKeyReturnPopup(){
+  document.getElementById('keyReturnPopupOv').classList.remove('show');
+}
+
+/* 반납된 차량 슬롯에 배지 표시 */
+function _applyReturnBadges(retArr, prevRetArr){
+  if(!retArr || !retArr.length) return;
+  var slots = getSlots();
+  var newReturnedIds = retArr.filter(function(id){ return !prevRetArr.includes(id); });
+  newReturnedIds.forEach(function(id){
+    /* dispatchSet에서 해당 entry 찾기 */
+    var entry = dispatchSet[id] || { car: '', name: '', phone: '' };
+    /* 차량번호로 슬롯 매칭 */
+    var carNum = typeof entry === 'object' ? (entry.car||'') : entry;
+    if(!carNum) return;
+    for(var i=0; i<TOTAL; i++){
+      var d = slots[i]||{};
+      if(!d.disabled && d.car && match4(carNum, d.car)){
+        _showReturnBadge(i, typeof entry==='object' ? entry : {car:carNum});
+        break;
+      }
+    }
+  });
+}
+
 /* ── 🔔 키불출 팝업 ── */
 function showDispatchPopup(entryOrCar){
   /* ★ FIX: entry 객체 또는 car 문자열 모두 처리 */
@@ -7807,6 +7923,14 @@ function handleData(data){
   var hist   = Array.isArray(data.hist)     ? data.hist     : [];
   var retArr = Array.isArray(data.returned) ? data.returned.map(String) : [];
 
+  /* ★ 개선: 키불출 관련 데이터(hist/returned)가 없는 수신은
+     주차현황판 내부 업데이트 → 키불출 이벤트 처리 스킵 */
+  var hasKdFields = data.hist || data.returned || data.action;
+  if(!hasKdFields){
+    /* pb_slots만 변경된 경우 → 슬롯 데이터만 반영, 깜박임 재적용 */
+    reapplyBlinks(); return;
+  }
+
   if(isFirstLoad){
     prevUpdatedAt = updAt; isFirstLoad = false;
     dispatchSet = {};
@@ -7818,11 +7942,17 @@ function handleData(data){
   }
 
   var kdChanged = updAt && updAt !== prevUpdatedAt;
+  var prevRetArr = Object.keys(dispatchSet).length ? retArr.slice() : [];
   if(!kdChanged){
+    /* ★ 키반납 배지 적용 (retArr 새 항목 감지) */
+    _applyReturnBadges(retArr, prevRetArr);
     retArr.forEach(function(id){ if(dispatchSet[id]) delete dispatchSet[id]; });
     reapplyBlinks(); updateAlertBar(); return;
   }
   prevUpdatedAt = updAt;
+
+  /* ★ 키반납 배지 적용 */
+  _applyReturnBadges(retArr, prevRetArr);
 
   retArr.forEach(function(id){
     if(dispatchSet[id]) delete dispatchSet[id];
