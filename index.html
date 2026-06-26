@@ -210,7 +210,14 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .alert-bar.show{display:block;}
 
 /* ══ 그리드 ══ */
-.grid-wrap{display:flex;flex-direction:column;padding:6px 8px 20vh;width:100%;box-sizing:border-box;}
+.grid-wrap{display:flex;flex-direction:column;padding:6px 8px 20vh;width:100%;box-sizing:border-box;
+  /* ★ BUG FIX: 자식 요소 overflow가 페이지 가로스크롤로 전파되지 않도록 차단 */
+  overflow-x:hidden;}
+/* ★ BUG FIX: 모바일 우측 여백 — grid-wrap 좌우 padding 제거
+   PC(601px+)는 8px 유지, 모바일은 0으로 설정해 그리드가 vw 전체를 꽉 채우도록 */
+@media(max-width:600px){
+  .grid-wrap{ padding-left:0 !important; padding-right:0 !important; }
+}
 /* ══ 격자(2열) 배치 모드 ══
    align-items:stretch → 같은 행의 두 파트 셀 높이 동일
    각 cell 안에서 part-body는 flex:0 auto → 콘텐츠 크기만큼만 차지 */
@@ -271,7 +278,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 /* ════ 열 가로 스크롤 (터치 드래그) ════ */
 .col-scroll-wrap{
   position:relative;
-  overflow-x:auto;
+  /* ★ BUG FIX: 기본값 hidden — 전체 열 표시 시 가로 스크롤 차단
+     열 접기 상태(visCols < totalCols)에서 JS가 overflow-x:auto로 전환 */
+  overflow-x:hidden;
   overflow-y:visible;
   -webkit-overflow-scrolling:touch; /* iOS 관성 스크롤 */
   width:100%;
@@ -395,7 +404,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .ctrl-btn-group{display:flex;gap:5px;align-items:center;flex:1;justify-content:flex-end;}
 
 /* ══ PART 라벨 (편집 가능) ══ */
-.part-wrap{margin:3px 0 2px;position:relative;flex-shrink:0;}
+.part-wrap{margin:3px 0 2px;position:relative;flex-shrink:0;
+  /* ★ BUG FIX: part-label이 뷰포트보다 넓어지면 grid-wrap이 overflow → 페이지 가로스크롤 발생
+     max-width + overflow:hidden 으로 차단 */
+  max-width:100%;overflow:hidden;}
 .part-wrap:first-child{margin-top:0;margin-bottom:2px;}
 @media(max-width:600px){
   .part-wrap{ margin:2px 0 1px; }
@@ -410,7 +422,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 /* 1행: 드래그핸들 + 파트명 + 구역명 */
 .part-label-row1{display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden;}
 /* 2행: 열/행 컨트롤 전용 */
-.part-label-row2{display:flex;align-items:center;gap:2px;width:100%;flex-shrink:0;}
+.part-label-row2{display:flex;align-items:center;gap:2px;width:100%;flex-shrink:0;
+  /* ★ BUG FIX: 버튼이 뷰포트 너비를 초과하지 않도록 */
+  flex-wrap:wrap;overflow:hidden;min-width:0;}
 
 /* ★ PC 전용: 구역명을 1행·2행 사이 중앙에 오버레이 (높이 변화 없음) */
 /* 모바일: PC extra input 숨김 */
@@ -613,17 +627,20 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 @media(max-width:600px){
   .slot-memo{font-size:var(--slot-memo-fs,9px) !important;max-height:calc(var(--slot-memo-fs,9px) * 2.4) !important;}
 }
-/* ★ 모바일: 메모 1줄 절대 제한 */
+/* ★ 모바일: 메모 줄 수 동적 제어
+   --slot-memo-lines: 기본 1줄, 슬롯이 넓으면(4열 이하) 2줄 허용
+   JS fitLayout에서 visCols 기준으로 --slot-memo-lines 세팅 */
 @media(max-width:600px){
   .slot-memo{
-    max-height:calc(var(--slot-memo-fs,9px) * 1.3) !important;
-    -webkit-line-clamp:1 !important;
-    white-space:nowrap;
-    text-overflow:ellipsis;
-    display:block !important;
-    overflow:hidden !important;
-    word-break:normal;
-    text-wrap:nowrap;
+    max-height:calc(var(--slot-memo-fs,9px) * 1.15 * var(--slot-memo-lines, 1) + 2px) !important;
+    -webkit-line-clamp: var(--slot-memo-lines, 1) !important;
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    white-space: normal;
+    word-break: break-all;
+    text-overflow: ellipsis;
+    text-wrap: unset;
   }
 }
 
@@ -1376,7 +1393,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   border-radius:6px;padding:3px 7px;border:1.5px solid #E8B800;min-width:28px;text-align:center;flex-shrink:0;
   box-shadow:0 1px 3px rgba(0,0,0,.2);}
 /* ★ 파트별 열/행 버튼 */
-.part-ctrl{display:inline-flex;align-items:center;gap:3px;margin-left:0;flex-shrink:0;
+.part-ctrl{display:inline-flex;align-items:center;gap:3px;margin-left:0;flex-shrink:1;min-width:0;
   background:rgba(255,255,255,.18);border-radius:8px;padding:2px 6px;border:1px solid rgba(254,229,0,.35);}
 .part-ctrl-lbl{font-size:11px;font-weight:900;color:#FEE500;white-space:nowrap;
   text-shadow:0 1px 3px rgba(0,0,0,.5);letter-spacing:.3px;}
@@ -3437,6 +3454,7 @@ function _fbSyncReset() {
 
 var fbConnected=false;
 var prevUpdatedAt=0, isFirstLoad=true;
+var _prevRetArr=[]; /* ★ BUG FIX: 이전 반납 배열을 별도 변수로 추적 */
 var dispatchSet={};
 var activeSlot=null, selectedStatus='none';
 var _fbPendingBuildGrid = false; /* ★ 모달 열려있을 때 Firebase buildGrid 보류 플래그 */
@@ -4052,8 +4070,11 @@ function fitLayout(){
   var gridMode = isPartGridMode();
 
   if(!gridMode){
-    var hPad = 16;
     var isMobile = vw < 600;
+    /* ★ BUG FIX: 모바일은 grid-wrap 좌우 padding 제거(CSS)와 함께
+       hPad=0으로 맞춰 slotW 계산이 vw 전체 기준이 되도록 함
+       PC는 grid-wrap padding 8px*2=16px 유지 */
+    var hPad = isMobile ? 0 : 16;
 
     /* ══ PC 세로 모드: 가용 높이 계산
        ★ FIX: mainWrap.clientHeight는 settings-body transition 중 오래된 값을 반환.
@@ -4096,7 +4117,14 @@ function fitLayout(){
 
       /* ★ 파트별 독립 slotW 계산 (표시 열 수 기준) */
       var gapW_p = 2 * (visCols_calc - 1);
-      var slotW_p = Math.floor((vw - hPad - gapW_p) / visCols_calc);
+      /* ★★ BUG FIX: 모바일 우측 여백 근본 해결
+         Math.floor 내림으로 생기는 잔여 픽셀(최대 ~10px)이 우측 여백으로 누적됨.
+         모바일은 grid-template-columns: repeat(pc, 1fr) 이 브라우저가 균등 분배하므로
+         슬롯너비 계산은 폰트크기 기준용으로만 사용 → Math.round로 근삿값 사용.
+         실제 그리드 렌더링 너비는 CSS 1fr이 결정하므로 여백 없음. */
+      var slotW_p = isMobile
+        ? Math.round((vw - hPad - gapW_p) / visCols_calc)
+        : Math.floor((vw - hPad - gapW_p) / visCols_calc);
 
       /* ★ 자연 슬롯 높이 (폭 비례) */
       var naturalSlotH_p = Math.min(Math.max(Math.floor(slotW_p * 1.15), 58), 110);
@@ -4131,7 +4159,9 @@ function fitLayout(){
       var carFs_p   = isMobile
         ? Math.min(Math.max(Math.floor(slotW_p*0.42),11),17)
         : Math.min(Math.max(Math.floor(slotW_p*0.57),12), 22, Math.floor(slotH_p*0.40));
-      var memoFs_p  = Math.min(Math.max(Math.floor(slotW_p*0.20),5), 25, Math.floor(slotH_p*0.17));
+      /* ★ 모바일 4열 이하: 슬롯이 넓으므로 메모 폰트도 더 크게 허용 */
+      var _memoRatio = (isMobile && visCols_calc <= 5) ? 0.15 : 0.20;
+      var memoFs_p  = Math.min(Math.max(Math.floor(slotW_p*_memoRatio),5), 25, Math.floor(slotH_p*0.17));
       var emptyFs_p = Math.min(Math.max(Math.floor(slotW_p*0.40),8), Math.floor(slotH_p*0.32), 22);
       var numSz_p   = Math.min(Math.max(Math.floor(slotW_p*0.62),16), 30, Math.floor(slotH_p*0.50));
       var numFs_p   = Math.min(Math.max(Math.floor(numSz_p*0.56),9),17);
@@ -4157,6 +4187,10 @@ function fitLayout(){
       pgEl.style.setProperty('--slot-num-fs',   numFs_p   + 'px');
       pgEl.style.setProperty('--col-hc-fs',     colHcFs_p + 'px');
       pgEl.style.setProperty('--slot-badge-fs', badgeFs_p + 'px');
+      /* ★ 모바일 메모 줄 수: visCols ≤ 4이면 2줄, 그 외 1줄 */
+      if(isMobile){
+        pgEl.style.setProperty('--slot-memo-lines', visCols_calc <= 5 ? '2' : '1');
+      }
       /* ★ 우선순위: 차량번호 > 배지 > 메모 */
       var carMinH_p = numSz_p + Math.ceil(carFs_p * 2.2) + 4;
       var bdgMinH_p = carMinH_p + badgeFs_p + 4;
@@ -4179,6 +4213,13 @@ function fitLayout(){
       if(chEl){
         chEl.style.gridTemplateColumns='repeat('+pc+',minmax(0,1fr))';
         chEl.style.setProperty('--col-hc-fs', colHcFs_p + 'px');
+      }
+      /* ★ BUG FIX: fitLayout마다 _applyColScrollViewport 즉시 호출
+         — rAF 지연 제거: 동기 호출로 이전 픽셀 너비 잔류 방지
+         — visCols === pc: 인라인 너비 즉시 초기화 + overflow-x:hidden
+         — visCols < pc: totalW 픽셀 너비 즉시 세팅 + overflow-x:auto */
+      if(typeof _applyColScrollViewport === 'function'){
+        _applyColScrollViewport(p, pc, visCols_calc);
       }
     }
     return;
@@ -5342,25 +5383,36 @@ function _applyColScrollViewport(p, totalCols, visCols){
     var wrapW = sw.clientWidth;
     if(!wrapW || wrapW <= 0) wrapW = sw.getBoundingClientRect().width;
     if(!wrapW || wrapW <= 0) wrapW = sw.offsetWidth;
-    if(!wrapW || wrapW <= 0) wrapW = window.innerWidth - 16;
-    wrapW = Math.floor(wrapW); /* ★ 소수점 버림으로 totalW 초과 방지 */
+    if(!wrapW || wrapW <= 0) wrapW = window.innerWidth < 600 ? window.innerWidth : window.innerWidth - 16;
+    wrapW = Math.floor(wrapW);
 
-    /* 전체 그리드 너비 = 래퍼너비 / visCols * totalCols */
-    var totalW = Math.round(wrapW / visCols * totalCols);
+    /* ★ BUG FIX: gap(2px)을 반영한 정확한 totalW 계산
+       슬롯 1개 너비 = (wrapW - gap*(visCols-1)) / visCols
+       전체 그리드 너비 = 슬롯너비 * totalCols + gap*(totalCols-1)
+       → 스크롤 끝에서 정확히 맞아떨어져 우측 여백 0 */
+    var _gap = 2; /* column-gap */
+    var slotW_scroll = (wrapW - _gap * (visCols - 1)) / visCols;
+    var totalW = Math.ceil(slotW_scroll * totalCols + _gap * (totalCols - 1));
 
     /* parking-grid, col-header-row, col-header, inner 동일 픽셀 너비 */
     if(pg)   { pg.style.width    = totalW+'px'; pg.style.minWidth    = totalW+'px'; }
     if(chr)  { chr.style.width   = totalW+'px'; chr.style.minWidth   = totalW+'px'; }
     if(ch)   { ch.style.width    = totalW+'px'; ch.style.minWidth    = totalW+'px'; }
     if(inner){ inner.style.width = totalW+'px'; inner.style.minWidth = totalW+'px'; }
-    sw.classList.add('has-hidden-cols'); /* ★ 호버 버튼 표시용 */
+    /* ★ 열 접기 상태: 가로 스크롤 허용 */
+    sw.style.overflowX = 'auto';
+    sw.classList.add('has-hidden-cols');
   } else {
-    /* 전체 열 펼침: 너비 인라인 스타일 초기화 */
+    /* ★ BUG FIX: 전체 열 표시 상태 → 인라인 너비 즉시 초기화 + 스크롤 차단
+       rAF 지연 없이 동기적으로 초기화해야 이전 픽셀 너비가 남아 스크롤 생기는 현상 방지 */
     if(pg)   { pg.style.width    = ''; pg.style.minWidth    = ''; }
     if(chr)  { chr.style.width   = ''; chr.style.minWidth   = ''; }
     if(ch)   { ch.style.width    = ''; ch.style.minWidth    = ''; }
     if(inner){ inner.style.width = ''; inner.style.minWidth = ''; }
     sw.scrollLeft = 0;
+    /* ★ overflow-x:hidden — 전체 열 표시 시 가로 스크롤 완전 차단
+       11/11 상태에서 좌로 밀면 우측 여백이 보이는 현상 방지 */
+    sw.style.overflowX = 'hidden';
     sw.classList.remove('has-hidden-cols');
   }
   /* ★ PC: 화살표 버튼 초기화 */
@@ -5681,16 +5733,33 @@ function addPartCol(pNum){
 function removePartCol(pNum){
   var cur=PART_COL_COUNTS[pNum-1]||COLS_PER_PART, rows=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
   if(cur<=MIN_COLS){showAlert('⚠️ 최소 '+MIN_COLS+'열');setTimeout(hideAlert,2000);return;}
-  /* 마지막 열 데이터 확인 (좌표 ID로 직접 조회) */
+
+  /* 마지막 열 차량 데이터 확인 (좌표 ID로 직접 조회) */
   var data=_getData(), hasCar=false;
   for(var r=0; r<rows&&!hasCar; r++){
     var id = _coordId(pNum, cur, r+1);
     if(data[id]&&data[id].car) hasCar=true;
   }
-  if(hasCar){
+
+  /* ★ 마지막 열 이름(열 헤더) 데이터 확인 */
+  var _cn = getColNames();
+  var colNameVal = _cn['p'+pNum+'c'+cur] || '';
+  var hasColName = colNameVal.trim().length > 0;
+
+  /* 차량 데이터 또는 열 이름이 있으면 확인 팝업 표시 */
+  if(hasCar || hasColName){
     _miniConfirmType='remove_col'; _miniConfirmPayload={pNum:pNum};
-    document.getElementById('miniConfirmIcon').textContent='⚠️';
-    document.getElementById('miniConfirmMsg').textContent=pNum+'파트 마지막 열에 차량이 있습니다.\n삭제하면 해당 열 데이터가 모두 제거됩니다.\n계속하시겠습니까?';
+    document.getElementById('miniConfirmIcon').textContent = hasCar ? '⚠️' : '🗑️';
+    /* ★ 상황에 맞는 메시지 */
+    var _msg = '';
+    if(hasCar && hasColName){
+      _msg = pNum+'파트 마지막 열('+colNameVal+')에 차량이 있습니다.\n열 이름과 차량 데이터가 모두 삭제됩니다.\n계속하시겠습니까?';
+    } else if(hasCar){
+      _msg = pNum+'파트 마지막 열에 차량이 있습니다.\n삭제하면 해당 열 데이터가 모두 제거됩니다.\n계속하시겠습니까?';
+    } else {
+      _msg = pNum+'파트 마지막 열 이름('+colNameVal+')이 저장되어 있습니다.\n삭제하면 열 이름도 함께 제거됩니다.\n계속하시겠습니까?';
+    }
+    document.getElementById('miniConfirmMsg').textContent = _msg;
     var _btn=document.getElementById('miniConfirmOkBtn');
     _btn.className='mini-confirm-ok clear'; _btn.textContent='삭제';
     document.getElementById('miniConfirmOv').classList.add('show');
@@ -7567,9 +7636,11 @@ function refreshSlot(i){
   var el=document.getElementById('slot_'+i);if(!el)return;
   renderSlot(el,i); reapplyBlinks();
   _fitSlotCarTexts(el);
-  /* ★ FIX: 모바일/PC 구분 없이 배지 초기화 (드래그 후 배지 사라짐 방지) */
-  requestAnimationFrame(function(){ _initBadgeSlider(el); });
-    /* 열 숨김은 col-scroll-wrap 스크롤 방식으로 처리 */
+  /* ★ BUG FIX: rAF 2중으로 감싸 renderSlot 후 레이아웃 확정 후 배지 초기화
+     배지가 flex 중간에 순간 보이는 깜빡임 방지 */
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ _initBadgeSlider(el); });
+  });
   if(el.style.display === 'none') el.style.display = '';
 }
 
@@ -7595,14 +7666,10 @@ function _initBadgeSlider(slotEl){
 
   var wrap = document.createElement('div');
   wrap.className = 'slot-badge-wrap ' + (badges.length === 1 ? 'single' : 'multi');
-  /* ★ PC에서 배지가 flex 흐름에 끼어드는 순간 방지 — 즉시 absolute 고정 */
-  if(window.innerWidth >= 601){
-    wrap.style.position = 'absolute';
-    wrap.style.bottom   = '2px';
-    wrap.style.left     = '0';
-    wrap.style.right    = '0';
-    wrap.style.marginTop = '0';
-  }
+  /* ★ BUG FIX: PC/모바일 조건 없이 항상 인라인 absolute 강제
+     — CSS @media 계산 전 순간에도 flex 흐름에 끼어들지 않도록 보장
+     — 키불출 이벤트, fitLayout 타이밍, buildGrid 직후 깜빡임 방지 */
+  wrap.style.cssText = 'position:absolute;bottom:2px;left:0;right:0;margin-top:0;padding:0 3px;box-sizing:border-box;pointer-events:none;overflow:hidden;z-index:5;';
   badges.forEach(function(b){
     b.parentNode && b.parentNode.removeChild(b);
     var item = document.createElement('div');
@@ -7657,7 +7724,13 @@ function _initAllBadgeSliders(){
       clearInterval(_badgeSliderTimers[k]);
       delete _badgeSliderTimers[k];
     });
-    document.querySelectorAll('.slot').forEach(function(s){ _initBadgeSlider(s); });
+    /* ★ BUG FIX: rAF 2중으로 감싸 fitLayout CSS 계산 완전 확정 후 실행
+       배지가 flex 흐름에 순간 끼어드는 깜빡임/위치 이탈 방지 */
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        document.querySelectorAll('.slot').forEach(function(s){ _initBadgeSlider(s); });
+      });
+    });
   }, 250); /* ★ 250ms 디바운스 — Firebase 연속 발화 대비 */
 }
 
@@ -7842,18 +7915,14 @@ function _restoreSearchReturn(fbData){
 
 /* ★ Firebase pb_search_return 수신 시 현재 DOM 배지 상태와 동기화 */
 function _syncSearchReturnFromFb(fbData){
-  /* fbData가 null이면 Firebase에 pb_search_return 키가 아예 없는 상태
-     → 아직 한 번도 저장한 적 없는 것이므로 현재 배지 건드리지 않음 */
-  if(!fbData || typeof fbData !== 'object') return;
-
-  var fbSlots = fbData;
-  var fbKeys  = Object.keys(fbSlots).map(String);
+  /* ★ BUG FIX: null이면 무시가 아니라 현재 return 배지 전부 제거
+     다른 기기에서 키반납확인 완료 → Firebase null → 이 기기도 즉시 제거 */
+  var fbKeys = (fbData && typeof fbData==='object') ? Object.keys(fbData).map(String) : [];
   var curKeys = Object.keys(_searchBadgeSlots).filter(function(k){ return _searchBadgeSlots[k]==='return'; }).map(String);
 
-  /* Firebase에 없는데 현재 'return' 상태인 슬롯 → 제거 (다른 기기에서 확인 완료) */
+  /* Firebase에 없는데 현재 'return' 상태인 슬롯 → 제거 */
   curKeys.forEach(function(idx){
     if(fbKeys.indexOf(idx) === -1){
-      /* _saveSearchReturn 호출 없이 DOM만 정리 (Firebase가 이미 최신) */
       var el = document.getElementById('slot_'+idx);
       if(el){
         var b = el.querySelector('.slot-search-return-badge');
@@ -7861,7 +7930,8 @@ function _syncSearchReturnFromFb(fbData){
         el.classList.remove('blink-search-issue');
         var wrap = el.querySelector('.slot-badge-wrap');
         if(wrap) wrap.style.display = '';
-        _initBadgeSlider(el);
+        /* ★ rAF 2중 — 레이아웃 확정 후 배지 복원 */
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){ _initBadgeSlider(el); }); });
       }
       delete _searchBadgeSlots[idx];
     }
@@ -7870,7 +7940,7 @@ function _syncSearchReturnFromFb(fbData){
   /* Firebase에 있는데 현재 없는 슬롯 → 추가 (다른 기기에서 키불출) */
   fbKeys.forEach(function(idx){
     if(_searchBadgeSlots[idx] !== 'return'){
-      _restoreSearchReturn(fbSlots);
+      _restoreSearchReturn(fbData);
       return;
     }
   });
@@ -8108,11 +8178,13 @@ function _removeDispatchBadge(slotIdx){
   var badge = el.querySelector('.slot-dispatch-badge');
   if(badge) badge.remove();
 
-  /* ② slot-badge-wrap 복원 + 슬라이더 재시작 */
+  /* ② slot-badge-wrap 복원 + 슬라이더 재시작 (rAF 2중 — 위치 확정 후) */
   var wrap = el.querySelector('.slot-badge-wrap');
   if(wrap){
     wrap.style.display = '';
-    _initBadgeSlider(el);
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){ _initBadgeSlider(el); });
+    });
   }
 }
 
@@ -8135,7 +8207,8 @@ function _confirmKeyReturn(slotIdx, entry){
   /* ★ 키불출앱 Firebase 연동: returned 배열에 해당 키 ID 추가 */
   if(returnedIds.length > 0 && fbDb){
     try{
-      var _code = localStorage.getItem('pb_sync_code') || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
+      /* ★ BUG FIX: 'pb_sync_code'는 저장되지 않는 키 → LS_CODE('pb_code')로 통일 */
+      var _code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
       if(_code){
         var _kdRef = fbDb.ref('kd_rooms/' + _code);
         _kdRef.once('value').then(function(snap){
@@ -8366,20 +8439,23 @@ function handleData(data){
       if(e && e.car && !retArr.includes(String(e.id)))
         dispatchSet[String(e.id)] = e;
     });
+    _prevRetArr = retArr.slice(); /* ★ 초기 반납 배열 저장 */
     reapplyBlinks(); updateAlertBar(); return;
   }
 
   var kdChanged = updAt && updAt !== prevUpdatedAt;
-  var prevRetArr = Object.keys(dispatchSet).length ? retArr.slice() : [];
+  /* ★ BUG FIX: prevRetArr를 현재 retArr로 초기화하면 신규 반납이 감지 안 됨
+     → 별도 보관한 _prevRetArr 사용 */
+  var prevRetArr = _prevRetArr.slice();
+  _prevRetArr = retArr.slice(); /* 다음 비교를 위해 갱신 */
+
   if(!kdChanged){
-    /* ★ 키반납 배지 적용 (retArr 새 항목 감지) */
     _applyReturnBadges(retArr, prevRetArr);
     retArr.forEach(function(id){ if(dispatchSet[id]) delete dispatchSet[id]; });
     reapplyBlinks(); updateAlertBar(); return;
   }
   prevUpdatedAt = updAt;
 
-  /* ★ 키반납 배지 적용 */
   _applyReturnBadges(retArr, prevRetArr);
 
   retArr.forEach(function(id){
@@ -9823,6 +9899,13 @@ function connectFb(url,code){
       _settingKeys.push('pb_header_memo','pb_memo_fs2','pb_memo_color2');
       _settingKeys.push('pb_promo_text','pb_promo_fs','pb_promo_color','pb_owner_list');
       _settingKeys.push('pb_local_ts','pb_part_order');
+      /* ★ BUG FIX: 코드변경 시 누락됐던 키 추가 — 이전 코드 잔여 데이터 완전 제거 */
+      _settingKeys.push(LS_SEARCH_RETURN);   /* pb_search_return_v1 */
+      _settingKeys.push(LS_OFFLINE_DIRTY);   /* pb_offline_dirty */
+      _settingKeys.push('pb_encar_log');
+      _settingKeys.push('pb_offline_saves');
+      _settingKeys.push('pb_col_hc_text_color');
+      _settingKeys.push('pb_col_part_text_colors');
       _settingKeys.forEach(function(k){ try{localStorage.removeItem(k);}catch(e){}; });
 
       /* ④ 화면 즉시 초기화 */
