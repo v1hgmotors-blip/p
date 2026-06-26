@@ -8153,7 +8153,8 @@ function _confirmKeyReturn(slotIdx, entry){
   /* ★ 키불출앱 Firebase 연동: returned 배열에 해당 키 ID 추가 */
   if(returnedIds.length > 0 && fbDb){
     try{
-      var _code = localStorage.getItem('pb_sync_code') || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
+      /* ★ BUG FIX: 'pb_sync_code'는 저장되지 않는 키 → LS_CODE('pb_code')로 통일 */
+      var _code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
       if(_code){
         var _kdRef = fbDb.ref('kd_rooms/' + _code);
         _kdRef.once('value').then(function(snap){
@@ -9542,9 +9543,27 @@ function saveAndConnect(){
 }
 /* ★★ FIX: 슬롯 실시간 리스너를 별도 함수로 분리
    — 새 기기에서 once() 완료 후 호출, 기존 기기에서 바로 호출 */
+/* ★ BUG FIX: 키불출앱 이벤트로 인한 불필요한 buildGrid 방지
+   pb_slots 리스너는 pb_slots 경로만 구독하므로 키불출앱 이벤트에 반응하지 않음.
+   단, fbRef(kd_rooms 전체) 경로 변경 시 fbSlotsRef도 재발화할 수 있으므로
+   실제 슬롯 데이터 변경이 있을 때만 처리하도록 _localTs 비교로 가드 추가. */
+var _lastSlotSnapTs = 0; /* 마지막으로 처리한 pb_slots 스냅샷의 _localTs */
 function _registerSlotsOnListener(){
   if(!fbSlotsRef) return;
   fbSlotsRef.on('value',function(snap){
+    /* ★ BUG FIX: _localTs가 동일하면 실제 슬롯 데이터 변경 없음
+       키불출앱이 kd_rooms 상위 경로를 변경할 때 fbSlotsRef(pb_slots)도 재발화하지만
+       pb_slots 자체의 _localTs는 그대로이므로, 이 경우 buildGrid/refreshSlot 생략 */
+    var _snapData = snap.val();
+    if(_snapData && window._fbSyncDone){
+      var _snapTs = parseInt(_snapData._localTs || '0');
+      if(_snapTs > 0 && _snapTs === _lastSlotSnapTs){
+        /* _localTs 동일 → 슬롯 데이터 변경 없음 → reapplyBlinks만 실행하고 종료 */
+        reapplyBlinks();
+        return;
+      }
+      if(_snapTs > 0) _lastSlotSnapTs = _snapTs;
+    }
     /* ★ 복원 보호: 복원 완료 후 30초간 Firebase 덮어쓰기 차단 */
     var restoreTs = parseInt(localStorage.getItem('pb_restore_pending')||'0');
     if(restoreTs && Date.now() - restoreTs < 30000){
@@ -9725,38 +9744,54 @@ function _registerSlotsOnListener(){
       } else {
         /* 실시간 수신: 이전 캐시와 diff 비교 */
         var _prevCache = window._fbPrevSlotCache || {};
-        var _diffIds = [];
-        for(var _dk in recvSlots){
-          if(JSON.stringify(recvSlots[_dk]) !== JSON.stringify(_prevCache[_dk])){
-            _diffIds.push(_dk);
-          }
-        }
-        for(var _pk in _prevCache){
-          if(!recvSlots.hasOwnProperty(_pk)) _diffIds.push(_pk);
-        }
-        /* 캐시 갱신 */
-        window._fbPrevSlotCache = JSON.parse(JSON.stringify(recvSlots));
 
-        if(_diffIds.length > 0 && _diffIds.length <= 8){
-          /* 소량 변경 → refreshSlot */
-          var _anyRefreshed = false;
-          for(var _ri=0; _ri<TOTAL; _ri++){
-            var _rid = _gidx2id(_ri);
-            if(_rid && _diffIds.indexOf(_rid) >= 0){
-              refreshSlot(_ri); _anyRefreshed = true;
+        /* ★ BUG FIX: recvSlots가 정의되지 않은 코드 경로(구형 _ids없음 분기)
+           또는 빈 객체일 때 _prevCache와 diff하면 모든 슬롯이 _diffIds에 추가되어
+           buildGrid() 전체 재빌드가 발생. 실제로 슬롯 데이터가 변경됐는지
+           로컬 저장 데이터를 기준으로 재구성하여 비교 */
+        var _safeRecvSlots = (typeof recvSlots !== 'undefined' && recvSlots && Object.keys(recvSlots).length > 0)
+          ? recvSlots
+          : (typeof recvSlots2 !== 'undefined' && recvSlots2 && Object.keys(recvSlots2).length > 0
+              ? recvSlots2
+              : null);
+
+        /* recvSlots가 없으면 슬롯 변경 없음 → buildGrid/refreshSlot 생략 */
+        if(!_safeRecvSlots){
+          /* 슬롯 변경 없음(키불출앱 이벤트 등) → 아무것도 안 함 */
+        } else {
+          var _diffIds = [];
+          for(var _dk in _safeRecvSlots){
+            if(JSON.stringify(_safeRecvSlots[_dk]) !== JSON.stringify(_prevCache[_dk])){
+              _diffIds.push(_dk);
             }
           }
-          if(_anyRefreshed){
-            if(typeof updateCarCountBadge==='function') updateCarCountBadge();
-            if(typeof _encarUpdateCount==='function') _encarUpdateCount();
-            if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
-            _initAllBadgeSliders();
-          } else { buildGrid(); _initAllBadgeSliders(); }
-        } else if(_diffIds.length > 8){
-          /* 대량 변경 → 전체 재빌드 */
-          buildGrid(); _initAllBadgeSliders();
+          for(var _pk in _prevCache){
+            if(!_safeRecvSlots.hasOwnProperty(_pk)) _diffIds.push(_pk);
+          }
+          /* 캐시 갱신 */
+          window._fbPrevSlotCache = JSON.parse(JSON.stringify(_safeRecvSlots));
+
+          if(_diffIds.length > 0 && _diffIds.length <= 8){
+            /* 소량 변경 → 해당 슬롯만 refreshSlot */
+            var _anyRefreshed = false;
+            for(var _ri=0; _ri<TOTAL; _ri++){
+              var _rid = _gidx2id(_ri);
+              if(_rid && _diffIds.indexOf(_rid) >= 0){
+                refreshSlot(_ri); _anyRefreshed = true;
+              }
+            }
+            if(_anyRefreshed){
+              if(typeof updateCarCountBadge==='function') updateCarCountBadge();
+              if(typeof _encarUpdateCount==='function') _encarUpdateCount();
+              if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
+              _initAllBadgeSliders();
+            } else { buildGrid(); _initAllBadgeSliders(); }
+          } else if(_diffIds.length > 8){
+            /* 대량 변경 → 전체 재빌드 */
+            buildGrid(); _initAllBadgeSliders();
+          }
+          /* _diffIds.length === 0: 변경 없음 → 아무것도 안 함 (정상) */
         }
-        /* _diffIds.length === 0: 변경 없음 → 아무것도 안 함 (정상) */
       }
     }
     _encarUpdateCount();_encarApplyBlinks();
@@ -9825,6 +9860,16 @@ function connectFb(url,code){
       _settingKeys.push('pb_header_memo','pb_memo_fs2','pb_memo_color2');
       _settingKeys.push('pb_promo_text','pb_promo_fs','pb_promo_color','pb_owner_list');
       _settingKeys.push('pb_local_ts','pb_part_order');
+      /* ★ BUG FIX: 코드 변경 시 누락됐던 키 추가 — 이전 코드 잔여 데이터 완전 제거 */
+      _settingKeys.push(LS_SEARCH_RETURN);          /* pb_search_return_v1 */
+      _settingKeys.push(LS_OFFLINE_DIRTY);           /* pb_offline_dirty */
+      _settingKeys.push(LS_ENCAR_LOG);               /* pb_encar_log */
+      _settingKeys.push('pb_offline_dirty');
+      _settingKeys.push('pb_offline_saves');
+      _settingKeys.push('pb_offline_snapshot');
+      _settingKeys.push('pb_encar_log');
+      _settingKeys.push('pb_col_hc_text_color');
+      _settingKeys.push('pb_col_part_text_colors');
       _settingKeys.forEach(function(k){ try{localStorage.removeItem(k);}catch(e){}; });
 
       /* ④ 화면 즉시 초기화 */
