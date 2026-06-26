@@ -7563,9 +7563,9 @@ function refreshSlot(i){
   var el=document.getElementById('slot_'+i);if(!el)return;
   renderSlot(el,i); reapplyBlinks();
   _fitSlotCarTexts(el);
-  /* ★ BUG FIX: rAF 2중으로 감싸 renderSlot 후 CSS 확정 프레임에서 배지 초기화 */
-  requestAnimationFrame(function(){ requestAnimationFrame(function(){ _initBadgeSlider(el); }); });
-  /* 열 숨김은 col-scroll-wrap 스크롤 방식으로 처리 */
+  /* ★ FIX: 모바일/PC 구분 없이 배지 초기화 (드래그 후 배지 사라짐 방지) */
+  requestAnimationFrame(function(){ _initBadgeSlider(el); });
+    /* 열 숨김은 col-scroll-wrap 스크롤 방식으로 처리 */
   if(el.style.display === 'none') el.style.display = '';
 }
 
@@ -7591,21 +7591,14 @@ function _initBadgeSlider(slotEl){
 
   var wrap = document.createElement('div');
   wrap.className = 'slot-badge-wrap ' + (badges.length === 1 ? 'single' : 'multi');
-  /* ★ BUG FIX: PC/모바일 모두 항상 absolute 고정 인라인 강제
-     — fitLayout 타이밍, Firebase 이벤트, 새로고침 직후 CSS 계산 전 appendChild 되더라도
-       flex 흐름에 끼어들지 않고 항상 슬롯 하단에 고정 */
-  wrap.style.cssText = [
-    'position:absolute',
-    'bottom:2px',
-    'left:0',
-    'right:0',
-    'margin-top:0',
-    'padding:0 3px',
-    'box-sizing:border-box',
-    'pointer-events:none',
-    'overflow:hidden',
-    'z-index:5'
-  ].join(';');
+  /* ★ PC에서 배지가 flex 흐름에 끼어드는 순간 방지 — 즉시 absolute 고정 */
+  if(window.innerWidth >= 601){
+    wrap.style.position = 'absolute';
+    wrap.style.bottom   = '2px';
+    wrap.style.left     = '0';
+    wrap.style.right    = '0';
+    wrap.style.marginTop = '0';
+  }
   badges.forEach(function(b){
     b.parentNode && b.parentNode.removeChild(b);
     var item = document.createElement('div');
@@ -7660,13 +7653,7 @@ function _initAllBadgeSliders(){
       clearInterval(_badgeSliderTimers[k]);
       delete _badgeSliderTimers[k];
     });
-    /* ★ BUG FIX: rAF 2중으로 감싸 fitLayout/Firebase 이벤트 후
-       CSS 계산이 완전히 끝난 프레임에서 배지 초기화 — 배지 위치 이탈 방지 */
-    requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        document.querySelectorAll('.slot').forEach(function(s){ _initBadgeSlider(s); });
-      });
-    });
+    document.querySelectorAll('.slot').forEach(function(s){ _initBadgeSlider(s); });
   }, 250); /* ★ 250ms 디바운스 — Firebase 연속 발화 대비 */
 }
 
@@ -7846,12 +7833,18 @@ function _restoreSearchReturn(fbData){
   });
 }
 
+
 /* ★ Firebase pb_search_return 수신 시 현재 DOM 배지 상태와 동기화 */
 function _syncSearchReturnFromFb(fbData){
-  var fbKeys = (fbData && typeof fbData === 'object') ? Object.keys(fbData).map(String) : [];
+  /* fbData가 null이면 Firebase에 pb_search_return 키가 아예 없는 상태
+     → 아직 한 번도 저장한 적 없는 것이므로 현재 배지 건드리지 않음 */
+  if(!fbData || typeof fbData !== 'object') return;
+
+  var fbSlots = fbData;
+  var fbKeys  = Object.keys(fbSlots).map(String);
   var curKeys = Object.keys(_searchBadgeSlots).filter(function(k){ return _searchBadgeSlots[k]==='return'; }).map(String);
 
-  /* Firebase에 없는데 현재 'return' 상태인 슬롯 → 제거 (다른 기기에서 확인 완료 or null 수신) */
+  /* Firebase에 없는데 현재 'return' 상태인 슬롯 → 제거 (다른 기기에서 확인 완료) */
   curKeys.forEach(function(idx){
     if(fbKeys.indexOf(idx) === -1){
       /* _saveSearchReturn 호출 없이 DOM만 정리 (Firebase가 이미 최신) */
@@ -7862,7 +7855,7 @@ function _syncSearchReturnFromFb(fbData){
         el.classList.remove('blink-search-issue');
         var wrap = el.querySelector('.slot-badge-wrap');
         if(wrap) wrap.style.display = '';
-        requestAnimationFrame(function(){ requestAnimationFrame(function(){ _initBadgeSlider(el); }); });
+        _initBadgeSlider(el);
       }
       delete _searchBadgeSlots[idx];
     }
@@ -7871,7 +7864,7 @@ function _syncSearchReturnFromFb(fbData){
   /* Firebase에 있는데 현재 없는 슬롯 → 추가 (다른 기기에서 키불출) */
   fbKeys.forEach(function(idx){
     if(_searchBadgeSlots[idx] !== 'return'){
-      _restoreSearchReturn(fbData);
+      _restoreSearchReturn(fbSlots);
       return;
     }
   });
@@ -8015,65 +8008,47 @@ function reapplyBlinks(){
   var dcarsRaw=[];
   for(var id in dispatchSet){
     var _de=dispatchSet[id];
-    dcarsRaw.push(typeof _de==='object'?(_de.car||''):_de); /* ★ FIX: object or string 모두 처리 */
+    dcarsRaw.push(typeof _de==='object'?(_de.car||''):_de);
   }
   for(var i=0;i<TOTAL;i++){
     var el=document.getElementById('slot_'+i);if(!el)continue;
     var d=slots[i]||{};
-    if(d.disabled){el.classList.remove('blink-dispatch');continue;}
+    if(d.disabled){
+      if(el.classList.contains('blink-dispatch')) el.classList.remove('blink-dispatch');
+      continue;
+    }
     var hit=false;
     if(d.car){
       for(var ci=0;ci<dcarsRaw.length;ci++){
-        /* ★ 4자리 연속 숫자 기준 매칭 */
         if(match4(d.car, dcarsRaw[ci])){hit=true;break;}
       }
     }
-    var wasBlink = el.classList.contains('blink-dispatch');
+    var hasBlink = el.classList.contains('blink-dispatch');
     if(hit){
-      el.classList.add('blink-dispatch');
+      /* ★ 이미 깜박 중이면 classList/DOM 건드리지 않음 — 깜박임 리셋 방지 */
+      if(!hasBlink) el.classList.add('blink-dispatch');
       expandPart(slotToPart(i));
-      /* ★ 키반납확인 배지 추가 */
       var _hitEntry = null;
       for(var _eid in dispatchSet){
         var _ee = dispatchSet[_eid];
         var _ec = typeof _ee==='object'?(_ee.car||''):_ee;
         if(match4(d.car, _ec)){ _hitEntry = _ee; break; }
       }
-      /* ★ BUG FIX: 새로 매칭된 슬롯만 배지 갱신 + rAF로 레이아웃 확정 후 초기화
-         - 이미 blink-dispatch 였던 슬롯은 배지가 이미 있으므로 스킵
-         - 새로 매칭된 슬롯만 _addDispatchBadge 후 _initBadgeSlider 재실행 */
-      if(!wasBlink){
-        _addDispatchBadge(i, _hitEntry||{car:d.car});
-        (function(_el){ requestAnimationFrame(function(){ requestAnimationFrame(function(){
-          _initBadgeSlider(_el);
-        }); }); })(el);
-      } else {
-        _addDispatchBadge(i, _hitEntry||{car:d.car});
-      }
+      _addDispatchBadge(i, _hitEntry||{car:d.car});
     } else {
-      el.classList.remove('blink-dispatch');
-      /* ★ 키반납확인 배지 제거 */
-      if(wasBlink){
-        _removeDispatchBadge(i);
-        (function(_el){ requestAnimationFrame(function(){ requestAnimationFrame(function(){
-          _initBadgeSlider(_el);
-        }); }); })(el);
-      }
+      if(hasBlink) el.classList.remove('blink-dispatch');
+      _removeDispatchBadge(i);
     }
   }
-  /* 파트 라벨 깜박: 해당 파트에 blink-dispatch 슬롯이 하나라도 있으면 라벨도 깜박
-     ★ FIX BUG4: NUM_PARTS 기준으로 반복 — PART_COUNT 변수는 구버전 잔재로 부정확할 수 있음.
-       파트 드래그 순서 변경 후에도 partWrap{p}와 parkingGrid{p}는 파트 번호로 고정 ID를
-       유지하므로 DOM 직접 조회가 항상 올바른 파트를 가리킴. */
   for(var p=1;p<=NUM_PARTS;p++){
     var lbl=document.querySelector('#partWrap'+p+' .part-label');
     if(!lbl) continue;
     var grid=document.getElementById('parkingGrid'+p);
     var hasHit=grid && grid.querySelector('.blink-dispatch');
-    if(hasHit) lbl.classList.add('blink-dispatch-label');
-    else lbl.classList.remove('blink-dispatch-label');
+    var lblHas = lbl.classList.contains('blink-dispatch-label');
+    if(hasHit){ if(!lblHas) lbl.classList.add('blink-dispatch-label'); }
+    else       { if(lblHas)  lbl.classList.remove('blink-dispatch-label'); }
   }
-  /* 열 헤더 깜박: blink-dispatch 슬롯이 있는 열의 col-hc도 깜박 */
   document.querySelectorAll('.col-hc').forEach(function(hc){ hc.classList.remove('blink-dispatch-col'); });
   document.querySelectorAll('.slot.blink-dispatch').forEach(function(slot){
     var idx = parseInt((slot.id||'').replace('slot_',''));
@@ -8105,13 +8080,11 @@ function _addDispatchBadge(slotIdx, entry){
   var sid = el.id;
   if(_badgeSliderTimers[sid]){ clearInterval(_badgeSliderTimers[sid]); delete _badgeSliderTimers[sid]; }
 
-  /* ② 키반납확인 버튼 생성 — absolute 하단 고정 인라인 강제 */
+  /* ② 키반납확인 버튼 생성 — wrap과 동일 위치(absolute bottom) */
   var badge = document.createElement('button');
   badge.className = 'slot-dispatch-badge';
   badge.textContent = '🔑키반납확인';
   badge.title = '클릭 시 키반납 처리';
-  /* ★ BUG FIX: CSS 계산 전 타이밍에도 위치 보장 — 인라인으로 absolute bottom 강제 */
-  badge.style.cssText = 'position:absolute;bottom:2px;left:0;right:0;z-index:35;';
   badge.onclick = function(e){ e.stopPropagation(); _confirmKeyReturn(slotIdx, entry); };
   el.appendChild(badge);
 }
@@ -8124,13 +8097,11 @@ function _removeDispatchBadge(slotIdx){
   var badge = el.querySelector('.slot-dispatch-badge');
   if(badge) badge.remove();
 
-  /* ② slot-badge-wrap 복원 + 슬라이더 재시작 (rAF 2중으로 레이아웃 확정 후) */
+  /* ② slot-badge-wrap 복원 + 슬라이더 재시작 */
   var wrap = el.querySelector('.slot-badge-wrap');
   if(wrap){
     wrap.style.display = '';
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){
-      _initBadgeSlider(el);
-    }); });
+    _initBadgeSlider(el);
   }
 }
 
@@ -8153,8 +8124,7 @@ function _confirmKeyReturn(slotIdx, entry){
   /* ★ 키불출앱 Firebase 연동: returned 배열에 해당 키 ID 추가 */
   if(returnedIds.length > 0 && fbDb){
     try{
-      /* ★ BUG FIX: 'pb_sync_code'는 저장되지 않는 키 → LS_CODE('pb_code')로 통일 */
-      var _code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
+      var _code = localStorage.getItem('pb_sync_code') || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
       if(_code){
         var _kdRef = fbDb.ref('kd_rooms/' + _code);
         _kdRef.once('value').then(function(snap){
@@ -8349,20 +8319,33 @@ function handleData(data){
   var retArr = Array.isArray(data.returned) ? data.returned.map(String) : [];
 
   /* ★ pb_search_return 실시간 동기화 — 다른 기기에서 키불출/키반납확인 시 즉시 반영
-     ★ null 포함 모든 값 처리 (null = 전체 반납 확인 완료) */
+     ★ 핵심: data에 pb_search_return 키가 명시적으로 존재할 때만 동기화
+             키불출앱 이벤트 등 pb_search_return이 없는 수신은 건너뜀 */
   if(data.hasOwnProperty('pb_search_return')){
     var srData = (data.pb_search_return && typeof data.pb_search_return === 'object') ? data.pb_search_return : null;
     try{ localStorage.setItem(LS_SEARCH_RETURN, JSON.stringify(srData || {})); }catch(e){}
-    /* null이든 객체든 _syncSearchReturnFromFb에 위임 — null 수신 시 배지 전체 제거 */
-    _syncSearchReturnFromFb(srData);
+    if(srData === null){
+      Object.keys(_searchBadgeSlots).filter(function(k){ return _searchBadgeSlots[k]==='return'; }).forEach(function(idx){
+        var el = document.getElementById('slot_'+idx);
+        if(el){
+          var b = el.querySelector('.slot-search-return-badge');
+          if(b) b.remove();
+          el.classList.remove('blink-search-issue');
+          var wrap = el.querySelector('.slot-badge-wrap');
+          if(wrap) wrap.style.display = '';
+          _initBadgeSlider(el);
+        }
+        delete _searchBadgeSlots[idx];
+      });
+    } else {
+      _syncSearchReturnFromFb(srData);
+    }
   }
 
-  /* ★ 개선: 키불출 관련 데이터(hist/returned)가 없는 수신은
-     주차현황판 내부 업데이트 → 키불출 이벤트 처리 스킵 */
   var hasKdFields = data.hist || data.returned || data.action;
   if(!hasKdFields){
-    /* pb_slots만 변경된 경우 → 슬롯 데이터만 반영, 깜박임 재적용 */
-    reapplyBlinks(); return;
+    /* pb_slots만 변경 → fbSlotsRef 리스너가 이미 처리 중, 중복 reapplyBlinks 생략 */
+    return;
   }
 
   if(isFirstLoad){
@@ -9543,27 +9526,9 @@ function saveAndConnect(){
 }
 /* ★★ FIX: 슬롯 실시간 리스너를 별도 함수로 분리
    — 새 기기에서 once() 완료 후 호출, 기존 기기에서 바로 호출 */
-/* ★ BUG FIX: 키불출앱 이벤트로 인한 불필요한 buildGrid 방지
-   pb_slots 리스너는 pb_slots 경로만 구독하므로 키불출앱 이벤트에 반응하지 않음.
-   단, fbRef(kd_rooms 전체) 경로 변경 시 fbSlotsRef도 재발화할 수 있으므로
-   실제 슬롯 데이터 변경이 있을 때만 처리하도록 _localTs 비교로 가드 추가. */
-var _lastSlotSnapTs = 0; /* 마지막으로 처리한 pb_slots 스냅샷의 _localTs */
 function _registerSlotsOnListener(){
   if(!fbSlotsRef) return;
   fbSlotsRef.on('value',function(snap){
-    /* ★ BUG FIX: _localTs가 동일하면 실제 슬롯 데이터 변경 없음
-       키불출앱이 kd_rooms 상위 경로를 변경할 때 fbSlotsRef(pb_slots)도 재발화하지만
-       pb_slots 자체의 _localTs는 그대로이므로, 이 경우 buildGrid/refreshSlot 생략 */
-    var _snapData = snap.val();
-    if(_snapData && window._fbSyncDone){
-      var _snapTs = parseInt(_snapData._localTs || '0');
-      if(_snapTs > 0 && _snapTs === _lastSlotSnapTs){
-        /* _localTs 동일 → 슬롯 데이터 변경 없음 → reapplyBlinks만 실행하고 종료 */
-        reapplyBlinks();
-        return;
-      }
-      if(_snapTs > 0) _lastSlotSnapTs = _snapTs;
-    }
     /* ★ 복원 보호: 복원 완료 후 30초간 Firebase 덮어쓰기 차단 */
     var restoreTs = parseInt(localStorage.getItem('pb_restore_pending')||'0');
     if(restoreTs && Date.now() - restoreTs < 30000){
@@ -9658,7 +9623,9 @@ function _registerSlotsOnListener(){
          Firebase에 S... 랜덤 ID로 저장된 기존 데이터도 올바르게 표시됨 */
       var recvSlots={};
       for(var k in data){
-        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||data[k]===null) continue;
+        /* ★ 슬롯 데이터 키만 포함 — 메타/키불출 관련 키 제외 */
+        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||
+           k==='pb_search_return'||k==='pb_settings'||data[k]===null) continue;
         recvSlots[k]=data[k];
       }
       var _hasIdKey = Object.keys(recvSlots).some(function(k){ return /^S[0-9a-z]{5,}/.test(k) || /^C_\d+_\d+_\d+$/.test(k); });
@@ -9711,7 +9678,8 @@ function _registerSlotsOnListener(){
       /* _ids 없음(구형): 파트키/전역인덱스 변환 */
       var recvSlots2={};
       for(var k in data){
-        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||data[k]===null)continue;
+        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||
+           k==='pb_search_return'||k==='pb_settings'||data[k]===null)continue;
         recvSlots2[k]=data[k];
       }
       if(Object.keys(recvSlots2).length > 0){
@@ -9744,54 +9712,38 @@ function _registerSlotsOnListener(){
       } else {
         /* 실시간 수신: 이전 캐시와 diff 비교 */
         var _prevCache = window._fbPrevSlotCache || {};
-
-        /* ★ BUG FIX: recvSlots가 정의되지 않은 코드 경로(구형 _ids없음 분기)
-           또는 빈 객체일 때 _prevCache와 diff하면 모든 슬롯이 _diffIds에 추가되어
-           buildGrid() 전체 재빌드가 발생. 실제로 슬롯 데이터가 변경됐는지
-           로컬 저장 데이터를 기준으로 재구성하여 비교 */
-        var _safeRecvSlots = (typeof recvSlots !== 'undefined' && recvSlots && Object.keys(recvSlots).length > 0)
-          ? recvSlots
-          : (typeof recvSlots2 !== 'undefined' && recvSlots2 && Object.keys(recvSlots2).length > 0
-              ? recvSlots2
-              : null);
-
-        /* recvSlots가 없으면 슬롯 변경 없음 → buildGrid/refreshSlot 생략 */
-        if(!_safeRecvSlots){
-          /* 슬롯 변경 없음(키불출앱 이벤트 등) → 아무것도 안 함 */
-        } else {
-          var _diffIds = [];
-          for(var _dk in _safeRecvSlots){
-            if(JSON.stringify(_safeRecvSlots[_dk]) !== JSON.stringify(_prevCache[_dk])){
-              _diffIds.push(_dk);
-            }
+        var _diffIds = [];
+        for(var _dk in recvSlots){
+          if(JSON.stringify(recvSlots[_dk]) !== JSON.stringify(_prevCache[_dk])){
+            _diffIds.push(_dk);
           }
-          for(var _pk in _prevCache){
-            if(!_safeRecvSlots.hasOwnProperty(_pk)) _diffIds.push(_pk);
-          }
-          /* 캐시 갱신 */
-          window._fbPrevSlotCache = JSON.parse(JSON.stringify(_safeRecvSlots));
-
-          if(_diffIds.length > 0 && _diffIds.length <= 8){
-            /* 소량 변경 → 해당 슬롯만 refreshSlot */
-            var _anyRefreshed = false;
-            for(var _ri=0; _ri<TOTAL; _ri++){
-              var _rid = _gidx2id(_ri);
-              if(_rid && _diffIds.indexOf(_rid) >= 0){
-                refreshSlot(_ri); _anyRefreshed = true;
-              }
-            }
-            if(_anyRefreshed){
-              if(typeof updateCarCountBadge==='function') updateCarCountBadge();
-              if(typeof _encarUpdateCount==='function') _encarUpdateCount();
-              if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
-              _initAllBadgeSliders();
-            } else { buildGrid(); _initAllBadgeSliders(); }
-          } else if(_diffIds.length > 8){
-            /* 대량 변경 → 전체 재빌드 */
-            buildGrid(); _initAllBadgeSliders();
-          }
-          /* _diffIds.length === 0: 변경 없음 → 아무것도 안 함 (정상) */
         }
+        for(var _pk in _prevCache){
+          if(!recvSlots.hasOwnProperty(_pk)) _diffIds.push(_pk);
+        }
+        /* 캐시 갱신 */
+        window._fbPrevSlotCache = JSON.parse(JSON.stringify(recvSlots));
+
+        if(_diffIds.length > 0 && _diffIds.length <= 8){
+          /* 소량 변경 → refreshSlot */
+          var _anyRefreshed = false;
+          for(var _ri=0; _ri<TOTAL; _ri++){
+            var _rid = _gidx2id(_ri);
+            if(_rid && _diffIds.indexOf(_rid) >= 0){
+              refreshSlot(_ri); _anyRefreshed = true;
+            }
+          }
+          if(_anyRefreshed){
+            if(typeof updateCarCountBadge==='function') updateCarCountBadge();
+            if(typeof _encarUpdateCount==='function') _encarUpdateCount();
+            if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
+            _initAllBadgeSliders();
+          } else { buildGrid(); _initAllBadgeSliders(); }
+        } else if(_diffIds.length > 8){
+          /* 대량 변경 → 전체 재빌드 */
+          buildGrid(); _initAllBadgeSliders();
+        }
+        /* _diffIds.length === 0: 변경 없음 → 아무것도 안 함 (정상) */
       }
     }
     _encarUpdateCount();_encarApplyBlinks();
@@ -9860,16 +9812,6 @@ function connectFb(url,code){
       _settingKeys.push('pb_header_memo','pb_memo_fs2','pb_memo_color2');
       _settingKeys.push('pb_promo_text','pb_promo_fs','pb_promo_color','pb_owner_list');
       _settingKeys.push('pb_local_ts','pb_part_order');
-      /* ★ BUG FIX: 코드 변경 시 누락됐던 키 추가 — 이전 코드 잔여 데이터 완전 제거 */
-      _settingKeys.push(LS_SEARCH_RETURN);          /* pb_search_return_v1 */
-      _settingKeys.push(LS_OFFLINE_DIRTY);           /* pb_offline_dirty */
-      _settingKeys.push(LS_ENCAR_LOG);               /* pb_encar_log */
-      _settingKeys.push('pb_offline_dirty');
-      _settingKeys.push('pb_offline_saves');
-      _settingKeys.push('pb_offline_snapshot');
-      _settingKeys.push('pb_encar_log');
-      _settingKeys.push('pb_col_hc_text_color');
-      _settingKeys.push('pb_col_part_text_colors');
       _settingKeys.forEach(function(k){ try{localStorage.removeItem(k);}catch(e){}; });
 
       /* ④ 화면 즉시 초기화 */
@@ -10082,15 +10024,6 @@ function connectFb(url,code){
       }catch(e){}
       _encarUpdateCount();
     },function(err){console.warn('[엔카로그동기화]',err);});
-
-    /* ★★ 키반납확인 실시간 리스너 — pb_search_return 전용 on()
-       handleData 의존 없이 직접 감지 → 다른 기기에서 키반납확인 클릭 시 즉시 반영
-       null 수신(전체 삭제) 포함 모든 변경을 처리 */
-    var _srRef = fbDb.ref('kd_rooms/'+code+'/pb_search_return');
-    try{ _srRef.off('value'); }catch(e){}
-    _srRef.on('value', function(snap){
-      _syncSearchReturnFromFb(snap.val());
-    }, function(err){ console.warn('[search_return 리스너]', err); });
 
     setDot('on','연결됨');
     /* ★ Firebase 연결 완료 시 미전송 설정 즉시 전송 */
