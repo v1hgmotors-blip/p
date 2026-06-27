@@ -331,9 +331,19 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   .col-scroll-arrow:hover  { background:rgba(58,29,10,.97); opacity:1; border-color:#FEE500; }
   .col-scroll-arrow:active { background:#3A1D00; }
 }
-.col-header-row{display:flex;align-items:center;gap:0;margin-top:3px;flex-shrink:0;min-width:0;}
+.col-header-row{display:flex;align-items:center;gap:0;margin-top:5px;flex-shrink:0;min-width:0;}
+@media(max-width:600px){
+  .col-header-row{ margin-top:4px; }
+}
 .col-header{display:grid;gap:2px;flex:1;min-width:0;margin-top:0;margin-bottom:0;flex-shrink:0;}
-.col-hc{text-align:center;font-size:var(--col-hc-fs,15px);font-weight:900;color:var(--col-hc-color,#FFFFFF);background:var(--col-hc-bg,var(--kakao-dark));border-radius:5px;padding:4px 1px;cursor:pointer;position:relative;transition:background .15s;text-shadow:0 1px 0 rgba(255,255,255,.4);overflow:hidden;white-space:normal;word-break:break-all;line-height:1.2;min-width:0;display:flex;align-items:center;justify-content:center;}
+.col-hc{text-align:center;font-size:var(--col-hc-fs,15px);font-weight:900;color:var(--col-hc-color,#FFFFFF);background:var(--col-hc-bg,var(--kakao-dark));border-radius:5px;
+  /* ★ padding 증가: 세로 여백 확보 → 열 헤더가 너무 얇아 보이는 문제 해결 */
+  padding:6px 1px;
+  min-height:24px;
+  cursor:pointer;position:relative;transition:background .15s;text-shadow:0 1px 0 rgba(255,255,255,.4);overflow:hidden;white-space:normal;word-break:break-all;line-height:1.2;min-width:0;display:flex;align-items:center;justify-content:center;}
+@media(max-width:600px){
+  .col-hc{ padding:5px 1px; min-height:22px; }
+}
 .col-hc:hover{filter:brightness(1.08);}
 .col-hc.editing{background:#FFF8CC;padding:0;}
 /* 키불출 열 헤더 깜박 */
@@ -384,7 +394,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .col-edit-switch input:checked + .col-edit-slider:before{transform:translateX(20px);}
 .col-edit-switch input:focus + .col-edit-slider{box-shadow:0 0 0 3px rgba(16,185,129,.35);}
 /* ★ FIX: width:100% 추가 — 열 접기/펼치기 후 parking-grid가 part-body 너비를 넘쳐흐르지 않도록 */
-.parking-grid{display:grid;column-gap:2px;row-gap:2px;flex-shrink:0;width:100%;}
+.parking-grid{display:grid;column-gap:2px;row-gap:2px;flex-shrink:0;width:100%;
+  /* ★ 슬롯 하단과 열 헤더 사이 여백 */
+  padding-bottom:3px;}
 /* ★ 검색바 2줄 레이아웃 */
 .search-bar{flex-wrap:wrap;row-gap:4px;}
 .search-row1{display:flex;gap:4px;align-items:center;width:100%;min-width:0;flex-wrap:wrap;position:relative;}
@@ -1074,7 +1086,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 
 /* ══ 편집 모달 ══ */
-.modal-ov{display:none;position:fixed;inset:0;background:rgba(58,29,29,.6);z-index:200;align-items:flex-start;justify-content:center;backdrop-filter:blur(2px);}
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(58,29,29,.6);z-index:200;align-items:flex-start;justify-content:center;backdrop-filter:blur(2px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:0;padding-bottom:60vh;}
 .modal-ov.show{display:flex;}
 /* ══ 판매완료/초기화 미니 확인 팝업 ══ */
 .mini-confirm-ov{display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;background:rgba(0,0,0,.45);}
@@ -1108,7 +1120,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .mini-confirm-ok{border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;color:#fff;}
 .mini-confirm-ok.sale{background:#1D4ED8;}
 .mini-confirm-ok.clear{background:#EF4444;}
-.modal{background:#FFFDE7;border:3px solid var(--kakao);border-radius:0 0 22px 22px;padding:14px 14px 20px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(58,29,29,.3);animation:mSlide .25s cubic-bezier(.34,1.56,.64,1);max-height:88vh;overflow-y:auto;overflow-x:hidden;position:relative;box-sizing:border-box;margin-top:var(--header-h,60px);}
+.modal{background:#FFFDE7;border:3px solid var(--kakao);border-radius:0 0 22px 22px;padding:14px 14px 20px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(58,29,29,.3);animation:mSlide .25s cubic-bezier(.34,1.56,.64,1);max-height:none;overflow-y:visible;overflow-x:hidden;position:relative;box-sizing:border-box;margin-top:0;flex-shrink:0;align-self:flex-start;}
 /* ★ 모달 상단 닫기 버튼 */
 .m-close-btn{position:absolute;top:12px;right:12px;background:rgba(58,29,29,.13);border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#3A1D1D;cursor:pointer;touch-action:manipulation;z-index:20;flex-shrink:0;line-height:1;}
 .m-close-btn:active{background:rgba(58,29,29,.28);}
@@ -4136,22 +4148,23 @@ function fitLayout(){
          목표: 66 + (pr-1)*2 + pr*slotH <= _pcAvailH  */
       var slotH_p = naturalSlotH_p;
       if(!isMobile && _pcAvailH > 0 && pr > 0){
-        /* 파트 오버헤드:
-           · part-label(~36px) + margin(~8px) + col-header(~22px) = 66px
-           · 행 gap: (행수 - 1) * (slot-num-sz * 0.29) ≈ (행수-1) * 6.4px
-           · 슬롯 margin-top(slot-num-sz*0.28): 행 수만큼
-           · padding-top on grid: slot-num-sz * 0.30 ≈ 6.6px */
-        var _slotNumSz = numSz_p || 22; /* fitLayout에서 계산된 배지 크기 */
+        /* 파트 오버헤드 실측 기준:
+           · part-label(~36px) + margin(~8px) = 44px
+           · col-header: padding(6*2=12px) + font(13px)*lineHeight(1.2)≈16px + margin-top(5px) = ~33px
+           · padding-bottom(parking-grid): 3px
+           → 총 overhead ≈ 44 + 33 + 3 = 80px
+           · 행 gap: (행수 - 1) * row-gap
+           · 슬롯 margin-top: slot-num-sz * 0.28 * 행 수 */
+        var _slotNumSz = numSz_p || 22;
         var _rowGapPc = Math.ceil(_slotNumSz * 0.29);
         var _slotMarginPc = Math.ceil(_slotNumSz * 0.28);
         var _gridPadPc = Math.ceil(_slotNumSz * 0.30);
-        var _partOvhd = 66 + _gridPadPc + (pr - 1) * _rowGapPc + pr * _slotMarginPc;
-        /* ★ 4행 기준 슬롯 높이 계산 → 5행 이상은 4행 크기 고정 + 스크롤 */
+        /* ★ overhead: 80px(고정) + grid padding-top */
+        var _partOvhd = 80 + _gridPadPc + (pr - 1) * _rowGapPc + pr * _slotMarginPc;
         var _baseRows = Math.min(pr, 4);
-        var _partOvhd4 = 66 + _gridPadPc + (_baseRows - 1) * _rowGapPc + _baseRows * _slotMarginPc;
+        var _partOvhd4 = 80 + _gridPadPc + (_baseRows - 1) * _rowGapPc + _baseRows * _slotMarginPc;
         var _fitH = Math.floor((_pcAvailH - _partOvhd4) / _baseRows);
         _fitH = Math.min(Math.max(_fitH, 58), 110);
-        /* ★ 5행 이상: 4행 계산값 그대로 사용 (naturalSlotH_p 무시) */
         slotH_p = (pr > 4) ? _fitH : Math.min(naturalSlotH_p, _fitH);
       }
 
@@ -4165,7 +4178,8 @@ function fitLayout(){
       var emptyFs_p = Math.min(Math.max(Math.floor(slotW_p*0.40),8), Math.floor(slotH_p*0.32), 22);
       var numSz_p   = Math.min(Math.max(Math.floor(slotW_p*0.62),16), 30, Math.floor(slotH_p*0.50));
       var numFs_p   = Math.min(Math.max(Math.floor(numSz_p*0.56),9),17);
-      var colHcFs_p = Math.min(Math.max(Math.floor(slotW_p*0.42),8),14);
+      /* ★ 열 헤더 폰트: 모바일 최솟값 10px으로 상향 (기존 8px → 가독성 향상) */
+      var colHcFs_p = Math.min(Math.max(Math.floor(slotW_p*0.42),10),14);
       /* ★ 배지 폰트: 행 수가 늘어날수록 비율·범위 자동 감소
          기준(4행): ratioW=0.28, ratioH=0.22, max=14px, min=10px
          행 추가마다: ratio -0.015/-0.012, max -0.5px, min -0.3px */
@@ -5716,7 +5730,7 @@ function addPartCol(pNum){
   localStorage.setItem(LS_PART_ROWS+'_'+pNum, rows);
   /* ★ 열 추가 시 접기 상태 유지 */
   var _cf=_getColFold(pNum); if(_cf>0) _setColFold(pNum,_cf+1);
-  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'struct-set');
+  /* ★ OPT: _pushGridStructure()에서 _gridConfig+_ids만 update하므로 전체 set 불필요 */
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   /* ★ 새로 추가된 열(맨 오른쪽)이 화면에 보이도록 스크롤 */
@@ -5805,7 +5819,7 @@ function _doRemovePartCol(pNum){
 
   /* ③ Firebase 전송 + 화면 갱신 (addPartCol과 동일한 구조 → 1번만 갱신) */
   _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
-  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'removePartCol');
+  /* ★ OPT: 전체 set 불필요 — _pushGridStructure()에서 _gridConfig+_ids만 update */
   if(typeof pushSettings==='function') pushSettings({colNames:_cn});
   _cleanColArrows();
   _recalcPartArrays(); _rebuildAndRefresh(); _pushGridStructure();
@@ -5834,7 +5848,7 @@ function addPartRow(pNum){
   _saveIds(ids);
   PART_ROW_COUNTS[pNum-1]=newR; localStorage.setItem(LS_PART_ROWS+'_'+pNum, newR);
   _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
-  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'addPartRow');
+  /* ★ OPT: 전체 set 불필요 — _pushGridStructure()에서 _gridConfig+_ids만 update */
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('✅ '+pNum+'파트 '+cols+'열×'+newR+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
@@ -5873,7 +5887,7 @@ function _doRemovePartRow(pNum){
   _saveIds(ids); _saveData(data);
   PART_ROW_COUNTS[pNum-1]=cur-1; localStorage.setItem(LS_PART_ROWS+'_'+pNum, cur-1);
   _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
-  if(fbSlotsRef) _fbSafeSet(Object.assign({},_getData(),{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'removePartRow');
+  /* ★ OPT: 전체 set 불필요 — _pushGridStructure()에서 _gridConfig+_ids만 update */
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
@@ -6916,6 +6930,8 @@ setTimeout(function(){
 /* ── openModal 에서 버튼 상태 반영 (hook) ── */
 var _origOpenModal = openModal;
 openModal = function(i){
+  /* ★ BUG FIX: 드래그 후 spurious click 차단 */
+  if(window._lastDragEndTs && Date.now() - window._lastDragEndTs < 400) return;
   _origOpenModal(i);
   _encarUpdateBtn(i);
   _inspectUpdateModal(i);
@@ -7174,10 +7190,66 @@ function swapSlotsData(a, b){
     upd[idB]=data[idB];
     _fbSafeUpdate(upd,'swap');
   }
+
+  /* ★ BUG FIX: 드래그 교환 시 키반납확인 배지 상태(_searchBadgeSlots) 인덱스도 함께 교환
+     refreshSlot()이 DOM을 재렌더링하면 동적 배지가 사라지므로
+     교환 후 배지가 있던 슬롯에 다시 배지를 복원해야 함 */
+  var badgeA = _searchBadgeSlots[a]; /* 'return' | 'issue' | undefined */
+  var badgeB = _searchBadgeSlots[b];
+  /* 상태맵 교환 */
+  if(badgeA) _searchBadgeSlots[b] = badgeA; else delete _searchBadgeSlots[b];
+  if(badgeB) _searchBadgeSlots[a] = badgeB; else delete _searchBadgeSlots[a];
+
   refreshSlot(a); refreshSlot(b);
-  /* ★ FIX: 드래그 교환 후 전체 배지 슬라이더 재초기화 */
-  setTimeout(function(){ _initAllBadgeSliders(); }, 150);
+
+  /* ★ DOM 재렌더 후 배지 복원 — rAF 2중으로 레이아웃 확정 후 실행 */
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){
+    /* a 슬롯 배지 복원 */
+    if(_searchBadgeSlots[a] === 'return') _restoreReturnBadgeOnSlot(a);
+    else if(_searchBadgeSlots[a] === 'issue') _restoreIssueBadgeOnSlot(a);
+    /* b 슬롯 배지 복원 */
+    if(_searchBadgeSlots[b] === 'return') _restoreReturnBadgeOnSlot(b);
+    else if(_searchBadgeSlots[b] === 'issue') _restoreIssueBadgeOnSlot(b);
+    /* 전체 배지 슬라이더 재초기화 */
+    _initAllBadgeSliders();
+  }); });
+
   showToast('🔄 슬롯 교환 완료','success');
+}
+
+/* ★ 특정 슬롯에 키반납확인 배지 복원 */
+function _restoreReturnBadgeOnSlot(slotIdx){
+  var el = document.getElementById('slot_'+slotIdx);
+  if(!el) return;
+  if(el.querySelector('.slot-search-return-badge')) return; /* 이미 있음 */
+  var wrap = el.querySelector('.slot-badge-wrap');
+  if(wrap) wrap.style.display = 'none';
+  el.classList.add('blink-search-issue');
+  var badge = document.createElement('button');
+  badge.className = 'slot-search-return-badge';
+  badge.textContent = '🔑키반납확인';
+  badge.title = '클릭 시 키반납 확인 처리';
+  (function(si){ badge.onclick = function(e){ e.stopPropagation(); _doSearchReturn(si); }; })(slotIdx);
+  el.appendChild(badge);
+  /* ★ localStorage 저장도 갱신 */
+  _saveSearchReturn();
+}
+
+/* ★ 특정 슬롯에 키불출 배지 복원 */
+function _restoreIssueBadgeOnSlot(slotIdx){
+  if(window.innerWidth <= 600) return;
+  var el = document.getElementById('slot_'+slotIdx);
+  if(!el) return;
+  if(el.querySelector('.slot-search-issue-badge,.slot-search-return-badge')) return;
+  var wrap = el.querySelector('.slot-badge-wrap');
+  if(wrap) wrap.style.display = 'none';
+  el.classList.add('blink-search');
+  var badge = document.createElement('button');
+  badge.className = 'slot-search-issue-badge';
+  badge.textContent = '🔑키불출';
+  badge.title = '클릭 시 키불출 처리';
+  (function(si){ badge.onclick = function(e){ e.stopPropagation(); _doSearchIssue(si); }; })(slotIdx);
+  el.appendChild(badge);
 }
 
 /* ── 유령 생성 ── */
@@ -7278,6 +7350,10 @@ function _dragEnd() {
   document.body.classList.remove('dragging-slot');
   /* ★ 드래그 조작 시 5분 타이머 연장 */
   if(_dragUnlocked) _startDragUnlockTimer();
+  /* ★ BUG FIX: 드래그 종료 시각 기록
+     — touchend 후 브라우저가 click 이벤트를 발생시켜 모달이 열리는 현상 방지
+     — openModal에서 이 시각 기준 400ms 이내 클릭은 드래그 후 click으로 간주, 차단 */
+  window._lastDragEndTs = Date.now();
   if (tgt !== null && tgt !== src) swapSlotsData(src, tgt);
 }
 
@@ -7859,7 +7935,11 @@ function _saveSearchReturn(){
   Object.keys(_searchBadgeSlots).forEach(function(idx){
     if(_searchBadgeSlots[idx] === 'return'){
       var d = getSlot(parseInt(idx)) || {};
-      data[idx] = { car: d.car || '' };
+      /* ★ BUG FIX: car 값이 있는 슬롯만 저장
+         빈 슬롯(car:'')이 저장되면 새로고침 후 엉뚱한 슬롯에 배지가 복원됨 */
+      if(d.car){
+        data[idx] = { car: d.car };
+      }
     }
   });
   /* localStorage */
@@ -7877,7 +7957,6 @@ function _saveSearchReturn(){
 function _restoreSearchReturn(fbData){
   /* ★ 모바일에서는 배지 복원하지 않음 */
   if(window.innerWidth <= 600) return;
-  /* Firebase 데이터가 전달된 경우 localStorage도 갱신 */
   var raw = fbData || null;
   if(!raw){
     try{ raw = JSON.parse(localStorage.getItem(LS_SEARCH_RETURN)||'null'); }catch(e){ raw=null; }
@@ -7885,23 +7964,25 @@ function _restoreSearchReturn(fbData){
   if(!raw || !Object.keys(raw).length) return;
   Object.keys(raw).forEach(function(idx){
     var slotIdx = parseInt(idx);
+    var savedCar = (raw[idx] && raw[idx].car) ? raw[idx].car : '';
+    /* ★ BUG FIX: 저장된 car와 현재 슬롯 car가 일치하는지 확인
+       새로고침 후 슬롯 배치가 바뀌거나 oq매칭으로 잘못 저장된 경우 방지 */
+    if(!savedCar) return;
+    var d = getSlot(slotIdx) || {};
+    if(!d.car || d.car !== savedCar) return; /* car 불일치 → 복원 안 함 */
+
     var el = document.getElementById('slot_'+slotIdx);
     if(!el) return;
-    /* 이미 있으면 스킵 */
     if(el.querySelector('.slot-search-return-badge')) return;
 
-    /* slot-badge-wrap 숨기기 */
     var wrap = el.querySelector('.slot-badge-wrap');
     if(wrap) wrap.style.display = 'none';
     var sid = el.id;
     if(typeof _badgeSliderTimers !== 'undefined' && _badgeSliderTimers[sid]){
       clearInterval(_badgeSliderTimers[sid]); delete _badgeSliderTimers[sid];
     }
-
-    /* 녹색 깜박임 */
     el.classList.add('blink-search-issue');
 
-    /* 키반납확인 배지 */
     var badge = document.createElement('button');
     badge.className = 'slot-search-return-badge';
     badge.textContent = '🔑키반납확인';
@@ -8055,19 +8136,82 @@ function extract4(s){
   });
   return r;
 }
+
+/* ★ BUG FIX: 앞뒤가 숫자가 아닌 독립 4자리만 추출
+   "2136"     → ["2136"]  ✅ 매칭
+   "21360"    → []        ✅ 5자리라 독립 4자리 없음
+   "가나2136" → ["2136"]  ✅ 앞이 문자
+   "가2136나" → ["2136"]  ✅ 앞뒤가 문자 */
+function extract4Standalone(s){
+  var r=[];
+  var src = norm(s);
+  /* 숫자가 아닌 문자(또는 시작)로 시작하고 숫자가 아닌 문자(또는 끝)로 끝나는 4자리 */
+  for(var i=0; i<src.length; i++){
+    if(src[i]>='0' && src[i]<='9'){
+      /* i위치에서 연속 숫자 길이 파악 */
+      var j=i;
+      while(j<src.length && src[j]>='0' && src[j]<='9') j++;
+      var numStr = src.slice(i,j);
+      if(numStr.length === 4) r.push(numStr); /* 정확히 4자리 연속 숫자 */
+      i = j-1; /* 다음 문자로 점프 */
+    }
+  }
+  return r;
+}
+
 /* 두 차량번호가 4자리 숫자 기준으로 매칭되는지 확인 */
 function match4(carA, carB){
-  var a4=extract4(norm(carA));
-  var b4=extract4(norm(carB));
+  var nA = norm(carA), nB = norm(carB);
+
+  /* ★ BUG FIX: 독립 4자리 기준 매칭 우선
+     "2136" 검색 vs "21360" 슬롯:
+       extract4Standalone("2136") = ["2136"]   (독립 4자리 있음)
+       extract4Standalone("21360") = []         (5자리라 독립 없음)
+       → aStandalone=["2136"], bStandalone=[]
+       → 한쪽만 독립 4자리 있음 → 하단 슬라이딩 비교로 fallback
+       → extract4("2136")=["2136"], extract4("21360")=["2136","1360"]
+       → "2136"==="2136" 매칭되려 하나
+       → 단, A가 독립 4자리 확정이면 B도 독립이어야 함 → 미매칭 ✅ */
+  var aStandalone = extract4Standalone(nA);
+  var bStandalone = extract4Standalone(nB);
+
+  /* 둘 다 독립 4자리 있음: 독립 4자리끼리만 비교 */
+  if(aStandalone.length>0 && bStandalone.length>0){
+    for(var i=0;i<aStandalone.length;i++)
+      for(var j=0;j<bStandalone.length;j++)
+        if(aStandalone[i]===bStandalone[j]) return true;
+    return false;
+  }
+
+  /* 한쪽이 독립 4자리, 상대방이 긴 번호인 경우:
+     독립 4자리를 가진 쪽의 숫자가 상대방에 독립 단위로 없으면 미매칭 */
+  if(aStandalone.length>0 || bStandalone.length>0){
+    var shorter = aStandalone.length>0 ? aStandalone : bStandalone;
+    var longerStr = aStandalone.length>0 ? nB : nA;
+    /* longerStr 에서 해당 4자리가 독립 단위인지 확인 */
+    for(var i=0;i<shorter.length;i++){
+      var idx = longerStr.indexOf(shorter[i]);
+      while(idx !== -1){
+        var before = idx===0 || !(longerStr[idx-1]>='0'&&longerStr[idx-1]<='9');
+        var after  = idx+4>=longerStr.length || !(longerStr[idx+4]>='0'&&longerStr[idx+4]<='9');
+        if(before && after) return true;
+        idx = longerStr.indexOf(shorter[i], idx+1);
+      }
+    }
+    return false;
+  }
+
+  /* 둘 다 독립 4자리 없음 (긴 번호끼리): 슬라이딩 4자리 비교 */
+  var a4 = extract4(nA), b4 = extract4(nB);
   if(a4.length>0 && b4.length>0){
     for(var i=0;i<a4.length;i++)
       for(var j=0;j<b4.length;j++)
         if(a4[i]===b4[j]) return true;
     return false;
   }
+
   /* 4자리 숫자 없으면 일반 포함 매칭 */
-  var na=norm(carA), nb=norm(carB);
-  return na.length>=2 && nb.length>=2 && (na.includes(nb)||nb.includes(na));
+  return nA.length>=2 && nB.length>=2 && (nA.includes(nB)||nB.includes(nA));
 }
 
 /* 키불출 감지된 파트 자동 펼치기 */
@@ -8508,6 +8652,10 @@ function selStatus(v){
   if(map[v]){ var el=document.getElementById(map[v]); if(el) el.className='status-btn '+cls[v]; }
 }
 function openModal(i){
+  /* ★ BUG FIX: 드래그 종료 후 400ms 이내 click → 모달 차단
+     드래그 후 같은 자리에 내려놓으면 touchend → click 이벤트가 순서대로 발생해
+     의도치 않게 모달이 열리는 현상 방지 */
+  if(window._lastDragEndTs && Date.now() - window._lastDragEndTs < 400) return;
   activeSlot=i;
   var d=getSlot(i);
   var _kn = getSlot(i).num; _kn = (_kn!==undefined && _kn!=='') ? _kn : '0';
@@ -8528,12 +8676,31 @@ function openModal(i){
   var _rb=document.getElementById('restoreBtn');
   if(_rb) _rb.style.display=(_slotHistory[i]&&_slotHistory[i].car)?'inline-block':'none';
   document.getElementById('modalOv').classList.add('show');
-  setTimeout(function(){document.getElementById('mCarInput').focus();},150);
+  setTimeout(function(){
+    document.getElementById('mCarInput').focus();
+    /* ★ 저장버튼이 화면 중앙까지 올라오도록 modal-ov 자동 스크롤
+       저장버튼(.mbtn-save)의 위치를 기준으로 화면 중앙에 맞춤 */
+    var ov = document.getElementById('modalOv');
+    var saveBtn = ov.querySelector('.mbtn-save');
+    if(saveBtn && ov){
+      requestAnimationFrame(function(){
+        var btnRect = saveBtn.getBoundingClientRect();
+        var screenCenter = window.innerHeight / 2;
+        var btnCenter = btnRect.top + btnRect.height / 2;
+        var scrollAmt = btnCenter - screenCenter;
+        if(scrollAmt > 0){
+          ov.scrollTop = scrollAmt;
+        }
+      });
+    }
+  },150);
   /* ★ PC: 차량번호 크기 슬라이더 동기화 */
   if(window.innerWidth >= 601 && typeof _syncCarFsSlider === 'function') _syncCarFsSlider();
 }
 function closeModal(){
   document.getElementById('modalOv').classList.remove('show');
+  /* ★ 스크롤 위치 초기화 — 다음 열기 시 깜빡임 방지 */
+  document.getElementById('modalOv').scrollTop = 0;
   var mb=document.getElementById('modalAlertBar');
   if(mb) mb.style.display='none';
   activeSlot=null;
