@@ -662,8 +662,11 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 /* 사용안함 */
 .slot.disabled{background:#888888!important;border-color:#FEE500!important;box-shadow:none!important;}
 .slot.disabled .slot-num{background:#333333!important;color:#888888!important;}
-.slot-x{font-size:18px;font-weight:900;color:#FFFFFF;margin-top:30px;line-height:1;}
-.slot-x-label{font-size:8px;color:#FFFFFF;font-weight:700;margin-top:2px;}
+/* ★ 사용안함 슬롯: X+텍스트 묶음을 슬롯 정중앙에 배치 */
+.slot-disabled-wrap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:3px;pointer-events:none;}
+.slot-x{font-size:18px;font-weight:900;color:#FFFFFF;line-height:1;}
+.slot-x-label{font-size:8px;color:#FFFFFF;font-weight:700;white-space:nowrap;}
 
 /* 키불출 깜박 */
 /* ══ 엔카 사진 예약 ══ */
@@ -7652,7 +7655,7 @@ function renderSlot(el,idx){
   var html='<div class="slot-id">'+(idx+1)+'</div>';
   html+='<div class="slot-num'+_numCls+'" onclick="editSlotNum(event,'+idx+')">'+ _slotNum +'</div>';
   if(d.disabled){
-    html+='<div class="slot-x">✕</div><div class="slot-x-label">사용안함</div>';
+    html+='<div class="slot-disabled-wrap"><div class="slot-x">✕</div><div class="slot-x-label">사용안함</div></div>';
   } else if(d.car){
     var sp=splitCarNum(d.car);
     html+='<div class="slot-car">'
