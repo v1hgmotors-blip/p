@@ -1843,6 +1843,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="col-scope-btn" id="colUndoBtn" onclick="undoColEdit()" title="열 편집 이전 상태로 되돌리기" style="background:#6B7280;color:#fff;border-color:#6B7280;opacity:0.4;">↩️ 되돌리기</button>
     </div>
     <button class="btn-reset-all" onclick="openResetConfirm()">🗑️ 전체초기화</button>
+    <button class="btn-reset-all" onclick="PIN.change()" style="background:#5A2D00;margin-left:4px;">🔑 비밀번호변경</button>
     <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
     <div class="ctrl-btn-group" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -12303,5 +12304,182 @@ function _initPcScrollLimiter2(){
     </div>
   </div>
 </div>
+<!-- ★ PIN 잠금 화면 -->
+<style>
+#pinLockOv{
+  position:fixed;inset:0;z-index:99999;
+  background:linear-gradient(160deg,#3A1D1D 0%,#5A2D00 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:20px;user-select:none;transition:opacity .3s;
+}
+#pinLockOv.pin-hidden{ opacity:0;pointer-events:none; }
+.pin-dot{
+  width:18px;height:18px;border-radius:50%;
+  background:rgba(255,255,255,.25);transition:background .12s;
+}
+.pin-dot.filled{ background:#FEE500; }
+.pin-key{
+  width:72px;height:72px;border-radius:50%;
+  background:rgba(255,255,255,.12);border:none;
+  color:#fff;font-size:22px;font-weight:700;
+  cursor:pointer;transition:background .1s,transform .1s;
+  font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.pin-key:active{ background:rgba(254,229,0,.35);transform:scale(.92); }
+.pin-key-del{ font-size:18px!important; }
+.pin-key-ok{ background:rgba(254,229,0,.18)!important;color:#FEE500!important;font-size:14px!important; }
+.pin-key-ok:active{ background:rgba(254,229,0,.38)!important; }
+@keyframes pinShake{
+  0%,100%{transform:translateX(0);}
+  20%{transform:translateX(-10px);}
+  40%{transform:translateX(10px);}
+  60%{transform:translateX(-7px);}
+  80%{transform:translateX(7px);}
+}
+.pin-shake{ animation:pinShake .35s ease; }
+</style>
+
+<div id="pinLockOv">
+  <div id="pinTitle" style="font-size:26px;font-weight:900;color:#FEE500;">🔐 비밀번호 입력</div>
+  <div id="pinSubtitle" style="font-size:13px;color:rgba(255,255,255,.6);">4자리 숫자를 입력하세요</div>
+  <div id="pinDots" style="display:flex;gap:16px;margin:4px 0;">
+    <div class="pin-dot" id="pd0"></div>
+    <div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div>
+    <div class="pin-dot" id="pd3"></div>
+  </div>
+  <div id="pinMsg" style="font-size:13px;color:#FF6B6B;font-weight:700;min-height:18px;opacity:0;transition:opacity .2s;"></div>
+  <div style="display:grid;grid-template-columns:repeat(3,72px);gap:12px;">
+    <button class="pin-key" onclick="PIN.key('1')">1</button>
+    <button class="pin-key" onclick="PIN.key('2')">2</button>
+    <button class="pin-key" onclick="PIN.key('3')">3</button>
+    <button class="pin-key" onclick="PIN.key('4')">4</button>
+    <button class="pin-key" onclick="PIN.key('5')">5</button>
+    <button class="pin-key" onclick="PIN.key('6')">6</button>
+    <button class="pin-key" onclick="PIN.key('7')">7</button>
+    <button class="pin-key" onclick="PIN.key('8')">8</button>
+    <button class="pin-key" onclick="PIN.key('9')">9</button>
+    <button class="pin-key pin-key-del" onclick="PIN.del()">⌫</button>
+    <button class="pin-key" onclick="PIN.key('0')">0</button>
+    <button class="pin-key pin-key-ok" onclick="PIN.ok()">확인</button>
+  </div>
+</div>
+
+<script>
+/* ★ PIN 잠금 — 상태 기계 방식 (오버라이드 없음) */
+var PIN = (function(){
+  var STORAGE_KEY = 'pb_pin_v1';
+  var DEFAULT_PIN = '0000';
+  /* 모드: 'unlock'=잠금해제, 'change_cur'=현재확인, 'change_new'=새입력, 'change_cfm'=재확인 */
+  var mode = 'unlock';
+  var buf = '';
+  var newPin = '';
+
+  function getPin(){ return localStorage.getItem(STORAGE_KEY) || DEFAULT_PIN; }
+  function setPin(p){ localStorage.setItem(STORAGE_KEY, p); }
+
+  function updateDots(){
+    for(var i=0;i<4;i++){
+      var d=document.getElementById('pd'+i);
+      if(d) d.classList.toggle('filled', i < buf.length);
+    }
+  }
+
+  function setTitle(t,s){
+    var tEl=document.getElementById('pinTitle');
+    var sEl=document.getElementById('pinSubtitle');
+    if(tEl) tEl.textContent=t;
+    if(sEl) sEl.textContent=s||'4자리 숫자를 입력하세요';
+  }
+
+  function showMsg(msg, color, duration){
+    var el=document.getElementById('pinMsg');
+    if(!el) return;
+    el.style.color = color||'#FF6B6B';
+    el.textContent = msg;
+    el.style.opacity='1';
+    /* 흔들기 */
+    var dots=document.getElementById('pinDots');
+    dots.classList.remove('pin-shake');
+    void dots.offsetWidth;
+    dots.classList.add('pin-shake');
+    setTimeout(function(){ el.style.opacity='0'; }, duration||1800);
+  }
+
+  function unlock(){
+    var ov=document.getElementById('pinLockOv');
+    if(ov){ ov.classList.add('pin-hidden'); }
+  }
+
+  function show(newMode){
+    mode = newMode || 'unlock';
+    buf = '';
+    /* ★ BUG FIX: change_cfm 단계로 전환 시 newPin을 초기화하면 안 됨
+       newPin은 change_new에서 저장한 값이므로 change_cfm 비교 때까지 유지 */
+    if(mode !== 'change_cfm') newPin = '';
+    updateDots();
+    var ov=document.getElementById('pinLockOv');
+    if(ov){ ov.classList.remove('pin-hidden'); ov.style.display='flex'; }
+    var msgEl=document.getElementById('pinMsg');
+    if(msgEl){ msgEl.style.opacity='0'; }
+    if(mode==='unlock'){
+      setTitle('🔐 비밀번호 입력','4자리 숫자를 입력하세요');
+    } else if(mode==='change_cur'){
+      setTitle('🔒 현재 비밀번호 확인','현재 비밀번호를 입력하세요');
+    } else if(mode==='change_new'){
+      setTitle('🔑 새 비밀번호 입력','새 4자리 숫자를 입력하세요');
+    } else if(mode==='change_cfm'){
+      setTitle('🔑 새 비밀번호 확인','한 번 더 입력하세요');
+    }
+  }
+
+  function submit(){
+    if(buf.length < 4) return;
+    var entered = buf;
+    buf = ''; updateDots();
+
+    if(mode==='unlock'){
+      if(entered===getPin()){
+        unlock();
+      } else {
+        showMsg('비밀번호가 틀렸습니다');
+      }
+
+    } else if(mode==='change_cur'){
+      if(entered===getPin()){
+        show('change_new');
+      } else {
+        showMsg('현재 비밀번호가 틀렸습니다');
+      }
+
+    } else if(mode==='change_new'){
+      newPin = entered;
+      show('change_cfm');
+
+    } else if(mode==='change_cfm'){
+      if(entered===newPin){
+        setPin(entered);
+        showMsg('✅ 비밀번호가 변경되었습니다','#6EE87A',1200);
+        setTimeout(function(){ unlock(); },1300);
+      } else {
+        newPin='';
+        showMsg('비밀번호가 일치하지 않습니다');
+        setTimeout(function(){ show('change_new'); },1000);
+      }
+    }
+  }
+
+  return {
+    key: function(d){ if(buf.length<4){ buf+=d; updateDots(); if(buf.length===4) setTimeout(submit,120); } },
+    del: function(){ if(buf.length>0){ buf=buf.slice(0,-1); updateDots(); } },
+    ok:  submit,
+    change: function(){ show('change_cur'); },
+    init: function(){ show('unlock'); }
+  };
+})();
+
+/* 앱 시작 시 PIN 화면 표시 */
+PIN.init();
+</script>
 </body>
 </html>
