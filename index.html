@@ -3465,6 +3465,7 @@ function _patchSaveSlots() {
 /* ── 동기화 리셋 (연결 해제 시) ── */
 function _fbSyncReset() {
   _fbSyncReady = false;
+  window._fbSyncDone = false; /* ★ BUG FIX: 재연결 시 초기화 — null 수신 보호 재활성화 */
   if (_fbSyncTimer) { clearTimeout(_fbSyncTimer); _fbSyncTimer = null; }
 }
 
@@ -9819,11 +9820,21 @@ function _registerSlotsOnListener(){
     var data=snap.val();
     if(data===null){
       var _ls=_getData();
-      if(Object.keys(_ls).some(function(k){return _ls[k]&&_ls[k].car;})){
-        console.warn('[pb_slots] null → ID 복원');
+      var _lsHasCar = Object.keys(_ls).some(function(k){return _ls[k]&&_ls[k].car;});
+      if(_lsHasCar){
+        /* ★ 로컬에 차량 있음 → Firebase null이어도 로컬 보존 + Firebase에 업로드 */
+        console.warn('[pb_slots] null 수신 but 로컬 데이터 존재 → 로컬 보존 후 Firebase 업로드');
         if(fbSlotsRef) _fbSafeSet(Object.assign({},_ls,{_ids:_getIds(),_gridConfig:_getGridConfig(),_localTs:_tsNow()}),'null-restore');
         _fbSyncMarkReady('firebase-null-restored'); return;
       }
+      /* ★ BUG FIX: 초기화 완료(window._fbSyncDone=true) 후 null 수신 시
+         로컬 데이터 절대 덮어쓰지 않음 — 새 기기 접속으로 인한 기존 기기 데이터 소실 방지
+         (완전초기화는 _cleared 플래그로만 처리) */
+      if(window._fbSyncDone){
+        console.warn('[pb_slots] 초기화 후 null 수신 — 로컬 보존 (덮어쓰기 차단)');
+        _fbSyncMarkReady('firebase-null-protected'); return;
+      }
+      /* 초기화 전 null 수신 → 빈 슬롯으로 시작 (새 기기 정상 흐름) */
       _safeSaveSlots({});
       if(document.getElementById('modalOv').classList.contains('show')){_fbPendingBuildGrid=true;}
       else{buildGrid();}
