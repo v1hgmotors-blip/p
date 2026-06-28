@@ -793,11 +793,11 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   .slot-search-return-badge{ display:none !important; }
 }
 @keyframes blinkSearchIssue{
-  0%,100%{background:#DFFFDD;box-shadow:0 0 0 4px rgba(45,180,0,.35),0 4px 16px rgba(45,180,0,.4);}
-  50%    {background:#AAFFAA;box-shadow:0 0 0 7px rgba(45,180,0,.45),0 6px 24px rgba(45,180,0,.55);}
+  0%,100%{background:#FFDDDD;box-shadow:0 0 0 4px rgba(220,38,38,.35),0 4px 16px rgba(220,38,38,.4);}
+  50%    {background:#FFAAAA;box-shadow:0 0 0 7px rgba(220,38,38,.45),0 6px 24px rgba(220,38,38,.55);}
 }
 .slot.blink-search-issue{
-  border-color:#2DB400!important;
+  border-color:#DC2626!important;
   border-width:3px!important;
   animation:blinkSearchIssue .7s ease-in-out infinite;
   z-index:10;
@@ -10288,6 +10288,17 @@ function connectFb(url,code){
       }catch(e){}
       _encarUpdateCount();
     },function(err){console.warn('[엔카로그동기화]',err);});
+
+    /* ★★ 키반납확인 전용 실시간 리스너 (pb_search_return)
+       handleData 의존 없이 직접 감지 → 다른 기기에서 키반납확인 클릭 시 즉시 반영
+       null 수신(전체 삭제 완료) 포함 모든 변경을 처리 */
+    (function(){
+      var _srRef = fbDb.ref('kd_rooms/'+code+'/pb_search_return');
+      try{ _srRef.off('value'); }catch(e){}
+      _srRef.on('value', function(snap){
+        _syncSearchReturnFromFb(snap.val());
+      }, function(err){ console.warn('[search_return 리스너]', err); });
+    })();
 
     setDot('on','연결됨');
     /* ★ Firebase 연결 완료 시 미전송 설정 즉시 전송 */
