@@ -7231,6 +7231,8 @@ function _restoreReturnBadgeOnSlot(slotIdx){
   if(wrap) wrap.style.display = 'none';
   el.classList.add('blink-search-issue');
   var badge = document.createElement('button');
+  badge.type = 'button'; /* ★ BUG FIX: 기본값 submit → 모바일 키보드 방지 */
+  badge.type = 'button'; /* ★ BUG FIX: 모바일 키보드 방지 */
   badge.className = 'slot-search-return-badge';
   badge.textContent = '🔑키반납확인';
   badge.title = '클릭 시 키반납 확인 처리';
@@ -7250,6 +7252,7 @@ function _restoreIssueBadgeOnSlot(slotIdx){
   if(wrap) wrap.style.display = 'none';
   el.classList.add('blink-search');
   var badge = document.createElement('button');
+  badge.type = 'button'; /* ★ BUG FIX: 모바일 키보드 방지 */
   badge.className = 'slot-search-issue-badge';
   badge.textContent = '🔑키불출';
   badge.title = '클릭 시 키불출 처리';
@@ -8078,6 +8081,7 @@ function _addSearchIssueBadge(slotIdx){
   }
 
   var badge = document.createElement('button');
+  badge.type = 'button'; /* ★ BUG FIX: 모바일 키보드 방지 */
   badge.className = 'slot-search-issue-badge';
   badge.textContent = '🔑키불출';
   badge.title = '클릭 시 키불출 처리';
@@ -8093,6 +8097,15 @@ function _addSearchIssueBadge(slotIdx){
 function _doSearchIssue(slotIdx){
   var el = document.getElementById('slot_'+slotIdx);
   if(!el) return;
+  /* ★ BUG FIX: 배지 버튼 클릭 시 키보드 내리기
+     검색 입력란 포커스 해제 → 모바일 키보드 내림 */
+  try{
+    var _si = document.getElementById('searchInput');
+    if(_si) _si.blur();
+    if(document.activeElement && typeof document.activeElement.blur==='function'){
+      document.activeElement.blur();
+    }
+  }catch(e){}
 
   /* 키불출 배지 제거 */
   var issueBadge = el.querySelector('.slot-search-issue-badge');
@@ -8123,6 +8136,12 @@ function _doSearchIssue(slotIdx){
 
 /* ★ 키반납 확인 처리 → 배지 제거 + 원상복구 */
 function _doSearchReturn(slotIdx){
+  /* ★ BUG FIX: 배지 버튼 클릭 시 키보드 내리기 */
+  try{
+    if(document.activeElement && typeof document.activeElement.blur==='function'){
+      document.activeElement.blur();
+    }
+  }catch(e){}
   _removeSearchBadge(slotIdx); /* 내부에서 _saveSearchReturn() 호출 */
   showAlert('✅ 키반납 확인 완료');
   setTimeout(hideAlert, 2000);
@@ -8312,6 +8331,7 @@ function _addDispatchBadge(slotIdx, entry){
 
   /* ② 키반납확인 버튼 생성 — wrap과 동일 위치(absolute bottom) */
   var badge = document.createElement('button');
+  badge.type = 'button'; /* ★ BUG FIX: 모바일 키보드 방지 */
   badge.className = 'slot-dispatch-badge';
   badge.textContent = '🔑키반납확인';
   badge.title = '클릭 시 키반납 처리';
@@ -8395,6 +8415,7 @@ function _showReturnBadge(slotIdx, entry){
   /* 기존 배지 제거 */
   _removeReturnBadge(slotIdx);
   var badge = document.createElement('div');
+  badge.type = 'button'; /* ★ BUG FIX: 모바일 키보드 방지 */
   badge.className = 'key-returned-badge';
   badge.id = 'returnBadge_'+slotIdx;
   badge.textContent = '🔑반납';
@@ -8682,7 +8703,11 @@ function openModal(i){
   if(_rb) _rb.style.display=(_slotHistory[i]&&_slotHistory[i].car)?'inline-block':'none';
   document.getElementById('modalOv').classList.add('show');
   setTimeout(function(){
-    document.getElementById('mCarInput').focus();
+    /* ★ BUG FIX: 모바일에서 자동 focus 하지 않음 → 키보드 자동 팝업 방지
+       PC에서만 차량번호 입력란 자동 포커스 */
+    if(window.innerWidth > 600){
+      document.getElementById('mCarInput').focus();
+    }
     /* ★ 저장버튼이 화면 중앙까지 올라오도록 modal-ov 자동 스크롤
        저장버튼(.mbtn-save)의 위치를 기준으로 화면 중앙에 맞춤 */
     var ov = document.getElementById('modalOv');
@@ -12420,6 +12445,17 @@ var PIN = (function(){
   function unlock(){
     var ov=document.getElementById('pinLockOv');
     if(ov){ ov.classList.add('pin-hidden'); }
+    /* ★ BUG FIX: PIN 해제 후 키반납확인 배지 복원
+       PIN 잠금 중 buildGrid()가 실행되면 _restoreSearchReturn()이 호출되지만
+       이 시점에 Firebase 데이터 수신 미완료로 car 불일치 → 복원 실패
+       PIN 해제 시점에 Firebase 데이터가 이미 수신됐으므로 재호출하여 복원 */
+    setTimeout(function(){
+      try{
+        if(typeof _restoreSearchReturn === 'function'){
+          _restoreSearchReturn();
+        }
+      }catch(e){}
+    }, 300);
   }
 
   function show(newMode){
