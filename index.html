@@ -8049,6 +8049,7 @@ function _restoreSearchReturn(fbData){
     el.classList.add('blink-search-issue');
 
     var badge = document.createElement('button');
+    badge.type = 'button'; /* ★ 모바일 키보드 방지 */
     badge.className = 'slot-search-return-badge';
     badge.textContent = '🔑키반납확인';
     badge.title = '클릭 시 키반납 확인 처리';
@@ -8083,13 +8084,16 @@ function _syncSearchReturnFromFb(fbData){
     }
   });
 
-  /* Firebase에 있는데 현재 없는 슬롯 → 추가 (다른 기기에서 키불출) */
-  fbKeys.forEach(function(idx){
-    if(_searchBadgeSlots[idx] !== 'return'){
-      _restoreSearchReturn(fbData);
-      return;
-    }
-  });
+  /* Firebase에 있는데 현재 없는 슬롯 → 추가 (다른 기기에서 키불출)
+     ★ BUG FIX: 반복마다 _restoreSearchReturn 전체 호출 → 1회만 호출로 최적화 */
+  var needRestore = fbKeys.some(function(idx){ return _searchBadgeSlots[idx] !== 'return'; });
+  if(needRestore){
+    /* localStorage도 갱신 후 복원 */
+    try{ localStorage.setItem(LS_SEARCH_RETURN, JSON.stringify(fbData)); }catch(e){}
+    _restoreSearchReturn(fbData);
+  }
+  /* 배너 상태 업데이트 */
+  _updateKeyIssueBanner();
 }
 
 /* 검색 배지 정리 — state 지정 시 해당 상태만, 없으면 전체 */
@@ -8177,13 +8181,11 @@ function _doSearchIssue(slotIdx){
   if(window.innerWidth > 600){
     /* 키반납확인 배지 추가 */
     var badge = document.createElement('button');
+    badge.type = 'button'; /* ★ 모바일 키보드 방지 */
     badge.className = 'slot-search-return-badge';
     badge.textContent = '🔑키반납확인';
     badge.title = '클릭 시 키반납 확인 처리';
-    badge.onclick = function(e){
-      e.stopPropagation();
-      _doSearchReturn(slotIdx);
-    };
+    (function(si){ badge.onclick = function(e){ e.stopPropagation(); _doSearchReturn(si); }; })(slotIdx);
     el.appendChild(badge);
   }
   _searchBadgeSlots[slotIdx] = 'return';
@@ -11356,9 +11358,11 @@ function _collectBackupData(slotAM) {
     if (k && k.startsWith('pb_') &&
         k !== LS_BACKUP_AM && k !== LS_BACKUP_PM &&
         k !== LS_LAST_AUTO_BACKUP_DATE &&
-        k !== LS_PART_VIEW &&           /* ★ Fix BUG6: 격자/1열 모드는 기기별 독립 — 백업 제외 */
-        k !== _LS_PENDING_SETTINGS &&   /* ★ 미전송 설정 큐 — 백업 제외 (복원 시 오염 방지) */
+        k !== LS_PART_VIEW &&           /* ★ 격자/1열 모드는 기기별 독립 — 백업 제외 */
+        k !== _LS_PENDING_SETTINGS &&   /* ★ 미전송 설정 큐 — 백업 제외 */
         k !== 'pb_offline_dirty' &&     /* ★ dirty 슬롯 큐 — 백업 제외 */
+        k !== LS_URL &&                 /* ★ Firebase URL — 공유코드 기반 백업: URL 제외
+                                           URL이 바뀌어도 공유코드만 같으면 복원 가능 */
         !k.startsWith('pb_snapshot_'))  /* ★ 이전 스냅샷 제외 (용량 초과 방지) */
       data[k] = localStorage.getItem(k);
   }
@@ -11592,41 +11596,27 @@ function showLocalBackupList(){
           if(!raw){ alert('백업 데이터가 없습니다.'); return; }
           var data = JSON.parse(raw);
 
-          /* ★ 백업 URL/코드 추출 */
-          var backupUrl  = data[LS_URL]  || data['pb_fb_url']  || '';
-          var backupCode = data[LS_CODE] || data['pb_code']    || '';
-          var curUrl     = localStorage.getItem(LS_URL)  || _PB_DEFAULTS.url  || '';
+          /* ★ 공유코드 기반 복원: 백업에 URL 없음, 코드만 확인 */
+          var backupCode = data[LS_CODE] || data['pb_code'] || '';
           var curCode    = localStorage.getItem(LS_CODE) || _PB_DEFAULTS.code || '';
+          var curUrl     = localStorage.getItem(LS_URL)  || _PB_DEFAULTS.url  || '';
 
-          /* ★ BUG FIX: 공유코드 기반 복원
-             URL이 달라도 공유코드만 일치하면 복원 허용
-             → Firebase URL 변경 후에도 데이터 손실 없이 복원 가능 */
-          var codeOk = backupCode && curCode && backupCode === curCode;
-          var urlSame = backupUrl && curUrl &&
-            backupUrl.replace(/\/+$/,'') === curUrl.replace(/\/+$/,'');
-
-          if(!codeOk){
-            /* ── 공유코드 불일치 → 복원 차단 ── */
+          /* 공유코드 불일치 → 복원 차단 */
+          if(backupCode && curCode && backupCode !== curCode){
             alert(
               '⛔ 복원 불가\n\n' +
-              '이 백업의 공유코드: ' + (backupCode||'(없음)') + '\n' +
-              '현재 앱 공유코드: ' + (curCode||'(없음)') + '\n\n' +
+              '이 백업의 공유코드: ' + backupCode + '\n' +
+              '현재 앱 공유코드: '  + curCode + '\n\n' +
               '공유코드가 다른 백업은 복원할 수 없습니다.'
             );
             return;
           }
 
-          /* ── 공유코드 일치 → 복원 허용 (URL 달라도 OK) ── */
-          var confirmMsg = '이 로컬 백업으로 복원하시겠습니까?\n📡 공유코드: ' + curCode;
-          if(!urlSame && backupUrl){
-            /* URL이 다른 경우 안내 */
-            confirmMsg += '\n\n⚠️ 백업 URL과 현재 URL이 다릅니다.\n' +
-              '백업 URL: ' + backupUrl + '\n' +
-              '현재 URL: ' + curUrl + '\n' +
-              '→ 현재 URL을 유지하고 주차 데이터만 복원합니다.\n(Firebase URL 변경 후 복원 시 정상 동작)';
-          }
-          if(!confirm(confirmMsg + '\n\n(현재 데이터가 교체됩니다)')) return;
-          /* ★ 항상 현재 URL/코드 유지하여 복원 (URL 변경 후에도 정상 동작) */
+          /* 공유코드 일치 (또는 백업에 코드 없음) → 복원 */
+          if(!confirm('이 백업으로 복원하시겠습니까?\n📡 공유코드: ' + curCode +
+            '\n\n현재 데이터가 교체됩니다.')) return;
+
+          /* 현재 URL/코드 유지하여 복원 */
           _doLocalRestore(data, curUrl, curCode);
         }catch(e){ alert('복원 실패: '+e.message); }
       });
