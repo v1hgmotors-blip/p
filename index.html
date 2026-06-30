@@ -3483,6 +3483,11 @@ function _fbSyncMarkReady(source) {
       if (typeof _encarUpdateCount === 'function') _encarUpdateCount();
       if (typeof _encarApplyBlinks === 'function') _encarApplyBlinks();
       _initAllBadgeSliders();
+      /* ★ 상품화중 메모 배지도 슬롯과 동일하게 Firebase 동기화 완료 후 갱신
+         (복원/새기기 접속 시 localStorage 최신값으로 다시 로드) */
+      if(typeof window._pmbReloadFromStorage === 'function'){
+        setTimeout(window._pmbReloadFromStorage, 300);
+      }
     } catch(e) {}
   }, 400);
   console.log('[SYNC] ✅ Firebase 수신 완료 (' + source + ') — 이후 로컬 쓰기 허용');
@@ -12560,6 +12565,649 @@ function _initPcScrollLimiter2(){
     </div>
   </div>
 </div>
+<!-- ★ 상품화중 메모 — 다중 생성/드래그/크기조절/차량매칭 깜박임 플로팅 배지 -->
+<style>
+.pmb-badge{
+  position:fixed;
+  z-index:9500;
+  background:#FF8C00;
+  color:#fff;
+  border-radius:14px;
+  padding:6px 10px;
+  font-size:10px;
+  font-weight:900;
+  box-shadow:0 3px 10px rgba(0,0,0,.3);
+  cursor:grab;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  min-width:46px;
+  min-height:40px;
+  max-width:90vw;
+  overflow:hidden;
+  user-select:none;
+  touch-action:none;
+  border:2px solid rgba(255,255,255,.5);
+  transition:box-shadow .15s, transform .1s;
+  box-sizing:border-box;
+}
+.pmb-badge.dragging{
+  cursor:grabbing;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  transform:scale(1.04);
+}
+.pmb-badge .pmb-top-row{
+  display:flex;align-items:center;gap:4px;width:100%;justify-content:center;
+}
+.pmb-badge .pmb-icon{flex-shrink:0;}
+/* ★ 차량번호 — 배지를 꽉 채우는 큰 글씨, 또렷하게 표시 */
+.pmb-badge .pmb-car{
+  font-size:1em; /* el.style.fontSize 기준 — 크기조절 핸들로 비례 확대 */
+  font-weight:900;
+  line-height:1.05;
+  letter-spacing:.5px;
+  text-shadow:0 1px 2px rgba(0,0,0,.35);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+.pmb-badge .pmb-car.empty{opacity:.55;font-style:italic;font-weight:600;font-size:.7em;}
+/* 메모 미리보기 — 차량번호보다 작게, 보조정보 */
+.pmb-badge .pmb-memo-sub{
+  font-size:.45em;
+  font-weight:600;
+  opacity:.85;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+.pmb-badge .pmb-del{
+  position:absolute;
+  top:2px; right:2px;
+  flex-shrink:0;
+  width:16px;height:16px;
+  border-radius:50%;
+  background:rgba(0,0,0,.3);
+  display:none;
+  align-items:center;justify-content:center;
+  font-size:11px;line-height:1;
+  cursor:pointer;
+  z-index:2;
+}
+.pmb-badge.edit-mode .pmb-del{display:flex;}
+@keyframes pmbBlink{
+  0%,100%{background:#FF8C00;box-shadow:0 0 0 3px rgba(220,38,38,.4),0 3px 10px rgba(0,0,0,.3);}
+  50%{background:#DC2626;box-shadow:0 0 0 6px rgba(220,38,38,.55),0 5px 16px rgba(0,0,0,.4);}
+}
+.pmb-badge.blink{
+  animation:pmbBlink .8s ease-in-out infinite;
+  border-color:#FEE500;
+}
+.pmb-resize-handle{
+  position:absolute;
+  right:-3px;bottom:-3px;
+  width:16px;height:16px;
+  background:#fff;
+  border:2px solid #FF8C00;
+  border-radius:50%;
+  cursor:nwse-resize;
+  display:none;
+  touch-action:none;
+  z-index:1;
+}
+.pmb-badge.edit-mode .pmb-resize-handle{display:block;}
+
+#pmbAddBtn{
+  position:fixed;
+  top:70px; right:8px;
+  z-index:9499;
+  width:38px;height:38px;
+  border-radius:50%;
+  background:#5A2D00;
+  color:#FEE500;
+  font-size:20px;font-weight:900;
+  border:2px solid #FEE500;
+  display:flex;align-items:center;justify-content:center;
+  cursor:grab;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+  user-select:none;
+  touch-action:none;
+  transition:box-shadow .15s, transform .1s;
+}
+#pmbAddBtn.dragging{
+  cursor:grabbing;
+  box-shadow:0 8px 22px rgba(0,0,0,.4);
+  transform:scale(1.08);
+}
+
+#productMemoOv{
+  display:none;
+  position:fixed;inset:0;
+  z-index:99600;
+  background:rgba(40,20,0,.55);
+  align-items:center;justify-content:center;
+  padding:16px;
+}
+#productMemoOv.show{display:flex;}
+#productMemoBox{
+  background:#FFFDE7;
+  border:3px solid #FF8C00;
+  border-radius:18px;
+  padding:20px 18px;
+  width:100%;max-width:380px;
+  box-shadow:0 10px 40px rgba(0,0,0,.4);
+  box-sizing:border-box;
+}
+#productMemoBox .pm-title{
+  font-size:16px;font-weight:900;color:#B45309;
+  display:flex;align-items:center;gap:6px;margin-bottom:12px;
+}
+#productMemoBox textarea{
+  width:100%;min-height:120px;
+  border:2px solid #FDBA74;border-radius:12px;
+  padding:10px 12px;font-size:14px;font-family:inherit;
+  resize:vertical;box-sizing:border-box;
+  background:#fff;color:#3A1D1D;
+}
+#productMemoBox .pm-btns{
+  display:flex;gap:8px;margin-top:14px;
+}
+#productMemoBox .pm-btns button{
+  flex:1;padding:11px;border:none;border-radius:12px;
+  font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;
+}
+#productMemoBox .pm-save{background:#FF8C00;color:#fff;}
+#productMemoBox .pm-close{background:#E5E7EB;color:#444;}
+#productMemoBox .pm-delete{background:#DC2626;color:#fff;flex:0 0 auto;width:42px;}
+</style>
+
+<div id="pmbContainer"></div>
+<div id="pmbAddBtn" title="드래그 이동 · 클릭하면 새 배지 추가">＋</div>
+
+<div id="productMemoOv">
+  <div id="productMemoBox">
+    <div class="pm-title">🔧 상품화중 메모</div>
+    <input id="productMemoCarInput" type="text" placeholder="차량번호 (예: 1234)" inputmode="numeric"
+      style="width:100%;padding:9px 12px;border:2px solid #FDBA74;border-radius:10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:8px;background:#fff;color:#3A1D1D;">
+    <textarea id="productMemoTextarea" placeholder="작업 내용, 정비 항목 등을 입력하세요..."></textarea>
+    <div class="pm-btns">
+      <button class="pm-delete" id="pmbDeleteBtn" title="배지 삭제">🗑️</button>
+      <button class="pm-close" id="pmbCloseBtn">닫기</button>
+      <button class="pm-save" id="pmbSaveBtn">💾 저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ★ 상품화중 메모 배지 — IIFE로 완전히 격리된 스코프
+   전역 함수(openModal, closeModal, save, render, init 등)와 절대 충돌하지 않도록
+   모든 함수에 PMB 접두사 또는 클로저 내부 한정 */
+(function(){
+  'use strict';
+
+  var LS_KEY = 'pb_product_memo_badges_v1';
+  var LS_ADDBTN_POS = 'pb_product_memo_addbtn_pos';
+  var _badges = [];
+  var _activeId = null;
+  var _editMode = false;
+  var _pmbSuppressUntil = 0; /* 자신의 set() 직후 짧게 수신 무시 (에코 방지) */
+
+  function pmbLoad(){
+    try{
+      var raw = localStorage.getItem(LS_KEY);
+      var arr = raw ? JSON.parse(raw) : null;
+      if(Array.isArray(arr) && arr.length) return arr;
+    }catch(e){}
+    return [{ id:'b1', text:'', car:'', x:10, y:70, w:130, fontSize:10 }];
+  }
+  function pmbSaveLocal(){
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(_badges)); }catch(e){}
+    pmbSyncToFirebase();
+  }
+  function pmbSyncToFirebase(){
+    try{
+      if(typeof fbDb === 'undefined' || !fbDb) return;
+      var code = localStorage.getItem('pb_code') || (typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code) || '';
+      if(!code) return;
+      /* ★ BUG FIX: 위치/크기 포함 전체 배지 데이터를 Firebase에 저장
+         → 슬롯 로직과 동일하게 모든 기기가 동일한 배지 배열을 공유 */
+      _pmbSuppressUntil = Date.now() + 800; /* 내가 보낸 변경 에코 무시 (0.8초) */
+      fbDb.ref('kd_rooms/'+code+'/pb_product_memo_badges').set(_badges).catch(function(){});
+    }catch(e){}
+  }
+  function pmbGenId(){
+    return 'b' + Date.now() + Math.floor(Math.random()*1000);
+  }
+
+  function pmbRender(){
+    var wrap = document.getElementById('pmbContainer');
+    if(!wrap) return;
+    wrap.innerHTML = '';
+    _badges.forEach(function(b){
+      var el = document.createElement('div');
+      el.className = 'pmb-badge';
+      el.id = 'pmb_'+b.id;
+      el.style.left = b.x+'px';
+      el.style.top = b.y+'px';
+      el.style.width = b.w+'px';
+      /* ★ 저장된 fontSize가 너비와 비례하지 않으면(구버전 데이터) 너비 기준으로 보정 */
+      var _expectedFs = Math.min(Math.max((b.w||130) * 0.16, 9), 60);
+      var _savedFs = b.fontSize || 10;
+      var _useFs = Math.abs(_savedFs - _expectedFs) > _expectedFs*0.5 ? _expectedFs : _savedFs;
+      el.style.fontSize = _useFs+'px';
+      el.dataset.id = b.id;
+
+      var iconSpan = document.createElement('span');
+      iconSpan.className = 'pmb-icon';
+      iconSpan.textContent = '🔧';
+      iconSpan.style.fontSize = '0.85em';
+
+      var carSpan = document.createElement('span');
+      var carVal = (b.car||'').trim();
+      var hasCarOrMemo = !!(carVal || (b.text||'').trim());
+      carSpan.className = 'pmb-car' + (carVal ? '' : ' empty');
+      carSpan.textContent = carVal ? carVal : '상품화중';
+
+      var topRow = document.createElement('div');
+      topRow.className = 'pmb-top-row';
+      topRow.appendChild(iconSpan);
+      topRow.appendChild(carSpan);
+
+      var memoSpan = null;
+      var bodyTxt = (b.text||'').trim();
+      if(bodyTxt){
+        memoSpan = document.createElement('span');
+        memoSpan.className = 'pmb-memo-sub';
+        memoSpan.textContent = bodyTxt.length>16 ? bodyTxt.slice(0,16)+'…' : bodyTxt;
+      }
+
+      var delBtn = document.createElement('div');
+      delBtn.className = 'pmb-del';
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        pmbRemoveBadge(b.id);
+      });
+
+      var resizeHandle = document.createElement('div');
+      resizeHandle.className = 'pmb-resize-handle';
+
+      el.appendChild(topRow);
+      if(memoSpan) el.appendChild(memoSpan);
+      el.appendChild(delBtn);
+      el.appendChild(resizeHandle);
+      wrap.appendChild(el);
+
+      pmbAttachDrag(el, b.id);
+      pmbAttachResize(resizeHandle, el, b.id);
+    });
+    pmbApplyEditModeClass();
+    setTimeout(pmbRefreshAllBlinks, 50);
+  }
+
+  function pmbApplyEditModeClass(){
+    document.querySelectorAll('.pmb-badge').forEach(function(el){
+      el.classList.toggle('edit-mode', _editMode);
+    });
+  }
+
+  /* ── 드래그 이동 (배지) ── */
+  function pmbAttachDrag(el, id){
+    var dragging=false, startX=0, startY=0, origX=0, origY=0, moved=false;
+    function down(e){
+      if(e.target.classList.contains('pmb-resize-handle')) return;
+      if(e.target.classList.contains('pmb-del')) return;
+      var pt = e.touches?e.touches[0]:e;
+      dragging=true; moved=false;
+      startX=pt.clientX; startY=pt.clientY;
+      var r = el.getBoundingClientRect();
+      origX=r.left; origY=r.top;
+      el.classList.add('dragging');
+      e.preventDefault();
+    }
+    function move(e){
+      if(!dragging) return;
+      var pt = e.touches?e.touches[0]:e;
+      var dx=pt.clientX-startX, dy=pt.clientY-startY;
+      if(Math.abs(dx)>4||Math.abs(dy)>4) moved=true;
+      var nx=origX+dx, ny=origY+dy;
+      var maxX=window.innerWidth-el.offsetWidth-4;
+      var maxY=window.innerHeight-el.offsetHeight-4;
+      nx=Math.min(Math.max(nx,4),Math.max(maxX,4));
+      ny=Math.min(Math.max(ny,4),Math.max(maxY,4));
+      el.style.left=nx+'px'; el.style.top=ny+'px';
+      e.preventDefault();
+    }
+    function up(e){
+      if(!dragging) return;
+      dragging=false;
+      el.classList.remove('dragging');
+      var r = el.getBoundingClientRect();
+      var b = _badges.find(function(x){return x.id===id;});
+      if(b){ b.x=r.left; b.y=r.top; pmbSaveLocal(); }
+      /* ★ 모바일: touchstart에서 preventDefault()하면 합성 click이 발생 안 함
+         → 이동 없었으면(moved=false) 직접 모달 오픈 */
+      if(!moved && !_editMode){
+        pmbOpenModal(id);
+      }
+      moved=false;
+    }
+    el.addEventListener('mousedown', down);
+    el.addEventListener('touchstart', down, {passive:false});
+    document.addEventListener('mousemove', move);
+    document.addEventListener('touchmove', move, {passive:false});
+    document.addEventListener('mouseup', function(e){ if(dragging) up(e); });
+    document.addEventListener('touchend', function(e){ if(dragging) up(e); }, {passive:false});
+  }
+
+  /* ── 크기 조절 ── */
+  function pmbAttachResize(handle, el, id){
+    var resizing=false, startX=0, startW=0, startFs=0;
+    function down(e){
+      resizing=true;
+      var pt = e.touches?e.touches[0]:e;
+      startX=pt.clientX;
+      startW=el.offsetWidth;
+      startFs=parseFloat(el.style.fontSize)||10;
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    function move(e){
+      if(!resizing) return;
+      var pt = e.touches?e.touches[0]:e;
+      var dx=pt.clientX-startX;
+      var newW=Math.min(Math.max(startW+dx,60),400);
+      el.style.width=newW+'px';
+      /* ★ BUG FIX: 폰트를 너비에 직접 비례시켜 항상 배지를 꽉 채우도록 계산
+         (기존 고정 배율 dx*0.09 방식은 큰 배지에서 글자가 작아 보이는 문제) */
+      var newFs = Math.min(Math.max(newW * 0.16, 9), 60);
+      el.style.fontSize=newFs+'px';
+      /* pmb-icon, pmb-car는 em 단위라 부모 fontSize 변경만으로 자동 비례 조정됨 */
+      e.preventDefault();
+    }
+    function up(){
+      if(!resizing) return;
+      resizing=false;
+      var b = _badges.find(function(x){return x.id===id;});
+      if(b){
+        b.w = el.offsetWidth;
+        b.fontSize = parseFloat(el.style.fontSize)||10;
+        pmbSaveLocal();
+      }
+    }
+    handle.addEventListener('mousedown', down);
+    handle.addEventListener('touchstart', down, {passive:false});
+    document.addEventListener('mousemove', move);
+    document.addEventListener('touchmove', move, {passive:false});
+    document.addEventListener('mouseup', function(e){ if(resizing) up(); });
+    document.addEventListener('touchend', function(e){ if(resizing) up(); }, {passive:false});
+  }
+
+  function pmbAddNew(){
+    var id = pmbGenId();
+    var offset = (_badges.length % 6) * 12;
+    _badges.push({ id:id, text:'', car:'', x:10+offset, y:70+offset, w:130, fontSize:10 });
+    pmbSaveLocal();
+    pmbRender();
+  }
+  function pmbRemoveBadge(id){
+    if(!confirm('이 메모 배지를 삭제하시겠습니까?')) return;
+    _badges = _badges.filter(function(b){ return b.id!==id; });
+    if(!_badges.length){
+      _badges.push({ id:pmbGenId(), text:'', car:'', x:10, y:70, w:130, fontSize:10 });
+    }
+    pmbSaveLocal();
+    pmbRender();
+  }
+  function pmbDeleteCurrent(){
+    if(!_activeId) return;
+    var ov = document.getElementById('productMemoOv');
+    if(ov) ov.classList.remove('show');
+    var idToRemove = _activeId;
+    _activeId = null;
+    pmbRemoveBadge(idToRemove);
+  }
+
+  function pmbOpenModal(id){
+    _activeId = id;
+    var b = _badges.find(function(x){return x.id===id;});
+    var ta = document.getElementById('productMemoTextarea');
+    var carInp = document.getElementById('productMemoCarInput');
+    if(ta) ta.value = b ? (b.text||'') : '';
+    if(carInp) carInp.value = b ? (b.car||'') : '';
+    var ov = document.getElementById('productMemoOv');
+    if(ov) ov.classList.add('show');
+    setTimeout(function(){ if(carInp) carInp.focus(); },150);
+  }
+  function pmbCloseModal(){
+    var ov = document.getElementById('productMemoOv');
+    if(ov) ov.classList.remove('show');
+    _activeId = null;
+  }
+  function pmbSave(){
+    if(!_activeId) return;
+    var ta = document.getElementById('productMemoTextarea');
+    var carInp = document.getElementById('productMemoCarInput');
+    var txt = ta ? ta.value : '';
+    var carVal = carInp ? carInp.value.trim() : '';
+    var b = _badges.find(function(x){return x.id===_activeId;});
+    if(b){ b.text = txt; b.car = carVal; }
+    pmbSaveLocal();
+    pmbRender();
+    pmbCloseModal();
+    if(typeof showAlert === 'function'){
+      showAlert('✅ 상품화중 메모 저장됨');
+      setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); }, 1800);
+    }
+  }
+
+  function pmbToggleEditMode(){
+    _editMode = !_editMode;
+    pmbApplyEditModeClass();
+  }
+
+  /* ── 차량번호 매칭 기준 깜박임 갱신 ── */
+  function pmbRefreshAllBlinks(){
+    var activeCars = [];
+    try{
+      if(typeof dispatchSet === 'object' && dispatchSet){
+        Object.keys(dispatchSet).forEach(function(id){
+          var e = dispatchSet[id];
+          var car = typeof e==='object' ? (e.car||'') : (e||'');
+          if(car) activeCars.push(car);
+        });
+      }
+    }catch(ex){}
+    try{
+      var si = document.getElementById('searchInput');
+      var kw = si ? si.value.trim() : '';
+      if(kw) activeCars.push(kw);
+    }catch(ex){}
+
+    document.querySelectorAll('.pmb-badge').forEach(function(el){
+      var id = el.dataset.id;
+      var b = _badges.find(function(x){return x.id===id;});
+      var carVal = b ? (b.car||'').trim() : '';
+      var matched = false;
+      if(carVal && activeCars.length){
+        matched = activeCars.some(function(ac){
+          try{
+            return typeof match4==='function' ? match4(ac, carVal) : (ac===carVal);
+          }catch(ex){ return ac===carVal; }
+        });
+      }
+      el.classList.toggle('blink', matched);
+    });
+  }
+
+  /* ── ➕ 버튼 드래그 ── */
+  function pmbSaveAddBtnPos(x,y){
+    try{ localStorage.setItem(LS_ADDBTN_POS, JSON.stringify({x:x,y:y})); }catch(e){}
+  }
+  function pmbRestoreAddBtnPos(){
+    var btn = document.getElementById('pmbAddBtn');
+    if(!btn) return;
+    try{
+      var pos = JSON.parse(localStorage.getItem(LS_ADDBTN_POS) || 'null');
+      if(pos && typeof pos.x==='number' && typeof pos.y==='number'){
+        var maxX = window.innerWidth - btn.offsetWidth - 4;
+        var maxY = window.innerHeight - btn.offsetHeight - 4;
+        var x = Math.min(Math.max(pos.x,4), Math.max(maxX,4));
+        var y = Math.min(Math.max(pos.y,4), Math.max(maxY,4));
+        btn.style.left = x+'px';
+        btn.style.top = y+'px';
+        btn.style.right = 'auto';
+      }
+    }catch(e){}
+  }
+  function pmbAttachAddBtnDrag(){
+    var btn = document.getElementById('pmbAddBtn');
+    if(!btn) return;
+    var dragging=false, moved=false, startX=0, startY=0, origX=0, origY=0;
+    function down(e){
+      var pt = e.touches?e.touches[0]:e;
+      dragging=true; moved=false;
+      startX=pt.clientX; startY=pt.clientY;
+      var r = btn.getBoundingClientRect();
+      origX=r.left; origY=r.top;
+      btn.classList.add('dragging');
+      e.preventDefault();
+    }
+    function move(e){
+      if(!dragging) return;
+      var pt = e.touches?e.touches[0]:e;
+      var dx=pt.clientX-startX, dy=pt.clientY-startY;
+      if(Math.abs(dx)>4||Math.abs(dy)>4) moved=true;
+      var nx=origX+dx, ny=origY+dy;
+      var maxX=window.innerWidth-btn.offsetWidth-4;
+      var maxY=window.innerHeight-btn.offsetHeight-4;
+      nx=Math.min(Math.max(nx,4),Math.max(maxX,4));
+      ny=Math.min(Math.max(ny,4),Math.max(maxY,4));
+      btn.style.left=nx+'px'; btn.style.top=ny+'px'; btn.style.right='auto';
+      e.preventDefault();
+    }
+    function up(){
+      if(!dragging) return;
+      dragging=false;
+      btn.classList.remove('dragging');
+      var r = btn.getBoundingClientRect();
+      pmbSaveAddBtnPos(r.left, r.top);
+      if(!moved){
+        pmbAddNew();
+      }
+    }
+    btn.addEventListener('mousedown', down);
+    btn.addEventListener('touchstart', down, {passive:false});
+    document.addEventListener('mousemove', move);
+    document.addEventListener('touchmove', move, {passive:false});
+    document.addEventListener('mouseup', function(e){ if(dragging) up(); });
+    document.addEventListener('touchend', function(e){ if(dragging) up(); }, {passive:false});
+  }
+
+  /* ── Firebase 실시간 배지(위치/크기/텍스트/차량번호 전체) 동기화 수신 ── */
+  function pmbStartListener(){
+    try{
+      if(typeof fbDb === 'undefined' || !fbDb) return;
+      var code = localStorage.getItem('pb_code') || (typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code) || '';
+      if(!code) return;
+      fbDb.ref('kd_rooms/'+code+'/pb_product_memo_badges').on('value', function(snap){
+        if(Date.now() < _pmbSuppressUntil) return; /* 방금 내가 보낸 변경 → 무시 */
+        var arr = snap.val();
+        if(!Array.isArray(arr)) return;
+        /* ★ 위치/크기 포함 전체 배지 배열을 그대로 적용 — 슬롯과 동일한 방식 */
+        _badges = arr.map(function(b){
+          return {
+            id: b.id, text: b.text||'', car: b.car||'',
+            x: typeof b.x==='number'?b.x:10,
+            y: typeof b.y==='number'?b.y:70,
+            w: typeof b.w==='number'?b.w:130,
+            fontSize: typeof b.fontSize==='number'?b.fontSize:10
+          };
+        });
+        if(!_badges.length){
+          _badges = [{ id:pmbGenId(), text:'', car:'', x:10, y:70, w:130, fontSize:10 }];
+        }
+        try{ localStorage.setItem(LS_KEY, JSON.stringify(_badges)); }catch(e){}
+        pmbRender();
+      });
+    }catch(e){}
+  }
+
+  /* ── 초기화 ── */
+  function pmbInit(){
+    _badges = pmbLoad();
+    pmbRender();
+    pmbRestoreAddBtnPos();
+    pmbAttachAddBtnDrag();
+
+    /* 모달 버튼 바인딩 (인라인 onclick 대신 addEventListener로 안전하게) */
+    var delBtn = document.getElementById('pmbDeleteBtn');
+    var closeBtn = document.getElementById('pmbCloseBtn');
+    var saveBtn = document.getElementById('pmbSaveBtn');
+    if(delBtn) delBtn.addEventListener('click', pmbDeleteCurrent);
+    if(closeBtn) closeBtn.addEventListener('click', pmbCloseModal);
+    if(saveBtn) saveBtn.addEventListener('click', pmbSave);
+
+    /* 검색 입력 변화 감지 → 배지 깜박임 갱신 */
+    var si = document.getElementById('searchInput');
+    if(si){
+      si.addEventListener('input', function(){ pmbRefreshAllBlinks(); });
+      si.addEventListener('keyup', function(){ pmbRefreshAllBlinks(); });
+    }
+  }
+
+  if(document.readyState==='complete'||document.readyState==='interactive'){
+    setTimeout(pmbInit,150);
+  } else {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(pmbInit,150); });
+  }
+
+  var _pmTimer = setInterval(function(){
+    if(typeof fbDb !== 'undefined' && fbDb){
+      clearInterval(_pmTimer);
+      pmbStartListener();
+    }
+  }, 500);
+  setTimeout(function(){ clearInterval(_pmTimer); }, 15000);
+
+  /* ── 키불출앱 이벤트(reapplyBlinks) 후 배지 깜박임도 갱신되도록
+       전역 reapplyBlinks를 감싸서 호출 (원본 동작은 그대로 유지) ── */
+  if(typeof window.reapplyBlinks === 'function'){
+    var _origReapplyBlinks = window.reapplyBlinks;
+    window.reapplyBlinks = function(){
+      _origReapplyBlinks.apply(this, arguments);
+      setTimeout(pmbRefreshAllBlinks, 100);
+    };
+  }
+
+  /* doSearch / clearSearch 후 배지 깜박임 갱신 — 안전하게 래핑 */
+  if(typeof window.doSearch === 'function'){
+    var _origDoSearch = window.doSearch;
+    window.doSearch = function(){
+      _origDoSearch.apply(this, arguments);
+      setTimeout(pmbRefreshAllBlinks, 50);
+    };
+  }
+  if(typeof window.clearSearch === 'function'){
+    var _origClearSearch = window.clearSearch;
+    window.clearSearch = function(){
+      _origClearSearch.apply(this, arguments);
+      setTimeout(pmbRefreshAllBlinks, 50);
+    };
+  }
+
+  /* ★ 백업 복원 후 배지 다시 로드 — 외부(복원 로직)에서 호출 가능하도록 전역 노출 */
+  window._pmbReloadFromStorage = function(){
+    _badges = pmbLoad();
+    pmbRender();
+  };
+})();
+</script>
+
 <!-- ★ PIN 잠금 화면 -->
 <style>
 #pinLockOv{
