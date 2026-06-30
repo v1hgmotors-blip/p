@@ -3469,10 +3469,15 @@ function _fbSyncMarkReady(source) {
     try {
       /* ★ FIX: 차량 유무 관계없이 항상 buildGrid 호출 */
       buildGrid();
-      /* ★ BUG FIX: buildGrid 후 키반납확인 배지 복원 (PIN 해제 후 타이밍 보장) */
+      /* ★ BUG FIX: buildGrid(슬롯 데이터 로드) 완료 후 키반납확인 배지 복원
+         슬롯 데이터가 준비된 후 복원해야 car 일치 검증 통과 */
       setTimeout(function(){
-        if(typeof _restoreSearchReturn === 'function') _restoreSearchReturn();
-      }, 200);
+        if(typeof _restoreSearchReturn === 'function'){
+          /* localStorage의 최신 데이터로 복원 */
+          _restoreSearchReturn();
+          _updateKeyIssueBanner();
+        }
+      }, 300);
       setTimeout(_setPcScrollPadding, 200);
       if (typeof _encarUpdateCount === 'function') _encarUpdateCount();
       if (typeof _encarApplyBlinks === 'function') _encarApplyBlinks();
@@ -10442,8 +10447,41 @@ function connectFb(url,code){
     (function(){
       var _srRef = fbDb.ref('kd_rooms/'+code+'/pb_search_return');
       try{ _srRef.off('value'); }catch(e){}
+      var _srFirstEmit = true;
       _srRef.on('value', function(snap){
-        _syncSearchReturnFromFb(snap.val()); _updateKeyIssueBanner();
+        var fbData = snap.val();
+        /* ★ BUG FIX: 첫 수신 시 슬롯 데이터 준비 후 복원
+           pb_search_return이 pb_slots보다 먼저 수신되면
+           getSlot()이 빈값 → car 불일치 → 복원 실패
+           → _fbSyncDone(슬롯 수신 완료) 후에 복원 실행 */
+        if(_srFirstEmit){
+          _srFirstEmit = false;
+          if(fbData && typeof fbData === 'object' && Object.keys(fbData).length > 0){
+            /* localStorage 즉시 갱신 */
+            try{ localStorage.setItem(LS_SEARCH_RETURN, JSON.stringify(fbData)); }catch(e){}
+            /* 슬롯 데이터 수신 완료 대기 후 복원 */
+            var _waitAndRestore = function(remaining){
+              if(window._fbSyncDone){
+                /* 슬롯 준비 완료 → 복원 실행 */
+                setTimeout(function(){
+                  _restoreSearchReturn(fbData);
+                  _updateKeyIssueBanner();
+                }, 200);
+              } else if(remaining > 0){
+                /* 아직 미완료 → 재시도 */
+                setTimeout(function(){ _waitAndRestore(remaining - 1); }, 300);
+              } else {
+                /* 타임아웃 → 그냥 실행 */
+                _restoreSearchReturn(fbData);
+                _updateKeyIssueBanner();
+              }
+            };
+            _waitAndRestore(20); /* 최대 6초(20 * 300ms) 대기 */
+            return;
+          }
+        }
+        _syncSearchReturnFromFb(fbData);
+        _updateKeyIssueBanner();
       }, function(err){ console.warn('[search_return 리스너]', err); });
     })();
 
