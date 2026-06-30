@@ -1888,7 +1888,8 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="col-scope-btn" id="colUndoBtn" onclick="undoColEdit()" title="열 편집 이전 상태로 되돌리기" style="background:#6B7280;color:#fff;border-color:#6B7280;opacity:0.4;">↩️ 되돌리기</button>
     </div>
     <button class="btn-reset-all" onclick="openResetConfirm()">🗑️ 전체초기화</button>
-    <button class="btn-reset-all" onclick="PIN.change()" style="background:#5A2D00;margin-left:4px;">🔑 비밀번호변경</button>
+    <button class="btn-reset-all" onclick="PIN.change()" style="background:#5A2D00;color:#FEE500;font-weight:900;margin-left:4px;">🔑 비밀번호변경</button>
+    <button class="btn-reset-all" id="pinToggleBtn" onclick="_pinToggle()" style="background:#374151;color:#FEE500;font-weight:900;margin-left:4px;">🔓 잠금사용안함</button>
     <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
     <div class="ctrl-btn-group" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -10441,12 +10442,16 @@ function connectFb(url,code){
       _encarUpdateCount();
     },function(err){console.warn('[엔카로그동기화]',err);});
 
+    /* ★ PIN 사용안함 상태 실시간 동기화 리스너 */
+    if(typeof PIN !== 'undefined' && typeof PIN.startListener === 'function'){
+      setTimeout(function(){ PIN.startListener(); }, 500);
+    }
+
     /* ★★ 키반납확인 전용 실시간 리스너 (pb_search_return)
        handleData 의존 없이 직접 감지 → 다른 기기에서 키반납확인 클릭 시 즉시 반영
        null 수신(전체 삭제 완료) 포함 모든 변경을 처리 */
     (function(){
-      var _srRef = fbDb.ref('kd_rooms/'+code+'/pb_search_return');
-      try{ _srRef.off('value'); }catch(e){}
+      var _srRef = fbDb.ref('kd_rooms/'+code+'/pb_search_return');      try{ _srRef.off('value'); }catch(e){}
       var _srFirstEmit = true;
       _srRef.on('value', function(snap){
         var fbData = snap.val();
@@ -12620,6 +12625,7 @@ function _initPcScrollLimiter2(){
 /* ★ PIN 잠금 — 상태 기계 방식 (오버라이드 없음) */
 var PIN = (function(){
   var STORAGE_KEY = 'pb_pin_v1';
+  var DISABLED_KEY = 'pb_pin_disabled'; /* ★ PIN 사용안함 플래그 */
   var DEFAULT_PIN = '0000';
   /* 모드: 'unlock'=잠금해제, 'change_cur'=현재확인, 'change_new'=새입력, 'change_cfm'=재확인 */
   var mode = 'unlock';
@@ -12628,6 +12634,43 @@ var PIN = (function(){
 
   function getPin(){ return localStorage.getItem(STORAGE_KEY) || DEFAULT_PIN; }
   function setPin(p){ localStorage.setItem(STORAGE_KEY, p); }
+  function isDisabled(){ return localStorage.getItem(DISABLED_KEY) === '1'; }
+
+  /* ★ Firebase 동기화 — 사용안함/사용함 설정을 모든 기기에 반영 */
+  function _fbPinDisabledRef(){
+    try{
+      if(typeof fbDb==='undefined'||!fbDb) return null;
+      var code=localStorage.getItem('pb_code')||(_PB_DEFAULTS&&_PB_DEFAULTS.code)||'';
+      if(!code) return null;
+      return fbDb.ref('kd_rooms/'+code+'/pb_app_pin_disabled');
+    }catch(e){ return null; }
+  }
+  function _setDisabled(val){
+    /* localStorage */
+    if(val) localStorage.setItem(DISABLED_KEY,'1');
+    else    localStorage.removeItem(DISABLED_KEY);
+    /* Firebase */
+    var ref=_fbPinDisabledRef();
+    if(ref) ref.set(val?true:null).catch(function(){});
+    _updatePinToggleBtn();
+  }
+  /* Firebase 실시간 수신 → 모든 기기 동기화 */
+  function _startPinDisabledListener(){
+    var ref=_fbPinDisabledRef();
+    if(!ref) return;
+    ref.on('value',function(snap){
+      var fbVal=snap.val();
+      var wasDisabled=isDisabled();
+      if(fbVal===true){
+        localStorage.setItem(DISABLED_KEY,'1');
+      } else {
+        localStorage.removeItem(DISABLED_KEY);
+      }
+      _updatePinToggleBtn();
+      /* 다른 기기에서 사용안함→사용함으로 변경해도
+         현재 이미 unlock된 상태면 재잠금 안 함 */
+    });
+  }
 
   function updateDots(){
     for(var i=0;i<4;i++){
@@ -12701,6 +12744,8 @@ var PIN = (function(){
       setTitle('🔑 새 비밀번호 입력','새 4자리 숫자를 입력하세요');
     } else if(mode==='change_cfm'){
       setTitle('🔑 새 비밀번호 확인','한 번 더 입력하세요');
+    } else if(mode==='disable_cur'){
+      setTitle('🔓 앱 잠금 사용안함','현재 비밀번호를 입력하세요');
     }
   }
 
@@ -12709,7 +12754,20 @@ var PIN = (function(){
     var entered = buf;
     buf = ''; updateDots();
 
-    if(mode==='unlock'){
+    if(mode==='disable_cur'){
+      /* ★ 사용안함: 현재 비밀번호 확인 후 PIN 비활성화 */
+      if(entered===getPin()){
+        _setDisabled(true);
+        unlock();
+        setTimeout(function(){
+          showAlert('🔓 앱 잠금이 비활성화되었습니다');
+          setTimeout(hideAlert,2500);
+        },400);
+      } else {
+        showMsg('비밀번호가 틀렸습니다');
+      }
+
+    } else if(mode==='unlock'){
       if(entered===getPin()){
         unlock();
       } else {
@@ -12745,12 +12803,60 @@ var PIN = (function(){
     del: function(){ if(buf.length>0){ buf=buf.slice(0,-1); updateDots(); } },
     ok:  submit,
     change: function(){ show('change_cur'); },
-    init: function(){ show('unlock'); }
+    isUnlocked: function(){ return _pinUnlocked; },
+    isDisabled: isDisabled,
+    /* PIN 사용안함 설정 (현재 비밀번호 확인 후 비활성화) */
+    disable: function(){ show('disable_cur'); },
+    /* PIN 사용함으로 전환 */
+    enable: function(){
+      _setDisabled(false);
+      showAlert('🔐 앱 잠금이 활성화되었습니다'); setTimeout(hideAlert, 2000);
+    },
+    /* Firebase 연결 후 호출 — 실시간 동기화 시작 */
+    startListener: _startPinDisabledListener,
+    init: function(){
+      /* ★ 기본값: 사용안함 — 최초 실행 시 pb_pin_disabled 미설정이면 '1'로 초기화 */
+      if(localStorage.getItem('pb_pin_disabled') === null){
+        _setDisabled(true); /* 기본값 사용안함 */
+      }
+      if(isDisabled()){
+        unlock();
+        return;
+      }
+      show('unlock');
+    }
   };
 })();
 
+/* ★ PIN 사용안함/사용함 토글 */
+function _pinToggle(){
+  if(typeof PIN === 'undefined') return;
+  if(PIN.isDisabled()){
+    PIN.enable();
+  } else {
+    PIN.disable(); /* 현재 비밀번호 확인 후 비활성화 */
+  }
+}
+function _updatePinToggleBtn(){
+  var btn = document.getElementById('pinToggleBtn');
+  if(!btn) return;
+  if(typeof PIN !== 'undefined' && PIN.isDisabled()){
+    btn.textContent = '🔐 잠금사용함';
+    btn.style.background = '#065F46';
+    btn.style.color = '#FEE500';
+    btn.style.fontWeight = '900';
+  } else {
+    btn.textContent = '🔓 잠금사용안함';
+    btn.style.background = '#374151';
+    btn.style.color = '#FEE500';
+    btn.style.fontWeight = '900';
+  }
+}
+
 /* 앱 시작 시 PIN 화면 표시 */
 PIN.init();
+/* 버튼 상태 초기화 */
+setTimeout(_updatePinToggleBtn, 300);
 </script>
 </body>
 </html>
