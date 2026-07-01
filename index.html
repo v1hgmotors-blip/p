@@ -1890,6 +1890,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <button class="btn-reset-all" onclick="openResetConfirm()">🗑️ 전체초기화</button>
     <button class="btn-reset-all" onclick="PIN.change()" style="background:#5A2D00;color:#FEE500;font-weight:900;margin-left:4px;">🔑 비밀번호변경</button>
     <button class="btn-reset-all" id="pinToggleBtn" onclick="_pinToggle()" style="background:#374151;color:#FEE500;font-weight:900;margin-left:4px;">🔓 잠금사용안함</button>
+    <button id="partPhotoBtn" onclick="_openPartPhotoSetting()">📸 파트위치사진</button>
     <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
     <div class="ctrl-btn-group" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -7610,6 +7611,16 @@ function updateCarCountBadge(){
       var d = slots[k];
       if(d && d.car && extract4(d.car).length > 0) count++;
     });
+    /* ★ 상품화중 메모 배지 차량번호도 카운트에 포함
+       (슬롯에 없는 차량이 상품화중 배지에만 등록된 경우 포함) */
+    try{
+      var pmbData = JSON.parse(localStorage.getItem('pb_product_memo_badges_v1')||'[]');
+      if(Array.isArray(pmbData)){
+        pmbData.forEach(function(b){
+          if(b && b.car && b.car.trim().length > 0) count++;
+        });
+      }
+    }catch(ex){}
     var el = document.getElementById('carCountNum');
     if(el) el.textContent = count;
   } catch(e){}
@@ -8201,7 +8212,15 @@ function _doSearchIssue(slotIdx){
   }
   _searchBadgeSlots[slotIdx] = 'return';
 
-  /* ★ localStorage에 저장 */
+  /* ★ 해당 슬롯의 파트 사진 팝업 표시 (등록된 경우) */
+  try{
+    var _partNo = slotToPart(slotIdx);
+    var _slotData = getSlot(slotIdx);
+    var _carNo = _slotData ? (_slotData.car||'') : '';
+    if(typeof window._showPartPhotoPopup === 'function'){
+      window._showPartPhotoPopup(_partNo, '🔑 키불출 ' + (_carNo||''));
+    }
+  }catch(ex){}
   _saveSearchReturn();
   _updateKeyIssueBanner(); /* ★ 키불출 후 배너 표시 */
 }
@@ -8413,6 +8432,16 @@ function _addDispatchBadge(slotIdx, entry){
   el.appendChild(badge);
   /* ★ 키불출앱 배지 추가 시 배너 업데이트 */
   setTimeout(function(){ _updateKeyIssueBanner(); }, 50);
+  /* ★ 키불출앱 이벤트 시 해당 파트 사진 팝업 */
+  try{
+    var _partNo = slotToPart(slotIdx);
+    var _carNo = typeof entry==='object' ? (entry.car||'') : '';
+    if(typeof window._showPartPhotoPopup === 'function'){
+      setTimeout(function(){
+        window._showPartPhotoPopup(_partNo, '🔑 키불출앱 ' + (_carNo||''));
+      }, 200);
+    }
+  }catch(ex){}
 }
 
 function _removeDispatchBadge(slotIdx){
@@ -12565,6 +12594,219 @@ function _initPcScrollLimiter2(){
     </div>
   </div>
 </div>
+<!-- ★ 파트별 위치 사진 — 키불출/키불출앱 이벤트 시 팝업 표시 -->
+<style>
+/* ── 파트 사진 등록 버튼 ── */
+#partPhotoBtn{
+  display:inline-flex;align-items:center;gap:4px;
+  background:#1E3A5F;color:#FEE500;
+  border:none;border-radius:8px;padding:5px 10px;
+  font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;
+  margin-left:4px;
+}
+/* ── 파트 사진 등록 모달 ── */
+#partPhotoSettingOv{
+  display:none;position:fixed;inset:0;z-index:99700;
+  background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px;
+}
+#partPhotoSettingOv.show{display:flex;}
+#partPhotoSettingBox{
+  background:#FFFDE7;border-radius:18px;padding:20px 18px;
+  width:100%;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,.4);
+  box-sizing:border-box;max-height:90vh;overflow-y:auto;
+}
+#partPhotoSettingBox .pps-title{
+  font-size:16px;font-weight:900;color:#1E3A5F;
+  margin-bottom:14px;display:flex;align-items:center;gap:6px;
+}
+.pps-part-row{
+  display:flex;flex-direction:column;gap:6px;
+  padding:12px 0;border-bottom:1px solid #E8C88A;
+}
+.pps-part-row:last-of-type{border-bottom:none;}
+.pps-part-label{font-size:13px;font-weight:900;color:#5A2D00;}
+.pps-part-preview{
+  width:100%;max-height:120px;object-fit:cover;
+  border-radius:10px;border:2px solid #E8C88A;display:none;
+}
+.pps-part-preview.show{display:block;}
+.pps-part-actions{display:flex;gap:8px;}
+.pps-upload-btn{
+  flex:1;padding:8px;background:#1E3A5F;color:#FEE500;
+  border:none;border-radius:10px;font-size:12px;font-weight:900;
+  cursor:pointer;font-family:inherit;
+}
+.pps-clear-btn{
+  padding:8px 14px;background:#DC2626;color:#fff;
+  border:none;border-radius:10px;font-size:12px;font-weight:900;
+  cursor:pointer;font-family:inherit;
+}
+
+/* ── 파트 사진 팝업 (이벤트 시 표시) ── */
+#partPhotoPopupOv{
+  display:none;position:fixed;inset:0;z-index:99800;
+  background:rgba(0,0,0,.7);align-items:center;justify-content:center;
+  padding:16px;
+}
+#partPhotoPopupOv.show{display:flex;}
+#partPhotoPopupBox{
+  background:#1E293B;border-radius:20px;padding:16px;
+  max-width:480px;width:100%;box-shadow:0 16px 60px rgba(0,0,0,.6);
+  box-sizing:border-box;
+}
+#partPhotoPopupTitle{
+  font-size:14px;font-weight:900;color:#FEE500;
+  margin-bottom:10px;text-align:center;
+}
+#partPhotoPopupImg{
+  width:100%;max-height:65vh;object-fit:contain;
+  border-radius:12px;border:2px solid #334155;display:block;
+}
+#partPhotoPopupClose{
+  width:100%;margin-top:12px;padding:10px;
+  background:#334155;color:#fff;border:none;border-radius:12px;
+  font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;
+}
+</style>
+
+<!-- 파트 사진 등록 버튼 (상단 컨트롤 영역에 삽입됨) -->
+<div id="partPhotoSettingOv">
+  <div id="partPhotoSettingBox">
+    <div class="pps-title">📸 파트별 위치 사진 등록</div>
+    <div id="ppsPartList"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="_closePartPhotoSetting()" style="flex:1;padding:10px;background:#E5E7EB;color:#444;border:none;border-radius:12px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 파트 사진 팝업 -->
+<div id="partPhotoPopupOv">
+  <div id="partPhotoPopupBox">
+    <div id="partPhotoPopupTitle">📍 파트 위치</div>
+    <img id="partPhotoPopupImg" src="" alt="파트 위치">
+    <button id="partPhotoPopupClose" onclick="_closePartPhotoPopup()">닫기</button>
+  </div>
+</div>
+
+<script>
+/* ★ 파트별 위치 사진 시스템 */
+(function(){
+  'use strict';
+  var LS_PREFIX = 'pb_part_photo_'; /* pb_part_photo_1, pb_part_photo_2, ... */
+  var _popupTimer = null;
+
+  /* 저장/불러오기 (base64) */
+  function _getPhoto(partNo){
+    try{ return localStorage.getItem(LS_PREFIX+partNo) || ''; }catch(e){ return ''; }
+  }
+  function _setPhoto(partNo, base64){
+    try{ localStorage.setItem(LS_PREFIX+partNo, base64); }catch(e){
+      alert('사진 용량이 너무 큽니다. 더 작은 사진을 사용해 주세요.');
+    }
+  }
+  function _clearPhoto(partNo){
+    try{ localStorage.removeItem(LS_PREFIX+partNo); }catch(e){}
+  }
+
+  /* 설정 모달 열기 */
+  window._openPartPhotoSetting = function(){
+    var list = document.getElementById('ppsPartList');
+    if(!list) return;
+    var numParts = (typeof NUM_PARTS !== 'undefined') ? NUM_PARTS : 3;
+    list.innerHTML = '';
+    for(var p=1; p<=numParts; p++){
+      (function(partNo){
+        var extraEl = document.getElementById('partExtra'+partNo);
+        var partName = extraEl ? extraEl.value.trim() : '';
+        var label = partName || (partNo+'파트');
+        var photo = _getPhoto(partNo);
+
+        var row = document.createElement('div');
+        row.className = 'pps-part-row';
+        row.innerHTML = [
+          '<div class="pps-part-label">'+partNo+'. '+label+'</div>',
+          '<img class="pps-part-preview'+(photo?' show':'')+('"'+(photo?' src="'+photo+'"':'')+' id="ppsPreview'+partNo+'">'),
+          '<div class="pps-part-actions">',
+          '<button class="pps-upload-btn" id="ppsUploadBtn'+partNo+'">📷 사진 등록/변경</button>',
+          (photo ? '<button class="pps-clear-btn" onclick="_clearPartPhoto('+partNo+')">삭제</button>' : ''),
+          '</div>',
+          '<input type="file" accept="image/*" style="display:none" id="ppsFileInput'+partNo+'">'
+        ].join('');
+        list.appendChild(row);
+
+        /* 파일 선택 이벤트 */
+        setTimeout(function(){
+          var btn = document.getElementById('ppsUploadBtn'+partNo);
+          var inp = document.getElementById('ppsFileInput'+partNo);
+          if(!btn||!inp) return;
+          btn.onclick = function(){ inp.click(); };
+          inp.onchange = function(e){
+            var file = e.target.files[0];
+            if(!file) return;
+            /* 2MB 제한 */
+            if(file.size > 2*1024*1024){
+              alert('사진 크기가 2MB를 초과합니다. 더 작은 사진을 사용해 주세요.');
+              return;
+            }
+            var reader = new FileReader();
+            reader.onload = function(ev){
+              var base64 = ev.target.result;
+              _setPhoto(partNo, base64);
+              var prev = document.getElementById('ppsPreview'+partNo);
+              if(prev){ prev.src=base64; prev.classList.add('show'); }
+              /* 삭제 버튼 추가 */
+              var actions = row.querySelector('.pps-part-actions');
+              if(actions && !actions.querySelector('.pps-clear-btn')){
+                var cb = document.createElement('button');
+                cb.className = 'pps-clear-btn';
+                cb.textContent = '삭제';
+                cb.onclick = function(){ _clearPartPhoto(partNo); };
+                actions.appendChild(cb);
+              }
+            };
+            reader.readAsDataURL(file);
+          };
+        }, 50);
+      })(p);
+    }
+    document.getElementById('partPhotoSettingOv').classList.add('show');
+  };
+
+  window._clearPartPhoto = function(partNo){
+    if(!confirm(partNo+'파트 사진을 삭제하시겠습니까?')) return;
+    _clearPhoto(partNo);
+    window._openPartPhotoSetting(); /* 새로고침 */
+  };
+
+  window._closePartPhotoSetting = function(){
+    document.getElementById('partPhotoSettingOv').classList.remove('show');
+  };
+
+  /* 파트 사진 팝업 표시 */
+  window._showPartPhotoPopup = function(partNo, reason){
+    var photo = _getPhoto(partNo);
+    if(!photo) return; /* 사진 없으면 표시 안 함 */
+    var extraEl = document.getElementById('partExtra'+partNo);
+    var partName = extraEl ? extraEl.value.trim() : '';
+    var label = (reason||'') + ' — ' + (partName||partNo+'파트') + ' 위치';
+
+    document.getElementById('partPhotoPopupTitle').textContent = '📍 '+label;
+    document.getElementById('partPhotoPopupImg').src = photo;
+    document.getElementById('partPhotoPopupOv').classList.add('show');
+
+    /* 5초 후 자동 닫기 */
+    if(_popupTimer) clearTimeout(_popupTimer);
+    _popupTimer = setTimeout(function(){ window._closePartPhotoPopup(); }, 5000);
+  };
+
+  window._closePartPhotoPopup = function(){
+    document.getElementById('partPhotoPopupOv').classList.remove('show');
+    if(_popupTimer){ clearTimeout(_popupTimer); _popupTimer=null; }
+  };
+})();
+</script>
+
 <!-- ★ 상품화중 메모 — 다중 생성/드래그/크기조절/차량매칭 깜박임 플로팅 배지 -->
 <style>
 .pmb-badge{
@@ -12962,6 +13204,8 @@ function _initPcScrollLimiter2(){
     }
     pmbSaveLocal();
     pmbRender();
+    /* ★ 배지 삭제 시 카운트 갱신 */
+    if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
   }
   function pmbDeleteCurrent(){
     if(!_activeId) return;
@@ -12999,6 +13243,8 @@ function _initPcScrollLimiter2(){
     pmbSaveLocal();
     pmbRender();
     pmbCloseModal();
+    /* ★ 차량번호 변경 시 전체 차량 카운트 배지 갱신 */
+    if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
     if(typeof showAlert === 'function'){
       showAlert('✅ 상품화중 메모 저장됨');
       setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); }, 1800);
@@ -13133,6 +13379,8 @@ function _initPcScrollLimiter2(){
         }
         try{ localStorage.setItem(LS_KEY, JSON.stringify(_badges)); }catch(e){}
         pmbRender();
+        /* ★ Firebase 동기화 수신 시에도 카운트 갱신 */
+        if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
       });
     }catch(e){}
   }
@@ -13143,6 +13391,10 @@ function _initPcScrollLimiter2(){
     pmbRender();
     pmbRestoreAddBtnPos();
     pmbAttachAddBtnDrag();
+    /* ★ 초기 로드 시 카운트 갱신 (상품화중 배지 차량번호 포함) */
+    setTimeout(function(){
+      if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
+    }, 500);
 
     /* 모달 버튼 바인딩 (인라인 onclick 대신 addEventListener로 안전하게) */
     var delBtn = document.getElementById('pmbDeleteBtn');
