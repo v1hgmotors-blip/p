@@ -13297,9 +13297,10 @@ function _initPcScrollLimiter2(){
         <div id="partPhotoQrText" style="font-size:9px;color:#64748B;margin-top:6px;white-space:pre-line;text-align:left;"></div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;">
-      <button id="partPhotoPopupPrint" onclick="_printPartPhoto()" style="flex:1;padding:8px;background:#1E3A5F;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖨️ 인쇄</button>
-      <button id="partPhotoPopupClose" onclick="_closePartPhotoPopup()" style="flex:1;">닫기</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="partPhotoPopupPrint" onclick="_printPartPhoto()" style="flex:1;min-width:80px;padding:8px;background:#1E3A5F;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖨️ 인쇄</button>
+      <button id="partPhotoPopupDownload" onclick="_downloadPartPhoto()" style="flex:1;min-width:80px;padding:8px;background:#065F46;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
+      <button id="partPhotoPopupClose" onclick="_closePartPhotoPopup()" style="flex:1;min-width:80px;padding:8px;background:#334155;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">닫기</button>
     </div>
   </div>
 </div>
@@ -16438,6 +16439,20 @@ window._drawQRCanvas = function(container, text, size){
   };
 
   /* ★ 인쇄 기능 — 팝업 이미지를 새 창에서 인쇄 */
+  /* ★ 다운로드 기능 */
+  window._downloadPartPhoto = function(){
+    var img = document.getElementById('partPhotoPopupImg');
+    var title = document.getElementById('partPhotoPopupTitle');
+    if(!img || !img.src) return;
+    var fileName = (title ? title.textContent.replace(/[\/:*?"<>|]/g,'_') : '파트위치안내') + '.png';
+    var a = document.createElement('a');
+    a.href = img.src;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   window._printPartPhoto = function(){
     var img = document.getElementById('partPhotoPopupImg');
     var title = document.getElementById('partPhotoPopupTitle');
