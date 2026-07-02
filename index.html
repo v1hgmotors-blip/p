@@ -13159,18 +13159,24 @@ function _initPcScrollLimiter2(){
       alert('이미지 생성 실패. 약도탭에서 내용을 그린 후 저장해 주세요.');
       return;
     }
+    /* ★ 약도 캔버스 원본을 별도 저장 (수정 시 중복 방지) */
     try{
-      localStorage.setItem('pb_part_photo_'+_partNo, dataUrl);
-    }catch(ex){
-      alert('저장 실패 — 저장 공간이 부족합니다. 이미지 크기를 줄여보세요.');
-      return;
-    }
-    /* ★ Firebase 동기화 — _setPhoto 통해 모든 기기에 전송 */
-    try{
-      if(typeof window._syncPartPhotoToFirebase==='function'){
-        window._syncPartPhotoToFirebase(_partNo, dataUrl);
+      if(_canvas && _canvas.width>0 && _canvas.height>0){
+        var canvasData=_canvas.toDataURL('image/png');
+        localStorage.setItem('pb_part_canvas_'+_partNo, canvasData);
+      } else {
+        localStorage.removeItem('pb_part_canvas_'+_partNo);
       }
     }catch(ex){}
+    /* 합성 이미지(경로안내+약도) → pb_part_photo_ 에 저장 (팝업용) */
+    if(typeof window._syncPartPhotoToFirebase==='function'){
+      window._syncPartPhotoToFirebase(_partNo, dataUrl);
+    } else {
+      try{ localStorage.setItem('pb_part_photo_'+_partNo, dataUrl); }catch(ex){
+        alert('저장 실패 — 저장 공간이 부족합니다.');
+        return;
+      }
+    }
     window._closeMapEditor();
     if(typeof window._openPartPhotoSetting==='function') window._openPartPhotoSetting();
     if(typeof showAlert==='function'){
@@ -13196,30 +13202,41 @@ function _initPcScrollLimiter2(){
     document.getElementById('mapEditorPartName').textContent=(extra&&extra.value.trim())||(partNo+'파트');
     document.getElementById('mapEditorOv').style.display='flex';
     _initPhotoInput();
-    /* 기존 저장 데이터 복원 */
+
+    /* ★ 기존 저장 데이터 복원 */
     _bgPhoto=''; _steps=[];
-    var prev=document.getElementById('mtePhotoPreview');
-    if(prev){prev.src='';prev.style.display='none';}
-    /* 첫 탭(경로안내)으로 초기화 */
-    _mteTabSwitch(0);
-    /* 기본 3단계 안내 */
+
+    /* 경로 단계 복원 */
+    try{
+      var savedSteps=JSON.parse(localStorage.getItem('pb_part_steps_'+partNo)||'[]');
+      if(Array.isArray(savedSteps)&&savedSteps.length>0){
+        _steps=savedSteps;
+      }
+    }catch(ex){ _steps=[]; }
+    /* 저장된 단계 없으면 기본 3단계 */
     if(_steps.length===0){
       _steps=[{text:''},{text:''},{text:''}];
     }
+
+    /* 첫 탭(경로안내)으로 */
+    _mteTabSwitch(0);
     _renderSteps();
-    /* 약도 캔버스 초기화 */
+
+    /* 캔버스 초기화 + 기존 약도 복원 */
     setTimeout(function(){
       _initCanvas();
       _resizeCanvas();
       _history=[];
-      var existing=localStorage.getItem('pb_part_photo_'+partNo)||'';
-      /* 기존 저장 이미지가 있으면 약도탭에 로드 */
-      if(existing){
+      /* ★ 캔버스 원본(pb_part_canvas_) 우선 — 없으면 합성이미지(pb_part_photo_) 사용
+         이렇게 해야 수정 시 경로안내 텍스트 중복 방지 */
+      var canvasData=localStorage.getItem('pb_part_canvas_'+partNo)||'';
+      var photoData=canvasData||localStorage.getItem('pb_part_photo_'+partNo)||'';
+      if(photoData){
         var img=new Image();
         img.onload=function(){
           if(_ctx) _ctx.drawImage(img,0,0,_canvas.width,_canvas.height);
         };
-        img.src=existing;
+        img.src=photoData;
       }
     },100);
   };
@@ -16160,34 +16177,27 @@ window._drawQRCanvas = function(container, text, size){
   var _photoSuppressUntil={}; /* 에코 방지 */
   function _setPhoto(partNo, base64){
     /* localStorage 저장 */
+    var lsSaved=true;
     try{ localStorage.setItem(LS_PREFIX+partNo, base64); }catch(e){
-      alert('사진 용량이 너무 큽니다.');
-      return;
+      lsSaved=false;
+      console.warn('[파트사진] localStorage 저장 실패 (용량 부족)');
     }
-    /* ★ Firebase 동기화 — 이미지를 JPEG로 압축해서 용량 절감 */
+    if(!lsSaved) return; /* localStorage 실패 시 Firebase도 저장 안 함 */
+    /* ★ Firebase 동기화 — 용량 제한 없음, 원본 그대로 저장 */
     try{
       var ref=_fbPhotoRef(partNo);
       if(ref){
-        /* Canvas로 JPEG 재압축 (품질 0.7) */
-        var img=new Image();
-        img.onload=function(){
-          var cv=document.createElement('canvas');
-          cv.width=Math.min(img.width,800);
-          cv.height=Math.round(img.height*(cv.width/img.width));
-          var ctx=cv.getContext('2d');
-          ctx.drawImage(img,0,0,cv.width,cv.height);
-          var compressed=cv.toDataURL('image/jpeg',0.7);
-          _photoSuppressUntil[partNo]=Date.now()+1000;
-          ref.set(compressed).catch(function(err){
-            console.warn('[파트사진] Firebase 저장 실패:', err.message);
-          });
-        };
-        img.src=base64;
+        _photoSuppressUntil[partNo]=Date.now()+5000; /* ★ 5초로 연장 — 대용량 이미지 업로드 시간 여유 */
+        ref.set(base64).catch(function(err){
+          console.warn('[파트사진] Firebase 저장 실패:', err.message);
+        });
       }
     }catch(e){ console.warn('[파트사진] Firebase 오류',e); }
   }
   function _clearPhoto(partNo){
     try{ localStorage.removeItem(LS_PREFIX+partNo); }catch(e){}
+    /* ★ 캔버스 원본도 같이 삭제 */
+    try{ localStorage.removeItem('pb_part_canvas_'+partNo); }catch(e){}
     /* Firebase에서도 삭제 */
     try{
       var ref=_fbPhotoRef(partNo);
@@ -16214,10 +16224,18 @@ window._drawQRCanvas = function(container, text, size){
             try{ localStorage.removeItem(LS_PREFIX+partNo); }catch(e){}
           }
         });
-        /* 설정 화면 열려 있으면 미리보기 갱신 */
+        /* ★ 설정 화면 열려있으면 변경된 파트 미리보기만 갱신 (전체 재렌더링 X) */
         var settingOv=document.getElementById('partPhotoSettingOv');
         if(settingOv&&settingOv.classList.contains('show')){
-          if(typeof window._openPartPhotoSetting==='function') window._openPartPhotoSetting();
+          Object.keys(data).forEach(function(pNo){
+            if(_photoSuppressUntil[pNo]&&Date.now()<_photoSuppressUntil[pNo]) return;
+            var prev=document.getElementById('ppsPreview'+pNo);
+            if(prev){
+              var newPhoto=localStorage.getItem(LS_PREFIX+pNo)||'';
+              if(newPhoto){ prev.src=newPhoto; prev.classList.add('show'); }
+              else { prev.src=''; prev.classList.remove('show'); }
+            }
+          });
         }
       });
     }catch(e){ console.warn('[파트사진] 리스너 오류',e); }
@@ -16256,7 +16274,7 @@ window._drawQRCanvas = function(container, text, size){
           '<img class="pps-part-preview'+(photo?' show':'')+('"'+(photo?' src="'+photo+'"':'')+' id="ppsPreview'+partNo+'">'),
           '<div class="pps-part-actions">',
           '<button class="pps-upload-btn" id="ppsUploadBtn'+partNo+'">📷 사진 등록</button>',
-          '<button class="pps-upload-btn" style="background:#065F46;" onclick="_openMapEditor('+partNo+')">✏️ 약도 그리기</button>',
+          '<button class="pps-upload-btn" style="background:#065F46;" onclick="_openMapEditor('+partNo+')">✏️ '+(photo?'약도 수정':'약도 그리기')+'</button>',
           (photo ? '<button class="pps-clear-btn" onclick="_clearPartPhoto('+partNo+')">삭제</button>' : ''),
           '</div>',
           '<input type="file" accept="image/*" style="display:none" id="ppsFileInput'+partNo+'">'
@@ -16371,7 +16389,7 @@ window._drawQRCanvas = function(container, text, size){
 
     /* 20초 후 자동 닫기 */
     if(_popupTimer) clearTimeout(_popupTimer);
-    _popupTimer = setTimeout(function(){ window._closePartPhotoPopup(); }, 20000);
+    _popupTimer = setTimeout(function(){ window._closePartPhotoPopup(); }, 55000);
   };
 
   window._closePartPhotoPopup = function(){
