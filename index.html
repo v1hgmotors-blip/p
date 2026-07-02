@@ -13159,11 +13159,21 @@ function _initPcScrollLimiter2(){
       alert('이미지 생성 실패. 약도탭에서 내용을 그린 후 저장해 주세요.');
       return;
     }
-    /* ★ 약도 캔버스 원본을 별도 저장 (수정 시 중복 방지) */
+    /* ★ 약도 캔버스 원본 저장 + Firebase 동기화 (새 기기에서도 수정 가능) */
+    var canvasData='';
     try{
       if(_canvas && _canvas.width>0 && _canvas.height>0){
-        var canvasData=_canvas.toDataURL('image/png');
+        canvasData=_canvas.toDataURL('image/png');
         localStorage.setItem('pb_part_canvas_'+_partNo, canvasData);
+        /* Firebase에도 캔버스 원본 저장 → 새 기기에서 수정 시 중복 방지 */
+        try{
+          if(typeof fbDb!=='undefined'&&fbDb){
+            var code=localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+            if(code){
+              fbDb.ref('kd_rooms/'+code+'/pb_part_canvases/'+_partNo).set(canvasData).catch(function(){});
+            }
+          }
+        }catch(ex2){}
       } else {
         localStorage.removeItem('pb_part_canvas_'+_partNo);
       }
@@ -13287,7 +13297,10 @@ function _initPcScrollLimiter2(){
         <div id="partPhotoQrText" style="font-size:9px;color:#64748B;margin-top:6px;white-space:pre-line;text-align:left;"></div>
       </div>
     </div>
-    <button id="partPhotoPopupClose" onclick="_closePartPhotoPopup()">닫기</button>
+    <div style="display:flex;gap:8px;">
+      <button id="partPhotoPopupPrint" onclick="_printPartPhoto()" style="flex:1;padding:8px;background:#1E3A5F;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖨️ 인쇄</button>
+      <button id="partPhotoPopupClose" onclick="_closePartPhotoPopup()" style="flex:1;">닫기</button>
+    </div>
   </div>
 </div>
 
@@ -16202,8 +16215,34 @@ window._drawQRCanvas = function(container, text, size){
     try{
       var ref=_fbPhotoRef(partNo);
       if(ref) ref.remove().catch(function(){});
+      /* 캔버스 원본도 Firebase에서 삭제 */
+      if(typeof fbDb!=='undefined'&&fbDb){
+        var code2=localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+        if(code2) fbDb.ref('kd_rooms/'+code2+'/pb_part_canvases/'+partNo).remove().catch(function(){});
+      }
     }catch(e){}
   }
+  /* ★ Firebase 실시간 리스너 — 캔버스 원본도 동기화 */
+  function _startCanvasListener(){
+    try{
+      if(typeof fbDb==='undefined'||!fbDb) return;
+      var code=localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+      if(!code) return;
+      fbDb.ref('kd_rooms/'+code+'/pb_part_canvases').on('value',function(snap){
+        var data=snap.val();
+        if(!data||typeof data!=='object') return;
+        Object.keys(data).forEach(function(partNo){
+          var canvas=data[partNo];
+          if(typeof canvas==='string'&&canvas.length>0){
+            try{ localStorage.setItem('pb_part_canvas_'+partNo, canvas); }catch(e){}
+          } else {
+            try{ localStorage.removeItem('pb_part_canvas_'+partNo); }catch(e){}
+          }
+        });
+      });
+    }catch(e){ console.warn('[파트캔버스] 리스너 오류',e); }
+  }
+
   /* ★ Firebase 실시간 리스너 — 다른 기기에서 저장하면 즉시 수신 */
   function _startPhotoListener(){
     try{
@@ -16245,6 +16284,7 @@ window._drawQRCanvas = function(container, text, size){
     if(typeof fbDb!=='undefined'&&fbDb){
       clearInterval(_photoListenerTimer);
       _startPhotoListener();
+      _startCanvasListener(); /* ★ 캔버스 원본도 동기화 */
     }
   },500);
   setTimeout(function(){ clearInterval(_photoListenerTimer); },15000);
@@ -16395,6 +16435,34 @@ window._drawQRCanvas = function(container, text, size){
   window._closePartPhotoPopup = function(){
     document.getElementById('partPhotoPopupOv').classList.remove('show');
     if(_popupTimer){ clearTimeout(_popupTimer); _popupTimer=null; }
+  };
+
+  /* ★ 인쇄 기능 — 팝업 이미지를 새 창에서 인쇄 */
+  window._printPartPhoto = function(){
+    var img = document.getElementById('partPhotoPopupImg');
+    var title = document.getElementById('partPhotoPopupTitle');
+    if(!img || !img.src) return;
+    var printWin = window.open('','_blank','width=900,height=700');
+    if(!printWin) { alert('팝업이 차단되었습니다. 브라우저 팝업 허용 후 다시 시도해주세요.'); return; }
+    printWin.document.write([
+      '<!DOCTYPE html><html><head>',
+      '<meta charset="UTF-8">',
+      '<title>'+(title?title.textContent:'파트 위치 안내')+'</title>',
+      '<style>',
+      'body{margin:0;padding:16px;font-family:sans-serif;background:#fff;}',
+      'h2{font-size:16px;color:#1E293B;margin:0 0 12px;font-weight:900;}',
+      'img{max-width:100%;height:auto;border-radius:8px;border:1px solid #ccc;display:block;}',
+      '@media print{',
+      '  @page{margin:10mm;}',
+      '  body{padding:0;}',
+      '  .no-print{display:none;}',
+      '}',
+      '</style></head><body>',
+      '<h2>'+(title?title.textContent:'파트 위치 안내')+'</h2>',
+      '<img src="'+img.src+'" onload="window.print();setTimeout(function(){window.close();},500);">',
+      '</body></html>'
+    ].join(''));
+    printWin.document.close();
   };
 })();
 </script>
