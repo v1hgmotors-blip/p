@@ -8478,7 +8478,7 @@ function _addDispatchBadge(slotIdx, entry){
     }
     /* ★ 자동문자 켜짐 시 — 딜러 번호로 약도 MMS 자동 발송 요청 */
     if(typeof window._autoSendRouteSms === 'function'){
-      window._autoSendRouteSms(_partNo2, entry);
+      window._autoSendRouteSms(_partNo2, entry, _slotLabel2);
     }
   }catch(ex){}
 }
@@ -13307,6 +13307,8 @@ function _initPcScrollLimiter2(){
     <div id="partPhotoPhoneLine" style="display:none;font-size:12px;font-weight:800;color:#FEE500;background:#0F2A4A;border-radius:8px;padding:6px 12px;margin-bottom:6px;"></div>
     <!-- ★ 경로 안내 텍스트 표시 영역 -->
     <div id="partPhotoRouteWrap" style="display:none;background:#1E3A5F;border-radius:12px;padding:12px 14px;margin-bottom:6px;">
+      <!-- ★ 차량번호 + 차량위치 헤더 (사진 로직과 동일) -->
+      <div id="partPhotoCarHeader" style="display:none;font-size:15px;font-weight:900;color:#E8590C;text-align:center;background:#fff;border:2.5px solid #E03131;border-radius:10px;padding:7px 10px;margin-bottom:10px;letter-spacing:-.3px;line-height:1.4;"></div>
       <div style="font-size:12px;font-weight:900;color:#FEE500;margin-bottom:8px;">📋 경로 안내</div>
       <div id="partPhotoRouteSteps"></div>
     </div>
@@ -16212,6 +16214,11 @@ window._drawQRCanvas = function(container, text, size){
   function _buildRouteSmsBody(){
     var title = (document.getElementById('partPhotoPopupTitle')||{}).textContent || '위치 안내';
     var body = title + '\n';
+    /* ★ 차량번호/차량위치 헤더가 표시 중이면 본문 맨 위에 포함 */
+    var hdr = document.getElementById('partPhotoCarHeader');
+    if(hdr && hdr.style.display !== 'none' && hdr.textContent.trim()){
+      body = hdr.textContent.trim() + '\n' + body;
+    }
     var stepsEl = document.getElementById('partPhotoRouteSteps');
     if(stepsEl){
       var rows = stepsEl.children;
@@ -16445,6 +16452,19 @@ window._drawQRCanvas = function(container, text, size){
 
     document.getElementById('partPhotoPopupTitle').textContent = '📍 '+label;
 
+    /* ★ 차량번호 + 차량위치 헤더 구성 (예: 차량번호:5176  차량위치:지하2층B12기둥-B12-11번) */
+    var _carNoHdr = String(reason||'').replace(/🔑|키불출앱|키불출/g,'').trim();
+    var _slotHdr  = String(slotSuffix||'').replace(/^\s*[—-]\s*/,'').trim(); /* '220-2번' */
+    var _headerTxt = '';
+    if(_carNoHdr || _slotHdr){
+      _headerTxt = '차량번호:' + (_carNoHdr||'-') + '   차량위치:' + (partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)';
+    }
+    var carHeader = document.getElementById('partPhotoCarHeader');
+    if(carHeader){
+      if(_headerTxt){ carHeader.textContent = _headerTxt; carHeader.style.display = 'block'; }
+      else { carHeader.style.display = 'none'; }
+    }
+
     /* ★ 경로 안내 텍스트 표시 */
     try{
       var routeWrap = document.getElementById('partPhotoRouteWrap');
@@ -16453,7 +16473,7 @@ window._drawQRCanvas = function(container, text, size){
       var steps = [];
       try{ steps = JSON.parse(localStorage.getItem(stepsKey)||'[]'); }catch(e){}
       var validSteps = steps.filter(function(s){ return s && s.text && s.text.trim(); });
-      if(validSteps.length > 0 && routeWrap && routeSteps){
+      if((validSteps.length > 0 || _headerTxt) && routeWrap && routeSteps){
         routeSteps.innerHTML = '';
         validSteps.forEach(function(step, i){
           var row = document.createElement('div');
@@ -16495,8 +16515,8 @@ window._drawQRCanvas = function(container, text, size){
       var steps = [];
       try{ steps = JSON.parse(localStorage.getItem(stepsKey)||'[]'); }catch(e){}
 
-      /* QR에 담을 텍스트 구성 */
-      var qrContent = (partName||partNo+'파트') + ' 위치 안내\n';
+      /* QR에 담을 텍스트 구성 — 차량번호/차량위치 헤더 포함 */
+      var qrContent = (_headerTxt ? _headerTxt + '\n' : '') + (partName||partNo+'파트') + ' 위치 안내\n';
       var validSteps = steps.filter(function(s){ return s && s.text && s.text.trim(); });
       if(validSteps.length > 0){
         validSteps.forEach(function(s,i){
@@ -16638,7 +16658,7 @@ window._drawQRCanvas = function(container, text, size){
   }
 
   /* ★ 자동 발송 본체 — 키불출앱 이벤트 수신 지점에서 호출 */
-  window._autoSendRouteSms = function(partNo, entry){
+  window._autoSendRouteSms = function(partNo, entry, slotLabel){
     try{
       if(localStorage.getItem(LS_AUTO_SMS)!=='1') return;             /* 토글 꺼짐 */
       if(typeof fbDb==='undefined' || !fbDb) return;                  /* Firebase 미연결 */
@@ -16650,11 +16670,13 @@ window._drawQRCanvas = function(container, text, size){
       var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
       if(!code) return;
 
-      /* 본문 구성: 차량번호 + 구역명 + 경로 안내 단계 */
+      /* 본문 구성: 차량번호 + 차량위치(구역명-번호) + 경로 안내 단계 (팝업 헤더와 동일 형식) */
       var extraEl = document.getElementById('partExtra'+partNo);
       var partName = extraEl ? extraEl.value.trim() : '';
       var car = String((entry&&entry.car)||'');
-      var text = '🔑 키불출 ' + car + ' — ' + (partName||partNo+'파트') + ' 위치 안내\n';
+      var loc = (partName||partNo+'파트') + (slotLabel ? '-'+slotLabel+'번' : '') + ' (줄)';
+      var text = '차량번호:' + (car||'-') + ' 차량위치:' + loc + '\n'
+               + '🔑 키불출 약도 위치 안내\n';
       var steps=[]; try{ steps=JSON.parse(localStorage.getItem('pb_part_steps_'+partNo)||'[]'); }catch(e){}
       var vs = steps.filter(function(s){ return s && s.text && s.text.trim(); });
       vs.forEach(function(s,i){ text += (i+1)+'. '+s.text.trim()+'\n'; });
