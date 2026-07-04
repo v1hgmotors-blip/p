@@ -8240,7 +8240,7 @@ function _doSearchIssue(slotIdx){
     var _reason = '🔑 키불출 ' + (_carNo||'');
     var _slotSuffix = _slotLabel ? (' — ' + _slotLabel + '번') : '';
     if(typeof window._showPartPhotoPopup === 'function'){
-      window._showPartPhotoPopup(_partNo, _reason, _slotSuffix);
+      window._showPartPhotoPopup(_partNo, _reason, _slotSuffix, '', slotIdx);
     }
   }catch(ex){}
   _saveSearchReturn();
@@ -8473,12 +8473,12 @@ function _addDispatchBadge(slotIdx, entry){
     var _phone2 = (typeof entry==='object') ? (entry.phone||'') : '';
     if(typeof window._showPartPhotoPopup === 'function'){
       setTimeout(function(){
-        window._showPartPhotoPopup(_partNo2, _reason2, _slotSuffix2, _phone2);
+        window._showPartPhotoPopup(_partNo2, _reason2, _slotSuffix2, _phone2, slotIdx);
       }, 200);
     }
     /* ★ 자동문자 켜짐 시 — 딜러 번호로 약도 MMS 자동 발송 요청 */
     if(typeof window._autoSendRouteSms === 'function'){
-      window._autoSendRouteSms(_partNo2, entry, _slotLabel2);
+      window._autoSendRouteSms(_partNo2, entry, _slotLabel2, slotIdx);
     }
   }catch(ex){}
 }
@@ -12694,6 +12694,12 @@ function _initPcScrollLimiter2(){
   box-shadow:0 16px 60px rgba(0,0,0,.6);
   box-sizing:border-box;
   display:flex;flex-direction:column;gap:8px;
+  /* ★ 스마트폰 대응: 화면 높이를 넘지 않게 + 내부 스크롤 → 하단 버튼 항상 도달 가능 */
+  max-height:calc(100vh - 16px);
+  max-height:calc(100dvh - 16px);
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
 }
 /* 약도(왼쪽) + QR(오른쪽) 가로 배치 */
 #partPhotoPopupMain{
@@ -13084,6 +13090,10 @@ function _initPcScrollLimiter2(){
     try{
       localStorage.setItem('pb_part_steps_'+_partNo, JSON.stringify(validSteps));
     }catch(ex){}
+    /* ★ 모든 기기 공유 — 경로 단계 Firebase 동기화 */
+    try{
+      if(typeof window._syncPartSteps==='function') window._syncPartSteps(_partNo, validSteps);
+    }catch(ex){}
 
     /* 합성 캔버스 생성 */
     var cw=800;
@@ -13305,6 +13315,16 @@ function _initPcScrollLimiter2(){
     <div id="partPhotoPopupTitle">📍 파트 위치</div>
     <!-- ★ 키불출앱 수신 전화번호 표시줄 -->
     <div id="partPhotoPhoneLine" style="display:none;font-size:12px;font-weight:800;color:#FEE500;background:#0F2A4A;border-radius:8px;padding:6px 12px;margin-bottom:6px;"></div>
+    <!-- ★ 담당차주 이름 + 전화번호 + 전화걸기 (슬롯 차주 필드에서 자동 표시) -->
+    <div id="partPhotoOwnerLine" style="display:none;font-size:13px;font-weight:900;color:#7CE38B;background:#0F2A4A;border-radius:8px;padding:8px 12px;margin-bottom:6px;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="partPhotoOwnerTxt"></span>
+      <a id="partPhotoOwnerCall" href="#" style="display:none;background:#16A34A;color:#fff;text-decoration:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:900;">📞 전화걸기</a>
+    </div>
+    <!-- ★ 전화번호 직접 입력 (검색 키불출 등 번호가 없는 경우) -->
+    <div id="partPhotoPhoneInputWrap" style="display:none;gap:8px;margin-bottom:6px;align-items:center;">
+      <input id="partPhotoPhoneInput" type="tel" inputmode="numeric" placeholder="📞 딜러 전화번호 입력 (숫자만)" style="flex:1;min-width:0;padding:9px 12px;border-radius:8px;border:1.5px solid #334E75;background:#0F2A4A;color:#fff;font-size:13px;font-weight:700;font-family:inherit;">
+      <button type="button" id="partPhotoManualSendBtn" onclick="_sendManualRouteSms()" style="flex-shrink:0;padding:9px 14px;background:#B45309;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;transition:background .2s;">📲 약도전송</button>
+    </div>
     <!-- ★ 경로 안내 텍스트 표시 영역 -->
     <div id="partPhotoRouteWrap" style="display:none;background:#1E3A5F;border-radius:12px;padding:12px 14px;margin-bottom:6px;">
       <!-- ★ 차량번호 + 차량위치 헤더 (사진 로직과 동일) -->
@@ -13317,12 +13337,12 @@ function _initPcScrollLimiter2(){
       <img id="partPhotoPopupImg" src="" alt="파트 위치">
       <!-- QR코드 (오른쪽, 작게) -->
       <div id="partPhotoQrWrap" style="display:none;background:#fff;border-radius:12px;padding:12px;text-align:center;flex-shrink:0;width:180px;">
-        <div style="font-size:11px;font-weight:800;color:#1E293B;margin-bottom:8px;line-height:1.4;">📱 다른 폰으로<br>스캔하면<br>경로 안내가 보입니다</div>
+        <div style="font-size:11px;font-weight:800;color:#1E293B;margin-bottom:8px;line-height:1.4;">📱 다른 폰으로<br>스캔하면<br>약도사진과 경로 안내가<br>보입니다</div>
         <div id="partPhotoQrCode" style="display:inline-block;"></div>
         <div id="partPhotoQrText" style="font-size:9px;color:#64748B;margin-top:6px;white-space:pre-line;text-align:left;"></div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:-12px;z-index:5;background:#1E293B;padding:8px 0 12px;margin-bottom:-12px;box-shadow:0 -8px 16px rgba(30,41,59,.9);">
       <button id="partPhotoPopupSms" onclick="_smsPartPhoto()" style="display:none;flex:1;min-width:80px;padding:8px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📲 문자전송</button>
       <button id="partPhotoPopupShare" onclick="_sharePartPhoto()" style="display:none;flex:1;min-width:80px;padding:8px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖼️ 약도공유</button>
       <button id="partPhotoPopupPrint" onclick="_printPartPhoto()" style="flex:1;min-width:80px;padding:8px;background:#1E3A5F;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖨️ 인쇄</button>
@@ -16203,6 +16223,7 @@ window._drawQRCanvas = function(container, text, size){
   var LS_PREFIX = 'pb_part_photo_'; /* pb_part_photo_1, pb_part_photo_2, ... */
   var _popupTimer = null;
   var _popupPhone = '';   /* ★ 키불출앱에서 들어온 딜러 전화번호 */
+  var _popupQrUrl = '';   /* ★ 현재 팝업의 QR 링크 (수동 약도전송 합성용) */
   /* ★ 010-1234-5678 형태로 표시 */
   function _fmtPhone(p){
     var d = String(p||'').replace(/[^0-9]/g,'');
@@ -16278,6 +16299,44 @@ window._drawQRCanvas = function(container, text, size){
       }
     }catch(e){}
   }
+  /* ★★ 경로 단계(pb_part_steps) Firebase 동기화 — 모든 기기 공유 ★★
+     사진(pb_part_photos)과 동일한 패턴: 저장 시 업로드 + 실시간 수신 + 에코 방지 */
+  var _stepsSuppressUntil={};
+  window._syncPartSteps = function(partNo, validSteps){
+    try{
+      if(typeof fbDb==='undefined'||!fbDb) return;
+      var code=localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+      if(!code) return;
+      _stepsSuppressUntil[partNo]=Date.now()+5000; /* 에코 방지 */
+      fbDb.ref('kd_rooms/'+code+'/pb_part_steps/'+partNo)
+        .set(JSON.stringify(validSteps||[]))
+        .catch(function(err){ console.warn('[경로단계] Firebase 저장 실패:', err&&err.message); });
+    }catch(e){ console.warn('[경로단계] Firebase 오류', e); }
+  };
+  function _startStepsListener(){
+    try{
+      if(typeof fbDb==='undefined'||!fbDb) return;
+      var code=localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+      if(!code) return;
+      fbDb.ref('kd_rooms/'+code+'/pb_part_steps').on('value',function(snap){
+        var data=snap.val();
+        if(!data||typeof data!=='object') return;
+        Object.keys(data).forEach(function(partNo){
+          /* 에코 방지 — 내가 방금 보낸 데이터는 무시 */
+          if(_stepsSuppressUntil[partNo]&&Date.now()<_stepsSuppressUntil[partNo]) return;
+          var v=data[partNo], jsonStr='';
+          if(typeof v==='string'){ jsonStr=v; }
+          else if(v){ try{ jsonStr=JSON.stringify(v); }catch(e){ jsonStr=''; } }
+          if(jsonStr){
+            try{ localStorage.setItem('pb_part_steps_'+partNo, jsonStr); }catch(e){}
+          } else {
+            try{ localStorage.removeItem('pb_part_steps_'+partNo); }catch(e){}
+          }
+        });
+      });
+    }catch(e){ console.warn('[경로단계] 리스너 오류', e); }
+  }
+
   /* ★ Firebase 실시간 리스너 — 캔버스 원본도 동기화 */
   function _startCanvasListener(){
     try{
@@ -16341,6 +16400,7 @@ window._drawQRCanvas = function(container, text, size){
       clearInterval(_photoListenerTimer);
       _startPhotoListener();
       _startCanvasListener(); /* ★ 캔버스 원본도 동기화 */
+      _startStepsListener();  /* ★ 경로 단계도 모든 기기 공유 */
     }
   },500);
   setTimeout(function(){ clearInterval(_photoListenerTimer); },15000);
@@ -16422,25 +16482,78 @@ window._drawQRCanvas = function(container, text, size){
   };
 
   /* 파트 사진 팝업 표시 */
-  window._showPartPhotoPopup = function(partNo, reason, slotSuffix, phone){
+  window._showPartPhotoPopup = function(partNo, reason, slotSuffix, phone, slotIdx){
     var photo = _getPhoto(partNo);
     if(!photo) return; /* 사진 없으면 표시 안 함 */
+
+    /* ★ 담당차주 표시 — 슬롯의 차주이름 + 메모/차주필드에서 전화번호 자동 추출 */
+    try{
+      var ownerLine = document.getElementById('partPhotoOwnerLine');
+      var ownerTxt  = document.getElementById('partPhotoOwnerTxt');
+      var ownerCall = document.getElementById('partPhotoOwnerCall');
+      var oName='', oPhone='';
+      if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
+        var _sd = getSlot(slotIdx)||{};
+        oName = String(_sd.owner||'').trim();
+        /* 전화번호는 메모 또는 차주 필드에서 010-xxxx-xxxx 패턴 자동 추출 */
+        var _srcTxt = String(_sd.memo||'') + ' ' + String(_sd.owner||'');
+        var _pm = _srcTxt.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        if(_pm) oPhone = _pm[0].replace(/[^0-9]/g,'');
+      }
+      if(ownerLine && ownerTxt && (oName || oPhone)){
+        ownerTxt.textContent = '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + _fmtPhone(oPhone) : '');
+        if(ownerCall){
+          if(oPhone){ ownerCall.href = 'tel:' + oPhone; ownerCall.style.display = 'inline-block'; }
+          else { ownerCall.style.display = 'none'; }
+        }
+        ownerLine.style.display = 'flex';
+      } else if(ownerLine){
+        ownerLine.style.display = 'none';
+      }
+    }catch(e){}
 
     /* ★ 키불출앱에서 들어온 전화번호 저장 → 문자전송/약도공유 버튼 활성화 */
     _popupPhone = String(phone||'').replace(/[^0-9+]/g,'');
     var phoneLine = document.getElementById('partPhotoPhoneLine');
+    var phoneInputWrap = document.getElementById('partPhotoPhoneInputWrap');
     var smsBtn   = document.getElementById('partPhotoPopupSms');
     var shareBtn = document.getElementById('partPhotoPopupShare');
-    if(_popupPhone){
+    /* ★ 자동문자 토글 꺼짐 = 모든 문자전송 비활성 (팝업은 정상 표시) */
+    var _smsEnabled = false;
+    try{ _smsEnabled = localStorage.getItem(LS_AUTO_SMS)==='1'; }catch(e){}
+    /* ★ 약도전송 버튼 상태 초기화 (이전 전송완료 표시 제거) */
+    var _mBtn = document.getElementById('partPhotoManualSendBtn');
+    if(_mBtn){ _mBtn.disabled=false; _mBtn.textContent='📲 약도전송'; _mBtn.style.background='#B45309'; }
+    if(!_smsEnabled){
+      /* 문자전송 관련 UI 전부 숨김 — 공유/인쇄/다운로드/QR은 그대로 */
+      if(smsBtn) smsBtn.style.display = 'none';
+      if(phoneInputWrap) phoneInputWrap.style.display = 'none';
+      if(phoneLine){
+        if(_popupPhone){
+          phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(_popupPhone) + ' (자동문자 꺼짐 — 문자전송 비활성)';
+          phoneLine.style.display = 'block';
+        } else {
+          phoneLine.style.display = 'none';
+        }
+      }
+      if(shareBtn) shareBtn.style.display = (navigator.share ? '' : 'none');
+    } else if(_popupPhone){
       if(phoneLine){
         phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(_popupPhone) + ' — 아래 「문자전송」으로 약도를 보낼 수 있습니다';
         phoneLine.style.display = 'block';
       }
+      if(phoneInputWrap) phoneInputWrap.style.display = 'none';
       if(smsBtn) smsBtn.style.display = '';
       /* 이미지 첨부 공유는 Web Share 지원 브라우저에서만 */
       if(shareBtn) shareBtn.style.display = (navigator.share ? '' : 'none');
     } else {
       if(phoneLine) phoneLine.style.display = 'none';
+      /* ★ 번호가 없으면(검색 키불출 등) 직접 입력줄 표시 */
+      if(phoneInputWrap){
+        phoneInputWrap.style.display = 'flex';
+        var _pi = document.getElementById('partPhotoPhoneInput');
+        if(_pi) _pi.value = '';
+      }
       if(smsBtn)   smsBtn.style.display   = 'none';
       /* 전화번호가 없어도 공유는 가능 (수신자 직접 선택) */
       if(shareBtn) shareBtn.style.display = (navigator.share ? '' : 'none');
@@ -16527,12 +16640,36 @@ window._drawQRCanvas = function(container, text, size){
       }
       qrContent = qrContent.trim();
 
+      /* ★★ QR에는 보기 페이지(view.html) 링크를 담음 —
+         스캔하면 브라우저에서 약도 사진 + 차량번호/위치 + 경로 안내가 함께 표시됨.
+         링크 생성 실패 시에는 기존처럼 텍스트를 QR에 담음 (기능 유지) */
+      var _qrUrl = '';
+      try{
+        var _vBase = 'https://v1hgmotors-blip.github.io/p/view.html';
+        if(location.protocol==='http:' || location.protocol==='https:'){
+          _vBase = new URL('view.html', location.href).href; /* 같은 폴더의 view.html */
+        }
+        var _code9 = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+        var _dbu9  = localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||'';
+        if(_code9){
+          _qrUrl = _vBase
+            + '?code=' + encodeURIComponent(_code9)
+            + '&part=' + encodeURIComponent(partNo)
+            + (_carNoHdr ? '&car=' + encodeURIComponent(_carNoHdr) : '')
+            + '&loc='  + encodeURIComponent((partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)')
+            + (oName ? '&on=' + encodeURIComponent(oName) : '')   /* ★ 담당차주 이름 */
+            + (oPhone ? '&op=' + encodeURIComponent(oPhone) : '') /* ★ 담당차주 전화 */
+            + (_dbu9 ? '&db=' + encodeURIComponent(_dbu9) : '');
+        }
+      }catch(e){ _qrUrl=''; }
+      _popupQrUrl = _qrUrl || ''; /* ★ 수동 약도전송 합성용으로 보관 */
+
       if(qrContent.length > 0){  /* ★ 내용 있으면 항상 QR 표시 */
         /* ★ 외부 라이브러리 없이 Canvas로 QR 직접 생성 */
         qrDiv.innerHTML = '';
         setTimeout(function(){
           try{
-            _drawQRCanvas(qrDiv, qrContent, 150);
+            _drawQRCanvas(qrDiv, _qrUrl || qrContent, 150);
           }catch(qrEx){
             qrDiv.innerHTML = '<div style="width:150px;height:150px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:10px;color:#444;text-align:center;padding:8px;box-sizing:border-box;font-weight:700;">QR 생성 실패<br>아래 경로 안내<br>참고하세요</div>';
           }
@@ -16558,10 +16695,30 @@ window._drawQRCanvas = function(container, text, size){
     if(_popupTimer){ clearTimeout(_popupTimer); _popupTimer=null; }
   };
 
+  /* ★ 녹색 전송완료 토스트 알림 */
+  function _greenToast(msg){
+    var t=document.getElementById('pbGreenToast');
+    if(!t){
+      t=document.createElement('div');
+      t.id='pbGreenToast';
+      t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:100000;background:#16A34A;color:#fff;font-size:15px;font-weight:900;padding:13px 24px;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.45);display:none;max-width:92vw;text-align:center;letter-spacing:-.3px;line-height:1.4;';
+      document.body.appendChild(t);
+    }
+    t.textContent=msg;
+    t.style.display='block';
+    clearTimeout(t._tm);
+    t._tm=setTimeout(function(){ t.style.display='none'; }, 4000);
+  }
+
   /* ★ 📲 문자전송 — 키불출앱에서 들어온 전화번호로 문자앱 자동 열기 (경로 안내 본문 자동 입력)
      · SMS URI 표준상 이미지 자동첨부는 불가 → 경로 안내 텍스트가 자동 입력됨
      · 약도 이미지까지 보내려면 「🖼️ 약도공유」 버튼 사용 (카톡/MMS 선택 가능) */
   window._smsPartPhoto = function(){
+    /* ★ 자동문자 꺼짐 = 모든 문자전송 차단 */
+    if(localStorage.getItem(LS_AUTO_SMS)!=='1'){
+      alert('📲 자동문자가 꺼져 있어 문자전송이 비활성화되어 있습니다.\nFirebase 설정에서 「자동문자」를 켜주세요.');
+      return;
+    }
     if(!_popupPhone){ alert('키불출앱에서 수신된 전화번호가 없습니다.'); return; }
     var body = _buildRouteSmsBody();
     var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -16642,6 +16799,173 @@ window._drawQRCanvas = function(container, text, size){
     }catch(e){ cb(''); }
   }
 
+  /* ★★ MMS용 합성 이미지 생성 — 수신 문자가 팝업창과 최대한 같은 모양으로 보이도록
+     [남색 배경] + [차량번호/차량위치 헤더] + [담당차주] + [약도 사진] + [QR코드] 를 한 장으로 합성
+     opts = { header:'차량번호:...', owner:'👤 담당차주: ...', qrText:'https://...' } */
+  function _composeMmsImage(photoUrl, opts, cb){
+    if(!photoUrl){ cb(''); return; }
+    opts = opts || {};
+    if(typeof opts === 'string') opts = { header: opts }; /* 하위 호환 */
+
+    /* 1단계: QR 캔버스 먼저 생성 (있으면) */
+    var _run = function(qrCanvas){
+      try{
+        var img = new Image();
+        img.onload = function(){
+          try{
+            var W = Math.min(Math.max(img.width, 700), 1400);
+            var innerW = W - 36;                       /* 좌우 여백 18px */
+            var imgH = Math.round(img.height * (innerW / img.width));
+            var pad = 18, gap = 14;
+
+            var cv = document.createElement('canvas');
+            var ctx = cv.getContext('2d');
+
+            /* 헤더 텍스트 줄바꿈 계산 */
+            var lines = [];
+            var headerH = 0;
+            var fontPx = Math.round(W * 0.034);
+            if(fontPx < 26) fontPx = 26;
+            if(fontPx > 42) fontPx = 42;
+            var lineH = Math.round(fontPx * 1.5);
+            if(opts.header){
+              ctx.font = '900 ' + fontPx + 'px sans-serif';
+              var maxTxtW = innerW - 56;
+              var words = String(opts.header).split(' ');
+              var cur = '';
+              for(var i=0; i<words.length; i++){
+                var test = cur ? cur + ' ' + words[i] : words[i];
+                if(ctx.measureText(test).width > maxTxtW && cur){
+                  lines.push(cur); cur = words[i];
+                } else { cur = test; }
+              }
+              if(cur) lines.push(cur);
+              headerH = lines.length * lineH + 36;
+            }
+
+            /* 담당차주 줄 높이 */
+            var ownerFontPx = Math.round(fontPx * 0.82);
+            var ownerH = opts.owner ? (ownerFontPx + 30) : 0;
+
+            /* QR 블록 높이 (흰 박스: 안내문 + QR) */
+            var qrSize = 0, qrCapPx = 0, qrBoxH = 0;
+            if(qrCanvas){
+              qrSize = Math.round(W * 0.24);
+              if(qrSize < 220) qrSize = 220;
+              if(qrSize > 340) qrSize = 340;
+              qrCapPx = Math.round(fontPx * 0.62);
+              qrBoxH = qrSize + qrCapPx*2 + 46;
+            }
+
+            cv.width = W;
+            cv.height = pad
+                      + (headerH ? headerH + gap : 0)
+                      + (ownerH ? ownerH + gap : 0)
+                      + imgH
+                      + (qrBoxH ? gap + qrBoxH : 0)
+                      + pad;
+            ctx = cv.getContext('2d');
+
+            /* 배경 — 팝업과 동일한 남색 */
+            ctx.fillStyle = '#1E293B';
+            ctx.fillRect(0, 0, cv.width, cv.height);
+
+            /* 라운드 사각형 헬퍼 */
+            var rr = function(x, y, w, h, r){
+              ctx.beginPath();
+              ctx.moveTo(x+r, y);
+              ctx.arcTo(x+w, y,   x+w, y+h, r);
+              ctx.arcTo(x+w, y+h, x,   y+h, r);
+              ctx.arcTo(x,   y+h, x,   y,   r);
+              ctx.arcTo(x,   y,   x+w, y,   r);
+              ctx.closePath();
+            };
+
+            var y = pad;
+            if(headerH){
+              /* 흰바탕 + 빨간테두리 헤더 */
+              rr(pad, y, innerW, headerH, 16);
+              ctx.fillStyle = '#FFFFFF'; ctx.fill();
+              ctx.lineWidth = 5; ctx.strokeStyle = '#E03131'; ctx.stroke();
+              ctx.font = '900 ' + fontPx + 'px sans-serif';
+              ctx.fillStyle = '#E8590C';
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              var ty = y + 18 + lineH/2;
+              for(var j=0; j<lines.length; j++){ ctx.fillText(lines[j], W/2, ty); ty += lineH; }
+              y += headerH + gap;
+            }
+
+            if(ownerH){
+              /* 담당차주 — 짙은 남색 칩 + 연두색 글씨 (팝업과 동일) */
+              rr(pad, y, innerW, ownerH, 12);
+              ctx.fillStyle = '#0F2A4A'; ctx.fill();
+              ctx.font = '900 ' + ownerFontPx + 'px sans-serif';
+              ctx.fillStyle = '#7CE38B';
+              ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+              ctx.fillText(String(opts.owner), pad + 20, y + ownerH/2);
+              y += ownerH + gap;
+            }
+
+            /* 약도 사진 */
+            ctx.drawImage(img, pad, y, innerW, imgH);
+            y += imgH;
+
+            if(qrBoxH){
+              /* QR — 흰 박스 + 안내문 + QR코드 (팝업과 동일 컨셉) */
+              y += gap;
+              rr(pad, y, innerW, qrBoxH, 16);
+              ctx.fillStyle = '#FFFFFF'; ctx.fill();
+              ctx.font = '900 ' + qrCapPx + 'px sans-serif';
+              ctx.fillStyle = '#1E293B';
+              ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+              var capX = pad + 24 + qrSize + 20;
+              ctx.fillText('📱 다른 폰으로 스캔하면', capX, y + qrBoxH/2 - qrCapPx*0.8);
+              ctx.fillText('약도사진과 경로 안내가 보입니다', capX, y + qrBoxH/2 + qrCapPx*0.8);
+              ctx.drawImage(qrCanvas, pad + 24, y + (qrBoxH - qrSize)/2, qrSize, qrSize);
+            }
+
+            cb(cv.toDataURL('image/png'));
+          }catch(e){ cb(''); }
+        };
+        img.onerror = function(){ cb(''); };
+        img.src = photoUrl;
+      }catch(e){ cb(''); }
+    };
+
+    /* QR 생성 (실패해도 합성은 계속) */
+    if(opts.qrText && typeof _QRCodeLib !== 'undefined'){
+      try{
+        _QRCodeLib.toCanvas(opts.qrText, {
+          errorCorrectionLevel: 'M', margin: 2, width: 340,
+          color: { dark: '#1E293B', light: '#ffffff' }
+        }, function(err, canvas){ _run(err ? null : canvas); });
+      }catch(e){ _run(null); }
+    } else {
+      _run(null);
+    }
+  }
+
+  /* ★ QR용 보기 페이지 링크 생성 (팝업 QR과 동일 규칙) */
+  function _buildViewerUrl(partNo, carTxt, locTxt, ownerName, ownerPhone){
+    try{
+      var vBase = 'https://v1hgmotors-blip.github.io/p/view.html';
+      if(location.protocol==='http:' || location.protocol==='https:'){
+        vBase = new URL('view.html', location.href).href;
+      }
+      var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+      if(!code) return '';
+      var dbu = localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||'';
+      return vBase
+        + '?code=' + encodeURIComponent(code)
+        + '&part=' + encodeURIComponent(partNo)
+        + (carTxt ? '&car=' + encodeURIComponent(carTxt) : '')
+        + '&loc='  + encodeURIComponent(locTxt||'')
+        + (ownerName ? '&on=' + encodeURIComponent(ownerName) : '')
+        + (ownerPhone ? '&op=' + encodeURIComponent(ownerPhone) : '')
+        + (dbu ? '&db=' + encodeURIComponent(dbu) : '');
+    }catch(e){ return ''; }
+  }
+
   /* 발송 이력 관리 (7일 경과분 자동 정리) */
   function _smsSentMap(){
     var m={}; try{ m=JSON.parse(localStorage.getItem(LS_SMS_SENT)||'{}'); }catch(e){}
@@ -16658,7 +16982,7 @@ window._drawQRCanvas = function(container, text, size){
   }
 
   /* ★ 자동 발송 본체 — 키불출앱 이벤트 수신 지점에서 호출 */
-  window._autoSendRouteSms = function(partNo, entry, slotLabel){
+  window._autoSendRouteSms = function(partNo, entry, slotLabel, slotIdx){
     try{
       if(localStorage.getItem(LS_AUTO_SMS)!=='1') return;             /* 토글 꺼짐 */
       if(typeof fbDb==='undefined' || !fbDb) return;                  /* Firebase 미연결 */
@@ -16670,66 +16994,172 @@ window._drawQRCanvas = function(container, text, size){
       var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
       if(!code) return;
 
-      /* 본문 구성: 차량번호 + 차량위치(구역명-번호) + 경로 안내 단계 (팝업 헤더와 동일 형식) */
+      /* 본문 구성 (최소화): 차량번호/차량위치 한 줄 + 담당차주 한 줄
+         — 상세 내용(경로안내 등)은 합성 이미지가 담당, 텍스트는 이미지가 안 열리는 구형폰 대비용 */
       var extraEl = document.getElementById('partExtra'+partNo);
       var partName = extraEl ? extraEl.value.trim() : '';
       var car = String((entry&&entry.car)||'');
       var loc = (partName||partNo+'파트') + (slotLabel ? '-'+slotLabel+'번' : '') + ' (줄)';
-      var text = '차량번호:' + (car||'-') + ' 차량위치:' + loc + '\n'
-               + '🔑 키불출 약도 위치 안내\n';
-      var steps=[]; try{ steps=JSON.parse(localStorage.getItem('pb_part_steps_'+partNo)||'[]'); }catch(e){}
-      var vs = steps.filter(function(s){ return s && s.text && s.text.trim(); });
-      vs.forEach(function(s,i){ text += (i+1)+'. '+s.text.trim()+'\n'; });
-      text = text.trim();
+
+      /* 담당차주 (슬롯 차주 필드 + 메모에서 전화번호 추출) — 텍스트/이미지/QR 공용 */
+      var _ownerTxt = '', _oName9 = '', _oPhone9 = '';
+      try{
+        if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
+          var _sd9 = getSlot(slotIdx)||{};
+          _oName9 = String(_sd9.owner||'').trim();
+          var _pm9 = (String(_sd9.memo||'')+' '+String(_sd9.owner||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+          if(_pm9) _oPhone9 = _pm9[0].replace(/[^0-9]/g,'');
+          if(_oName9 || _oPhone9){
+            _ownerTxt = '👤 담당차주: ' + (_oName9||'-') + (_oPhone9 ? '  📞 ' + _fmtPhone(_oPhone9) : '');
+          }
+        }
+      }catch(e){}
+
+      var text = '차량번호:' + (car||'-') + ' 차량위치:' + loc;
+      if(_oName9 || _oPhone9){
+        text += '\n담당차주:' + (_oName9||'-') + (_oPhone9 ? ' 📞 ' + _fmtPhone(_oPhone9) : '');
+      }
 
       /* 선(先)기록 — 여러 기기가 같은 이벤트를 받아도 이 기기 기준 1회 */
       _markSmsSent(eid);
 
-      /* 약도 이미지 압축 후 발송요청 push */
+      /* 약도 이미지에 헤더+담당차주+QR 합성(팝업창 모양) → 압축 → 발송요청 push */
       var photo = _getPhoto(partNo);
-      _compressForMms(photo, function(jpeg){
-        try{
-          var qRef = fbDb.ref('kd_rooms/'+code+'/sms_queue').push();
-          qRef.set({
-            eid:       eid,                       /* ★ 서버측 중복차단 키 (기기간 중복 방지) */
-            phone:     phone,
-            car:       car,
-            text:      text,
-            image:     jpeg || null,              /* base64 JPEG (없으면 텍스트 LMS) */
-            status:    'pending',
-            createdAt: Date.now(),
-            from:      'parkboard'
-          }).then(function(){
-            if(typeof showAlert==='function'){
-              showAlert('📲 '+_fmtPhone(phone)+' 로 약도 문자 발송 요청됨...');
-            }
-            /* 발송 결과 실시간 수신 (60초 대기) */
-            var done=false;
-            var off=function(){ try{ qRef.off(); }catch(e){} };
-            qRef.on('value', function(snap){
-              var v=snap.val();
-              if(!v || done) return;
-              if(v.status==='sent'){
-                done=true; off();
-                if(typeof showAlert==='function') showAlert('✅ 약도 문자 발송 완료 → '+_fmtPhone(phone));
-                setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); }, 4000);
-              } else if(v.status==='failed'){
-                done=true; off();
-                if(typeof showAlert==='function') showAlert('❌ 약도 문자 발송 실패 ('+(v.error||'서버 오류')+') — 팝업의 📲문자전송 버튼을 이용하세요');
-              }
-            });
-            setTimeout(function(){
-              if(!done){
-                off();
-                if(typeof showAlert==='function') showAlert('⏳ 문자서버 응답 없음 — 서버(Cloud Functions) 연동 상태를 확인하세요');
-              }
-            }, 60000);
-          }).catch(function(e){
-            console.warn('[자동문자] 발송요청 실패:', e);
-          });
-        }catch(e){ console.warn('[자동문자] 오류:', e); }
+      var _hdrLine = '차량번호:' + (car||'-') + ' 차량위치:' + loc;
+      _composeMmsImage(photo, {
+        header: _hdrLine,
+        owner:  _ownerTxt,
+        qrText: _buildViewerUrl(partNo, car, loc, _oName9, _oPhone9)
+      }, function(composite){
+        _compressForMms(composite || photo, function(jpeg){
+          _queueRouteSms(code, phone, car, text, jpeg, eid, 'parkboard');
+        });
       });
     }catch(e){ console.warn('[자동문자] 오류:', e); }
+  };
+
+  /* ★ 발송요청 push + 결과 실시간 수신 (자동/수동 공용)
+     onStatus: 'sent' | 'failed' | 'timeout' 콜백 (선택) */
+  function _queueRouteSms(code, phone, car, text, jpeg, eid, from, onStatus){
+    var notify = function(s){ try{ if(typeof onStatus==='function') onStatus(s); }catch(e){} };
+    try{
+      var qRef = fbDb.ref('kd_rooms/'+code+'/sms_queue').push();
+      qRef.set({
+        eid:       eid,                       /* ★ 서버측 중복차단 키 (기기간 중복 방지) */
+        phone:     phone,
+        car:       car||'',
+        text:      text,
+        image:     jpeg || null,              /* base64 JPEG (없으면 텍스트 LMS) */
+        status:    'pending',
+        createdAt: Date.now(),
+        from:      from||'parkboard'
+      }).then(function(){
+        if(typeof showAlert==='function'){
+          showAlert('📲 '+_fmtPhone(phone)+' 로 약도 문자 발송 요청됨...');
+        }
+        /* 발송 결과 실시간 수신 (60초 대기) */
+        var done=false;
+        var off=function(){ try{ qRef.off(); }catch(e){} };
+        qRef.on('value', function(snap){
+          var v=snap.val();
+          if(!v || done) return;
+          if(v.status==='sent'){
+            done=true; off();
+            /* ★ 녹색 전송완료 알림 */
+            _greenToast('✅ 전송완료! 약도 문자 발송 → '+_fmtPhone(phone));
+            if(typeof hideAlert==='function') hideAlert();
+            notify('sent');
+          } else if(v.status==='failed'){
+            done=true; off();
+            if(typeof showAlert==='function') showAlert('❌ 약도 문자 발송 실패 ('+(v.error||'서버 오류')+')');
+            notify('failed');
+          }
+        });
+        setTimeout(function(){
+          if(!done){
+            off();
+            if(typeof showAlert==='function') showAlert('⏳ 문자서버 응답 없음 — 서버(Cloud Functions) 연동 상태를 확인하세요');
+            notify('timeout');
+          }
+        }, 60000);
+      }).catch(function(e){
+        console.warn('[약도문자] 발송요청 실패:', e);
+        if(typeof showAlert==='function') showAlert('❌ 발송요청 실패 — 네트워크를 확인하세요');
+        notify('failed');
+      });
+    }catch(e){ console.warn('[약도문자] 오류:', e); notify('failed'); }
+  }
+
+  /* ★ 📲 약도전송 (수동) — 검색 키불출 등 번호가 없을 때, 팝업에 번호를 직접 입력해 발송
+     문자서버(자동문자와 동일 경로)로 약도 이미지 MMS 발송. 서버 미연동 시 문자앱으로 대체 */
+  window._sendManualRouteSms = function(){
+    /* ★ 자동문자 꺼짐 = 모든 문자전송 차단 */
+    if(localStorage.getItem(LS_AUTO_SMS)!=='1'){
+      alert('📲 자동문자가 꺼져 있어 문자전송이 비활성화되어 있습니다.\nFirebase 설정에서 「자동문자」를 켜주세요.');
+      return;
+    }
+    var inp = document.getElementById('partPhotoPhoneInput');
+    var phone = String((inp&&inp.value)||'').replace(/[^0-9]/g,'');
+    if(phone.length<10 || phone.length>11){
+      alert('올바른 휴대폰 번호를 입력해 주세요 (예: 01012345678)');
+      if(inp) inp.focus();
+      return;
+    }
+    /* ★ 버튼 상태: 전송중 (회색) */
+    var mBtn = document.getElementById('partPhotoManualSendBtn');
+    var setBtn = function(txt, bg, dis){
+      if(!mBtn) return;
+      mBtn.textContent = txt;
+      mBtn.style.background = bg;
+      mBtn.disabled = !!dis;
+    };
+    setBtn('⏳ 전송중...', '#64748B', true);
+
+    /* 입력한 번호를 팝업에 반영 → 📲문자전송(문자앱) 버튼도 활성화 */
+    _popupPhone = phone;
+    var phoneLine = document.getElementById('partPhotoPhoneLine');
+    if(phoneLine){
+      phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(phone);
+      phoneLine.style.display = 'block';
+    }
+    var smsBtn = document.getElementById('partPhotoPopupSms');
+    if(smsBtn) smsBtn.style.display = '';
+
+    var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+    /* 문자서버를 못 쓰는 상황이면 → 문자앱으로 대체 (텍스트 자동입력) */
+    if(typeof fbDb==='undefined' || !fbDb || !code){
+      setBtn('📲 약도전송', '#B45309', false);
+      window._smsPartPhoto();
+      return;
+    }
+    var img = document.getElementById('partPhotoPopupImg');
+    /* ★ 팝업의 헤더/담당차주/QR을 이미지에 합성 → 수신 문자가 팝업창 모양으로 보임 */
+    var _hdrEl = document.getElementById('partPhotoCarHeader');
+    var _hdrTxt = (_hdrEl && _hdrEl.style.display !== 'none') ? _hdrEl.textContent.trim() : '';
+    var _ownEl = document.getElementById('partPhotoOwnerLine');
+    var _ownTxtEl = document.getElementById('partPhotoOwnerTxt');
+    var _ownTxt = (_ownEl && _ownEl.style.display !== 'none' && _ownTxtEl) ? _ownTxtEl.textContent.trim() : '';
+    /* ★ 텍스트 본문 최소화: 핵심 한 줄 + 담당차주 (이미지 미표시 구형폰 대비) */
+    var text = _hdrTxt || _buildRouteSmsBody();
+    if(_ownTxt){
+      text += '\n' + _ownTxt.replace(/^👤\s*/,'').replace(/담당차주:\s*/,'담당차주:').replace(/\s{2,}/g,' ');
+    }
+    _composeMmsImage((img&&img.src)||'', {
+      header: _hdrTxt,
+      owner:  _ownTxt,
+      qrText: _popupQrUrl
+    }, function(composite){
+      _compressForMms(composite || ((img&&img.src)||''), function(jpeg){
+        _queueRouteSms(code, phone, '', text, jpeg, 'manual_'+Date.now(), 'parkboard-manual', function(status){
+          /* ★ 발송 결과에 따라 버튼 색 변경 */
+          if(status==='sent'){
+            setBtn('✅ 전송완료', '#16A34A', true); /* 녹색 고정 — 팝업 다시 열면 초기화 */
+          } else {
+            setBtn('📲 약도전송', '#B45309', false); /* 실패/응답없음 → 재시도 가능 */
+          }
+        });
+      });
+    });
   };
 
   /* ★ 자동문자 토글 */

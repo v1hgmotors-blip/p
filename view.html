@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔑 차량 위치 안내</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    background:#0F1E33;color:#fff;
+    min-height:100vh;padding:14px 12px 40px;
+  }
+  .wrap{max-width:720px;margin:0 auto;}
+  .top-title{
+    text-align:center;font-size:16px;font-weight:900;color:#FEE500;
+    padding:8px 0 14px;letter-spacing:-.3px;
+  }
+  /* 차량번호/차량위치 헤더 — 팝업과 동일 스타일 */
+  .car-header{
+    display:none;
+    font-size:16px;font-weight:900;color:#E8590C;text-align:center;
+    background:#fff;border:2.5px solid #E03131;border-radius:12px;
+    padding:10px 12px;margin-bottom:12px;letter-spacing:-.3px;line-height:1.45;
+  }
+  /* ★ 담당차주 줄 — 팝업과 동일 (남색 칩 + 연두 글씨 + 전화걸기) */
+  .owner-line{
+    display:none;
+    align-items:center;gap:10px;flex-wrap:wrap;
+    font-size:14px;font-weight:900;color:#7CE38B;
+    background:#16305A;border-radius:12px;
+    padding:10px 14px;margin-bottom:12px;letter-spacing:-.3px;
+  }
+  .owner-call{
+    background:#16A34A;color:#fff;text-decoration:none;
+    padding:8px 16px;border-radius:9px;font-size:13px;font-weight:900;
+  }
+  .panel{
+    background:#1E3A5F;border-radius:14px;padding:14px 16px;margin-bottom:12px;
+  }
+  .panel-title{font-size:13px;font-weight:900;color:#FEE500;margin-bottom:10px;}
+  .step-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
+  .step-num{
+    flex-shrink:0;width:24px;height:24px;border-radius:50%;
+    background:#FF8C00;color:#fff;font-size:12px;font-weight:900;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step-txt{flex:1;font-size:14px;font-weight:700;line-height:1.55;padding-top:2px;}
+  .map-box{
+    background:#fff;border-radius:14px;padding:8px;margin-bottom:12px;
+    display:none;
+  }
+  .map-box img{width:100%;height:auto;display:block;border-radius:8px;}
+  .status{
+    text-align:center;font-size:14px;font-weight:800;color:#94A3B8;
+    padding:30px 10px;line-height:1.7;
+  }
+  .spin{
+    display:inline-block;width:26px;height:26px;border-radius:50%;
+    border:3px solid #334E75;border-top-color:#FEE500;
+    animation:sp 0.9s linear infinite;margin-bottom:10px;
+  }
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .foot{
+    text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:18px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top-title">📍 🔑 차량 위치 안내</div>
+  <div class="car-header" id="carHeader"></div>
+  <!-- ★ 담당차주 + 전화걸기 -->
+  <div class="owner-line" id="ownerLine">
+    <span id="ownerTxt"></span>
+    <a class="owner-call" id="ownerCall" href="#" style="display:none;">📞 전화걸기</a>
+  </div>
+
+  <div class="panel" id="routePanel" style="display:none;">
+    <div class="panel-title">📋 경로 안내</div>
+    <div id="routeSteps"></div>
+  </div>
+
+  <div class="map-box" id="mapBox">
+    <img id="mapImg" alt="약도">
+  </div>
+
+  <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
+
+  <div class="foot">한결모터스 주차현황판 · 위치 안내</div>
+</div>
+
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+(function(){
+  function qs(k){
+    try{ return new URLSearchParams(location.search).get(k) || ''; }catch(e){ return ''; }
+  }
+  var code = qs('code');
+  var part = qs('part');
+  var car  = qs('car');
+  var loc  = qs('loc');
+  var db   = qs('db') || 'https://hg-motors-default-rtdb.firebaseio.com';
+
+  var statusEl = document.getElementById('statusMsg');
+  function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
+  function hideStatus(){ statusEl.style.display='none'; }
+
+  /* 차량번호/차량위치 헤더 — 링크 파라미터에서 즉시 표시 (통신 전에 먼저 보임) */
+  if(car || loc){
+    var h = document.getElementById('carHeader');
+    h.textContent = '차량번호:' + (car||'-') + '  차량위치:' + (loc||'-');
+    h.style.display = 'block';
+  }
+
+  /* ★ 담당차주 — 링크 파라미터(on=이름, op=전화)에서 표시 + 전화걸기 */
+  var oName = qs('on');
+  var oPhone = (qs('op')||'').replace(/[^0-9]/g,'');
+  if(oName || oPhone){
+    var fmtP = oPhone;
+    if(oPhone.length===11) fmtP = oPhone.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3');
+    else if(oPhone.length===10) fmtP = oPhone.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3');
+    document.getElementById('ownerTxt').textContent =
+      '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + fmtP : '');
+    var oc = document.getElementById('ownerCall');
+    if(oPhone){ oc.href = 'tel:' + oPhone; oc.style.display = 'inline-block'; }
+    document.getElementById('ownerLine').style.display = 'flex';
+  }
+
+  if(!code || !part){
+    showStatus('⚠️ 잘못된 링크입니다.<br>QR을 다시 스캔해 주세요.');
+    return;
+  }
+
+  var loadedAny = false;
+  try{
+    firebase.initializeApp({ databaseURL: db });
+    var fdb = firebase.database();
+
+    /* 경로 안내 단계 */
+    fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part).once('value').then(function(snap){
+      try{
+        var v = snap.val(), steps = [];
+        if(typeof v === 'string'){ steps = JSON.parse(v||'[]'); }
+        else if(Array.isArray(v)){ steps = v; }
+        var valid = (steps||[]).filter(function(s){ return s && s.text && String(s.text).trim(); });
+        if(valid.length){
+          var box = document.getElementById('routeSteps');
+          box.innerHTML = '';
+          valid.forEach(function(s,i){
+            var row = document.createElement('div'); row.className='step-row';
+            var num = document.createElement('div'); num.className='step-num'; num.textContent = i+1;
+            var txt = document.createElement('div'); txt.className='step-txt'; txt.textContent = String(s.text).trim();
+            row.appendChild(num); row.appendChild(txt);
+            box.appendChild(row);
+          });
+          document.getElementById('routePanel').style.display = 'block';
+          loadedAny = true; hideStatus();
+        }
+      }catch(e){}
+    }).catch(function(){});
+
+    /* 약도 사진 */
+    fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part).once('value').then(function(snap){
+      var photo = snap.val();
+      if(typeof photo === 'string' && photo.indexOf('data:image') === 0){
+        var img = document.getElementById('mapImg');
+        img.src = photo;
+        document.getElementById('mapBox').style.display = 'block';
+        loadedAny = true; hideStatus();
+      } else {
+        if(!loadedAny) showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
+      }
+    }).catch(function(){
+      if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
+    });
+
+    /* 12초 안전장치 */
+    setTimeout(function(){
+      if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인 후 다시 스캔해 주세요.');
+    }, 12000);
+  }catch(e){
+    showStatus('⚠️ 연결 오류가 발생했습니다.<br>다시 스캔해 주세요.');
+  }
+})();
+</script>
+</body>
+</html>
