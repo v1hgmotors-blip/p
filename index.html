@@ -3177,15 +3177,15 @@ var _ownerDelMode = false;
    ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
   { n:'김준성',         p:'01090454247' },
-  { n:'이서찬',         p:'01036871883' },
-  { n:'김경수',         p:'01046971883' },
-  { n:'송욱',           p:'01037168602' },
-  { n:'송일석',         p:'01096666588' },
-  { n:'신정우',         p:'01089273421' },
-  { n:'김진희',         p:'01091394655' },
-  { n:'TSOYYURIYGEORGIEVICH',  p:'01076097787' },
-  { n:'KANVLADIMIR',   p:'01058083711' }
- 
+  { n:'이서찬',         p:'00000000000' },
+  { n:'김경수',         p:'00000000000' },
+  { n:'송욱',           p:'00000000000' },
+  { n:'송일석',         p:'00000000000' },
+  { n:'신정우',         p:'00000000000' },
+  { n:'김진희',         p:'00000000000' },
+  { n:'KIMALEKSANDR',  p:'00000000000' },
+  { n:'KANVLADIMIR',   p:'00000000000' },
+  { n:'YUN ANASTASIYA', p:'00000000000' }
 ];
 
 function getOwnerList() {
@@ -3874,6 +3874,20 @@ function getColName(part, col){
   var key = 'p'+part+'c'+col;
   return obj[key] !== undefined ? obj[key] : col+'열';
 }
+/* ★ 슬롯의 세로 위치 — 아래에서 몇 번째 칸인지 (맨 아랫칸 = 1번째 칸)
+   약도 팝업 헤더 / 문자 / QR 페이지의 차량위치에 함께 표시됨 */
+window._slotRowInfo = function(slotIdx){
+  try{
+    var pl = _gidxToPartLocal(slotIdx);
+    if(!pl) return '';
+    var cols = PART_COL_COUNTS[pl.part-1] || COLS_PER_PART;
+    var rows = PART_ROW_COUNTS[pl.part-1] || ROWS_PER_PART;
+    var row = Math.floor(pl.local / cols);   /* 0 = 맨 윗칸 */
+    var fromBottom = rows - row;             /* 맨 아랫칸 = 1 */
+    if(fromBottom < 1 || fromBottom > rows) return '';
+    return fromBottom + '번째 칸';
+  }catch(e){ return ''; }
+};
 var _localColEditTs = 0; /* ★ 로컬 편집 타임스탬프 */
 function setColName(part, col, val){
   var obj = getColNames();
@@ -16652,8 +16666,10 @@ window._drawQRCanvas = function(container, text, size){
     var _carNoHdr = String(reason||'').replace(/🔑|키불출앱|키불출/g,'').trim();
     var _slotHdr  = String(slotSuffix||'').replace(/^\s*[—-]\s*/,'').trim(); /* '220-2번' */
     var _headerTxt = '';
+    /* ★ 세로 위치 (아래에서 N번째 칸) */
+    var _rowTxt = (typeof _slotRowInfo==='function' && typeof slotIdx==='number') ? _slotRowInfo(slotIdx) : '';
     if(_carNoHdr || _slotHdr){
-      _headerTxt = '차량번호:' + (_carNoHdr||'-') + '   차량위치:' + (partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)';
+      _headerTxt = '차량번호:' + (_carNoHdr||'-') + '   차량위치:' + (partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)' + (_rowTxt ? ' ' + _rowTxt : '');
     }
     var carHeader = document.getElementById('partPhotoCarHeader');
     if(carHeader){
@@ -16739,7 +16755,7 @@ window._drawQRCanvas = function(container, text, size){
             + '?code=' + encodeURIComponent(_code9)
             + '&part=' + encodeURIComponent(partNo)
             + (_carNoHdr ? '&car=' + encodeURIComponent(_carNoHdr) : '')
-            + '&loc='  + encodeURIComponent((partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)')
+            + '&loc='  + encodeURIComponent((partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)' + (_rowTxt ? ' ' + _rowTxt : ''))
             + (oName ? '&on=' + encodeURIComponent(oName) : '')   /* ★ 담당차주 이름 */
             + (oPhone ? '&op=' + encodeURIComponent(oPhone) : '') /* ★ 담당차주 전화 */
             + (typeof _getBizNameGlobal==='function' && _getBizNameGlobal() ? '&bz=' + encodeURIComponent(_getBizNameGlobal()) : '')
@@ -17150,6 +17166,9 @@ window._drawQRCanvas = function(container, text, size){
       var partName = extraEl ? extraEl.value.trim() : '';
       var car = String((entry&&entry.car)||'');
       var loc = (partName||partNo+'파트') + (slotLabel ? '-'+slotLabel+'번' : '') + ' (줄)';
+      /* ★ 세로 위치 (아래에서 N번째 칸) */
+      var _rowTxt9 = (typeof _slotRowInfo==='function' && typeof slotIdx==='number') ? _slotRowInfo(slotIdx) : '';
+      if(_rowTxt9) loc += ' ' + _rowTxt9;
 
       /* 담당차주 (슬롯 차주 필드 + 메모에서 전화번호 추출) — 텍스트/이미지/QR 공용 */
       var _ownerTxt = '', _oName9 = '', _oPhone9 = '';
