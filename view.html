@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🔑 차량 위치 안내</title>
+<title>한결모터스 차량 위치 안내</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{
@@ -68,7 +68,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top-title">📍 🔑 차량 위치 안내</div>
+  <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★ 담당차주 + 전화걸기 -->
   <div class="owner-line" id="ownerLine">
@@ -87,7 +87,7 @@
 
   <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
-  <div class="foot">한결모터스 주차현황판 · 위치 안내</div>
+  <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
 </div>
 
 <!-- Firebase (compat) -->
@@ -98,11 +98,23 @@
   function qs(k){
     try{ return new URLSearchParams(location.search).get(k) || ''; }catch(e){ return ''; }
   }
-  var code = qs('code');
+  var code = qs('code') || qs('c');
   var part = qs('part');
   var car  = qs('car');
   var loc  = qs('loc');
   var db   = qs('db') || 'https://hg-motors-default-rtdb.firebaseio.com';
+  var lkey = qs('k');   /* ★ 단축링크 키 — Firebase에서 상세정보를 읽어옴 */
+  var bz   = qs('bz');  /* ★ 업체명 — 현황판 타이틀에서 자동 전달됨 */
+  function applyBiz(name){
+    if(!name) return;
+    try{
+      document.getElementById('topTitle').textContent = '🚗 ' + name + ' 차량 위치 안내';
+      document.title = name + ' 차량 위치 안내';
+      var f = document.getElementById('footTxt');
+      if(f) f.textContent = name + ' 주차현황판 · 위치 안내';
+    }catch(e){}
+  }
+  applyBiz(bz);
 
   var statusEl = document.getElementById('statusMsg');
   function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
@@ -118,27 +130,44 @@
   /* ★ 담당차주 — 링크 파라미터(on=이름, op=전화)에서 표시 + 전화걸기 */
   var oName = qs('on');
   var oPhone = (qs('op')||'').replace(/[^0-9]/g,'');
-  if(oName || oPhone){
-    var fmtP = oPhone;
-    if(oPhone.length===11) fmtP = oPhone.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3');
-    else if(oPhone.length===10) fmtP = oPhone.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3');
-    document.getElementById('ownerTxt').textContent =
-      '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + fmtP : '');
-    var oc = document.getElementById('ownerCall');
-    if(oPhone){ oc.href = 'tel:' + oPhone; oc.style.display = 'inline-block'; }
-    document.getElementById('ownerLine').style.display = 'flex';
-  }
 
-  if(!code || !part){
+  /* 헤더/담당차주 렌더 함수 (단축링크에서도 재사용) */
+  function renderHeader(){
+    if(car || loc){
+      var h = document.getElementById('carHeader');
+      h.textContent = '차량번호:' + (car||'-') + '  차량위치:' + (loc||'-');
+      h.style.display = 'block';
+    }
+    if(oName || oPhone){
+      var fmtP = oPhone;
+      if(oPhone.length===11) fmtP = oPhone.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3');
+      else if(oPhone.length===10) fmtP = oPhone.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3');
+      document.getElementById('ownerTxt').textContent =
+        '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + fmtP : '');
+      var oc = document.getElementById('ownerCall');
+      if(oPhone){ oc.href = 'tel:' + oPhone; oc.style.display = 'inline-block'; }
+      document.getElementById('ownerLine').style.display = 'flex';
+    }
+  }
+  renderHeader();
+
+  if(!code || (!part && !lkey)){
     showStatus('⚠️ 잘못된 링크입니다.<br>QR을 다시 스캔해 주세요.');
     return;
   }
 
   var loadedAny = false;
+  var fdb = null;
   try{
     firebase.initializeApp({ databaseURL: db });
-    var fdb = firebase.database();
+    fdb = firebase.database();
+  }catch(e){
+    showStatus('⚠️ 연결 오류가 발생했습니다.<br>다시 스캔해 주세요.');
+    return;
+  }
 
+  /* 파트의 경로 안내 + 약도 사진 로드 */
+  function loadPart(){
     /* 경로 안내 단계 */
     fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part).once('value').then(function(snap){
       try{
@@ -176,14 +205,34 @@
     }).catch(function(){
       if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
     });
-
-    /* 12초 안전장치 */
-    setTimeout(function(){
-      if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인 후 다시 스캔해 주세요.');
-    }, 12000);
-  }catch(e){
-    showStatus('⚠️ 연결 오류가 발생했습니다.<br>다시 스캔해 주세요.');
   }
+
+  if(lkey){
+    /* ★ 단축링크: 상세정보(part/car/loc/담당차주)를 Firebase에서 읽어옴 */
+    fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value').then(function(snap){
+      var d = snap.val();
+      if(d && typeof d === 'object'){
+        part = String(d.part||part||'');
+        car = String(d.car||car||'');
+        loc = String(d.loc||loc||'');
+        oName = String(d.on||oName||'');
+        oPhone = String(d.op||oPhone||'').replace(/[^0-9]/g,'');
+        applyBiz(d.bz); /* ★ 업체명 */
+        renderHeader();
+      }
+      if(part){ loadPart(); }
+      else { showStatus('⚠️ 링크 정보가 만료되었거나 없습니다.'); }
+    }).catch(function(){
+      showStatus('⚠️ 링크 정보를 불러오지 못했습니다.<br>네트워크를 확인해 주세요.');
+    });
+  } else {
+    loadPart();
+  }
+
+  /* 12초 안전장치 */
+  setTimeout(function(){
+    if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인 후 다시 스캔해 주세요.');
+  }, 12000);
 })();
 </script>
 </body>

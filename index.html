@@ -106,7 +106,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .settings-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;min-height:26px;cursor:pointer;user-select:none;}
 .settings-toggle-lbl{font-size:13px;font-weight:800;color:#7A5500;}
 .settings-toggle-btn{background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px;color:#7A5500;line-height:1;flex-shrink:0;}
-.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:140px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 자동문자 줄 추가로 80→140px */
+.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:170px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 자동문자 줄 추가로 80→140px */
 .settings-body.collapsed{max-height:0;opacity:0;padding-bottom:0;}
 /* ★ 메인 스크롤 래퍼 */
 #mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
@@ -1504,11 +1504,12 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   background:#FFF9DB; border:1.5px solid #FCD34D; border-radius:10px;
   padding:10px 10px 8px;
 }
-.owner-add-row { display:flex; gap:6px; margin-bottom:8px; }
+.owner-add-row { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; align-items:center; } /* ★ 좁은 화면 줄바꿈 */
 .owner-add-input {
-  flex:1; border:1.5px solid #FCD34D; border-radius:8px;
+  flex:1; min-width:110px; border:1.5px solid #FCD34D; border-radius:8px; /* ★ min-width로 넘침 방지 */
   padding:7px 10px; font-size:13px; font-weight:700; font-family:inherit;
   background:#fff; outline:none; color:#3A1D1D;
+  box-sizing:border-box;
 }
 .owner-add-input:focus { border-color:#E8B800; }
 .owner-add-save {
@@ -1965,6 +1966,8 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
         <span class="storage-mode-slider"></span>
       </label>
       <span class="storage-mode-badge both" id="autoSmsBadge">⏸️ 자동문자 꺼짐</span>
+      <!-- ★ 발송 방식 전환: 🖼️ 이미지 MMS(121원) ↔ 🔗 링크 LMS(49.5원) -->
+      <button type="button" id="smsModeBtn" onclick="toggleSmsMode()" style="padding:5px 12px;border:none;border-radius:8px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;background:#1D4ED8;color:#fff;letter-spacing:-.3px;">🔗 링크 49.5원</button>
       <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">키불출 이벤트 → 딜러번호로 약도 MMS 자동발송 (문자서버 연동 필요)</span>
     </div>
   </div>
@@ -2206,7 +2209,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 
     <div class="m-section">
       <div class="m-memo-label-row">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;flex-wrap:nowrap;min-width:0;flex:1;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;flex-wrap:wrap;min-width:0;flex:1;">
           <div class="m-label" style="margin-bottom:0;flex-shrink:0;">📝 메모</div>
           <button class="owner-btn" onclick="toggleOwnerPanel()" id="ownerPanelBtn" style="flex-shrink:0;">👤 차주</button>
           <input id="mOwnerInlineInput" type="text" autocomplete="off"
@@ -2214,7 +2217,13 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
                  maxlength="15"
                  oninput="onOwnerInlineInput(this.value)"
                  onkeydown="if(event.key==='Enter'){onOwnerInlineInput(this.value);this.blur();}"
-                 style="flex:1;min-width:0;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#FFF8CC;font-family:inherit;outline:none;" />
+                 style="flex:1;min-width:100px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#FFF8CC;font-family:inherit;outline:none;box-sizing:border-box;" />
+          <!-- ★ 차주 전화번호 입력 (약도 문자/팝업의 담당차주 전화·전화걸기에 사용) -->
+          <input id="mOwnerPhoneInput" type="tel" inputmode="numeric" autocomplete="off"
+                 placeholder="📞 차주 전화번호"
+                 maxlength="13"
+                 oninput="onOwnerPhoneInput(this.value)"
+                 style="flex:1;min-width:120px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#E8F5E9;font-family:inherit;outline:none;box-sizing:border-box;" />
         </div>
         <div class="m-memo-fs-ctrl">
           <span style="font-size:11px;font-weight:700;color:var(--text-sub);">글씨크기</span>
@@ -2229,8 +2238,13 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
         <div class="owner-panel-inner">
           <div class="owner-add-row">
             <input class="owner-add-input" id="ownerAddInput" type="text"
-                   placeholder="차주 이름 입력" maxlength="15"
+                   placeholder="이름" maxlength="15"
                    onkeydown="if(event.key==='Enter')addOwner()">
+            <!-- ★ 차주 전화번호 (이름과 세트로 저장 → 칩 선택 시 함께 입력됨) -->
+            <input class="owner-add-input" id="ownerAddPhone" type="tel" inputmode="numeric"
+                   placeholder="📞 전화번호" maxlength="13"
+                   onkeydown="if(event.key==='Enter')addOwner()"
+                   style="background:#E8F5E9;">
             <button class="owner-add-save" onclick="addOwner()">＋ 추가</button>
             <button class="owner-sel-btn" id="ownerSelBtn" onclick="toggleOwnerDelMode()" title="선택삭제">🗑️</button>
           </div>
@@ -3159,15 +3173,37 @@ var _ownerDelMode = false;
 
 /* ★ 하드코딩 기본 차주 목록 (항상 상단 표시, 삭제 불가) */
 
-/* ★ 기본 차주 목록 (하드코딩, 선택만 가능 / 삭제 불가) */
+/* ★ 기본 차주 목록 (하드코딩, 선택만 가능 / 삭제 불가)
+   ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
-  '김준성','이서찬','김경수','송욱','송일석',
-  '신정우','김진희','KIMALEKSANDR','KANVLADIMIR','YUN ANASTASIYA'
+  { n:'김준성',         p:'01090454247' },
+  { n:'이서찬',         p:'01036871883' },
+  { n:'김경수',         p:'01046971883' },
+  { n:'송욱',           p:'01037168602' },
+  { n:'송일석',         p:'01096666588' },
+  { n:'신정우',         p:'01089273421' },
+  { n:'김진희',         p:'01091394655' },
+  { n:'TSOYYURIYGEORGIEVICH',  p:'01076097787' },
+  { n:'KANVLADIMIR',   p:'01058083711' }
+ 
 ];
 
 function getOwnerList() {
   try { return JSON.parse(localStorage.getItem(LS_OWNER_LIST) || '[]'); }
   catch(e) { return []; }
+}
+/* ★ 차주 항목 헬퍼 — 기존(문자열)과 신규({n:이름, p:전화}) 형식 모두 지원 */
+function _ownerEntryName(e){ return (e && typeof e === 'object') ? String(e.n||'') : String(e||''); }
+function _ownerEntryPhone(e){ return (e && typeof e === 'object') ? String(e.p||'').replace(/[^0-9]/g,'') : ''; }
+/* ★ 칩 선택 시: 이름 + 전화번호를 슬롯에 함께 적용 */
+function applyOwnerSelection(name, phone){
+  insertOwnerToMemo(name);
+  phone = String(phone||'').replace(/[^0-9]/g,'');
+  if(phone){
+    var pi = document.getElementById('mOwnerPhoneInput');
+    if(pi) pi.value = phone;
+    if(typeof onOwnerPhoneInput === 'function') onOwnerPhoneInput(phone);
+  }
 }
 function saveOwnerList(list) {
   localStorage.setItem(LS_OWNER_LIST, JSON.stringify(list));
@@ -3195,15 +3231,17 @@ function renderOwnerList() {
   if (!wrap) return;
   wrap.innerHTML = '';
 
-  /* ★ 기본 차주 (상단 고정, 선택만 가능) */
-  DEFAULT_OWNER_LIST.forEach(function(name) {
+  /* ★ 기본 차주 (상단 고정, 선택만 가능) — 이름+전화 세트 */
+  DEFAULT_OWNER_LIST.forEach(function(entry) {
+    var name  = _ownerEntryName(entry);
+    var phone = _ownerEntryPhone(entry);
     var chip = document.createElement('div');
     chip.className = 'owner-chip owner-chip-default';
-    chip.title = '기본 차주 (삭제 불가)';
-    chip.addEventListener('click', function() { insertOwnerToMemo(name); });
+    chip.title = '기본 차주 (삭제 불가)' + (phone ? ' · 📞 ' + phone : '');
+    chip.addEventListener('click', function() { applyOwnerSelection(name, phone); });
     var span = document.createElement('span');
     span.className = 'owner-chip-name';
-    span.textContent = name;
+    span.textContent = name + (phone ? ' 📞' : '');
     chip.appendChild(span);
     wrap.appendChild(chip);
   });
@@ -3224,10 +3262,13 @@ function renderOwnerList() {
     wrap.appendChild(emp);
     _updateDelConfirmBtn(); return;
   }
-  userList.forEach(function(name, i) {
+  userList.forEach(function(entry, i) {
+    var name  = _ownerEntryName(entry);
+    var phone = _ownerEntryPhone(entry);
     var chip = document.createElement('div');
     chip.className = 'owner-chip' + (_ownerDelMode ? ' sel-mode' : '');
     chip.dataset.idx = i;
+    if (phone) chip.title = '📞 ' + phone;
     if (_ownerDelMode) {
       var cb = document.createElement('input');
       cb.type = 'checkbox';
@@ -3240,11 +3281,11 @@ function renderOwnerList() {
         if (e.target !== cb) { cb.checked = !cb.checked; chip.classList.toggle('selected', cb.checked); _updateDelConfirmBtn(); }
       });
     } else {
-      chip.addEventListener('click', function() { insertOwnerToMemo(name); });
+      chip.addEventListener('click', function() { applyOwnerSelection(name, phone); });
     }
     var span = document.createElement('span');
     span.className = 'owner-chip-name';
-    span.textContent = name;
+    span.textContent = name + (phone ? ' 📞' : '');
     chip.appendChild(span);
     wrap.appendChild(chip);
   });
@@ -3253,23 +3294,49 @@ function renderOwnerList() {
 
 function addOwner() {
   var inp  = document.getElementById('ownerAddInput');
+  var pInp = document.getElementById('ownerAddPhone');
   var name = inp ? inp.value.trim() : '';
+  var phone = pInp ? pInp.value.replace(/[^0-9]/g,'') : '';
   if (!name) return;
-  if (DEFAULT_OWNER_LIST.indexOf(name) !== -1) {
+  var _isDefaultName = DEFAULT_OWNER_LIST.some(function(e){ return _ownerEntryName(e) === name; });
+  if (_isDefaultName) {
     showAlert('⚠️ 기본 차주 목록에 이미 있습니다.');
     setTimeout(hideAlert, 2000);
-    inp.value = ''; return;
+    inp.value = ''; if(pInp) pInp.value=''; return;
   }
   var list = getOwnerList();
-  if (list.indexOf(name) !== -1) { inp.value = ''; return; }
-  list.push(name);
+  /* ★ 중복 검사: 이름 기준 (기존 문자열/신규 객체 모두) — 있으면 전화번호만 갱신 */
+  var dupIdx = -1;
+  for (var i=0; i<list.length; i++){
+    if (_ownerEntryName(list[i]) === name){ dupIdx = i; break; }
+  }
+  if (dupIdx !== -1) {
+    if (phone) { list[dupIdx] = { n: name, p: phone }; saveOwnerList(list); renderOwnerList(); }
+    inp.value = ''; if(pInp) pInp.value=''; return;
+  }
+  /* ★ 전화번호 있으면 세트({n,p}), 없으면 기존처럼 이름만 */
+  list.push(phone ? { n: name, p: phone } : name);
   saveOwnerList(list);
-  inp.value = '';
+  inp.value = ''; if(pInp) pInp.value='';
   renderOwnerList();
 }
 
 
 /* ── 차주 인라인 입력란 처리 ── */
+/* ★ 차주 전화번호 입력 → 슬롯 ownerPhone에 즉시 저장 (Firebase 동기화 포함) */
+function onOwnerPhoneInput(p){
+  p = String(p||'').replace(/[^0-9]/g,'');
+  if(activeSlot !== null){
+    var s = getSlots();
+    if(!s[activeSlot]) s[activeSlot] = {};
+    s[activeSlot].ownerPhone = p;
+    saveSlots(s);
+    if(fbSlotsRef){
+      var upd = {}; upd[activeSlot] = s[activeSlot];
+      _fbV7Update(upd);
+    }
+  }
+}
 function onOwnerInlineInput(name) {
   name = (name || '').trim();
   /* 메모란 업데이트: 기존 "이름 /" 패턴 교체 or 앞에 삽입 */
@@ -8883,6 +8950,8 @@ function openModal(i){
   /* ★ 인라인 차주 입력란에 현재 owner 표시 */
   var _oi=document.getElementById('mOwnerInlineInput');
   if(_oi) _oi.value=d.owner||'';
+  var _opI=document.getElementById('mOwnerPhoneInput');
+  if(_opI) _opI.value=d.ownerPhone||'';
   resetOwnerPanel();
   selStatus(d.disabled?'disabled':(d.status||'none'));
   document.getElementById('mDupError').classList.remove('show');
@@ -9106,12 +9175,17 @@ function saveSlot(){
   var _inlineOwner = _inlineOwnerEl ? _inlineOwnerEl.value.trim() : '';
   /* 우선순위: 인라인입력 > 메모파싱 > 기존 owner */
   var _newOwner = _inlineOwner || _ownerFromMemo || _prevOwner;
+  /* ★ 차주 전화번호: 입력란 값 우선, 없으면 기존값 유지 */
+  var _opEl = document.getElementById('mOwnerPhoneInput');
+  var _prevOwnerPhone = (s[activeSlot] && s[activeSlot].ownerPhone) ? s[activeSlot].ownerPhone : '';
+  var _newOwnerPhone = _opEl ? _opEl.value.replace(/[^0-9]/g,'') : _prevOwnerPhone;
 
   s[activeSlot] = {
     car:      isClear ? '' : car,
     status:   isClear ? 'none' : selectedStatus,
     memo:     isClear ? '' : memo,
     owner:    isClear ? '' : _newOwner,
+    ownerPhone: isClear ? '' : _newOwnerPhone,
     disabled: dis,
     num:      isClear ? '0' : _prevNum,
     encar:    isClear ? {date:'',time:'',done:false,doneDate:''} : _prevEncar,
@@ -16495,10 +16569,13 @@ window._drawQRCanvas = function(container, text, size){
       if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
         var _sd = getSlot(slotIdx)||{};
         oName = String(_sd.owner||'').trim();
-        /* 전화번호는 메모 또는 차주 필드에서 010-xxxx-xxxx 패턴 자동 추출 */
-        var _srcTxt = String(_sd.memo||'') + ' ' + String(_sd.owner||'');
-        var _pm = _srcTxt.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
-        if(_pm) oPhone = _pm[0].replace(/[^0-9]/g,'');
+        /* ★ 전화번호: 전용 필드(ownerPhone) 우선 → 없으면 메모/차주 필드에서 자동 추출 */
+        oPhone = String(_sd.ownerPhone||'').replace(/[^0-9]/g,'');
+        if(!oPhone){
+          var _srcTxt = String(_sd.memo||'') + ' ' + String(_sd.owner||'');
+          var _pm = _srcTxt.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+          if(_pm) oPhone = _pm[0].replace(/[^0-9]/g,'');
+        }
       }
       if(ownerLine && ownerTxt && (oName || oPhone)){
         ownerTxt.textContent = '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + _fmtPhone(oPhone) : '');
@@ -16539,10 +16616,16 @@ window._drawQRCanvas = function(container, text, size){
       if(shareBtn) shareBtn.style.display = (navigator.share ? '' : 'none');
     } else if(_popupPhone){
       if(phoneLine){
-        phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(_popupPhone) + ' — 아래 「문자전송」으로 약도를 보낼 수 있습니다';
+        phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(_popupPhone);
         phoneLine.style.display = 'block';
       }
-      if(phoneInputWrap) phoneInputWrap.style.display = 'none';
+      /* ★ 번호가 있어도 입력란(번호 자동입력) + 약도전송 버튼 항상 표시
+         → 재전송하거나 다른 번호로 보내고 싶을 때 사용 */
+      if(phoneInputWrap){
+        phoneInputWrap.style.display = 'flex';
+        var _pi0 = document.getElementById('partPhotoPhoneInput');
+        if(_pi0) _pi0.value = _popupPhone;
+      }
       if(smsBtn) smsBtn.style.display = '';
       /* 이미지 첨부 공유는 Web Share 지원 브라우저에서만 */
       if(shareBtn) shareBtn.style.display = (navigator.share ? '' : 'none');
@@ -16659,6 +16742,7 @@ window._drawQRCanvas = function(container, text, size){
             + '&loc='  + encodeURIComponent((partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)')
             + (oName ? '&on=' + encodeURIComponent(oName) : '')   /* ★ 담당차주 이름 */
             + (oPhone ? '&op=' + encodeURIComponent(oPhone) : '') /* ★ 담당차주 전화 */
+            + (typeof _getBizNameGlobal==='function' && _getBizNameGlobal() ? '&bz=' + encodeURIComponent(_getBizNameGlobal()) : '')
             + (_dbu9 ? '&db=' + encodeURIComponent(_dbu9) : '');
         }
       }catch(e){ _qrUrl=''; }
@@ -16763,6 +16847,38 @@ window._drawQRCanvas = function(container, text, size){
      ══════════════════════════════════════════════════════ */
   var LS_AUTO_SMS = 'pb_auto_sms';           /* '1' = 켜짐 */
   var LS_SMS_SENT = 'pb_sms_sent_ids';       /* {eventId: timestamp} */
+  var LS_SMS_MODE = 'pb_sms_mode';           /* ★ 'link'(기본, LMS 49.5원) | 'mms'(이미지 121원) */
+
+  function _getSmsMode(){
+    try{ return localStorage.getItem(LS_SMS_MODE)==='mms' ? 'mms' : 'link'; }catch(e){ return 'link'; }
+  }
+  function _updateSmsModeBtn(){
+    var b=document.getElementById('smsModeBtn');
+    if(!b) return;
+    if(_getSmsMode()==='mms'){
+      b.textContent='🖼️ 이미지 121원';
+      b.style.background='#B45309';
+    } else {
+      b.textContent='🔗 링크 49.5원';
+      b.style.background='#1D4ED8';
+    }
+  }
+  window.toggleSmsMode = function(){
+    var next = _getSmsMode()==='mms' ? 'link' : 'mms';
+    try{ localStorage.setItem(LS_SMS_MODE, next); }catch(e){}
+    _updateSmsModeBtn();
+    if(typeof showAlert==='function'){
+      showAlert(next==='mms'
+        ? '🖼️ 이미지 문자(MMS·121원/건) — 약도가 이미지로 첨부되어 발송됩니다'
+        : '🔗 링크 문자(LMS·49.5원/건) — 약도 링크가 발송되며, 누르면 웹 약도가 열립니다');
+      setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); }, 4500);
+    }
+  };
+  (function(){
+    function apply(){ _updateSmsModeBtn(); }
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', apply);
+    else apply();
+  })();
 
   /* 약도 이미지를 MMS 규격(JPEG, ≤1440px, ≤190KB)으로 압축 */
   function _compressForMms(dataUrl, cb){
@@ -16945,6 +17061,39 @@ window._drawQRCanvas = function(container, text, size){
     }
   }
 
+  /* ★ 현황판 타이틀(멘트입력 필드)에서 업체명 추출 — 예: "🚗한결모터스🚗" → "한결모터스"
+     view.html 제목에 "{업체명} 차량 위치 안내"로 자동 표시됨 */
+  function _getBizName(){
+    var m='';
+    try{ m = localStorage.getItem('pb_header_memo')||''; }catch(e){}
+    m = m.replace(/[^0-9A-Za-z가-힣\s]/g,'').trim(); /* 이모지·기호 제거 */
+    if(m==='주차위치현황판') m=''; /* 기본값이면 업체명 아님 */
+    return m;
+  }
+  window._getBizNameGlobal = _getBizName;
+
+  /* ★ 단축링크 생성 — 상세정보를 Firebase에 저장하고 6글자 키만 담긴 짧은 링크 반환
+     (문자에 긴 URL 대신 view.html?c=코드&k=Ab3xYz 형태로 발송) */
+  function _makeShortLink(code, payload, cb){
+    try{
+      if(typeof fbDb==='undefined' || !fbDb){ cb(''); return; }
+      var chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+      var key='';
+      for(var i=0;i<6;i++) key += chars[Math.floor(Math.random()*chars.length)];
+      var base = 'https://v1hgmotors-blip.github.io/p/view.html';
+      if(location.protocol==='http:' || location.protocol==='https:'){
+        base = new URL('view.html', location.href).href;
+      }
+      payload = payload || {};
+      payload.t = Date.now();
+      var _bz = _getBizName();
+      if(_bz && !payload.bz) payload.bz = _bz; /* ★ 업체명 동봉 */
+      fbDb.ref('kd_rooms/'+code+'/links/'+key).set(payload).then(function(){
+        cb(base + '?c=' + encodeURIComponent(code) + '&k=' + key);
+      }).catch(function(){ cb(''); });
+    }catch(e){ cb(''); }
+  }
+
   /* ★ QR용 보기 페이지 링크 생성 (팝업 QR과 동일 규칙) */
   function _buildViewerUrl(partNo, carTxt, locTxt, ownerName, ownerPhone){
     try{
@@ -16962,6 +17111,7 @@ window._drawQRCanvas = function(container, text, size){
         + '&loc='  + encodeURIComponent(locTxt||'')
         + (ownerName ? '&on=' + encodeURIComponent(ownerName) : '')
         + (ownerPhone ? '&op=' + encodeURIComponent(ownerPhone) : '')
+        + (_getBizName() ? '&bz=' + encodeURIComponent(_getBizName()) : '')
         + (dbu ? '&db=' + encodeURIComponent(dbu) : '');
     }catch(e){ return ''; }
   }
@@ -17007,8 +17157,12 @@ window._drawQRCanvas = function(container, text, size){
         if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
           var _sd9 = getSlot(slotIdx)||{};
           _oName9 = String(_sd9.owner||'').trim();
-          var _pm9 = (String(_sd9.memo||'')+' '+String(_sd9.owner||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
-          if(_pm9) _oPhone9 = _pm9[0].replace(/[^0-9]/g,'');
+          /* ★ 전화번호: 전용 필드(ownerPhone) 우선 → 없으면 메모/차주 필드에서 자동 추출 */
+          _oPhone9 = String(_sd9.ownerPhone||'').replace(/[^0-9]/g,'');
+          if(!_oPhone9){
+            var _pm9 = (String(_sd9.memo||'')+' '+String(_sd9.owner||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+            if(_pm9) _oPhone9 = _pm9[0].replace(/[^0-9]/g,'');
+          }
           if(_oName9 || _oPhone9){
             _ownerTxt = '👤 담당차주: ' + (_oName9||'-') + (_oPhone9 ? '  📞 ' + _fmtPhone(_oPhone9) : '');
           }
@@ -17026,10 +17180,23 @@ window._drawQRCanvas = function(container, text, size){
       /* 약도 이미지에 헤더+담당차주+QR 합성(팝업창 모양) → 압축 → 발송요청 push */
       var photo = _getPhoto(partNo);
       var _hdrLine = '차량번호:' + (car||'-') + ' 차량위치:' + loc;
+      var _viewUrl9 = _buildViewerUrl(partNo, car, loc, _oName9, _oPhone9);
+
+      /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
+      if(_getSmsMode()==='link'){
+        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null }, function(shortUrl){
+          var u = shortUrl || _viewUrl9;
+          if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
+          _queueRouteSms(code, phone, car, text, '', eid, 'parkboard');
+        });
+        return;
+      }
+
+      /* 🖼️ 이미지 모드(MMS 121원): 팝업창 모양 합성 이미지 첨부 */
       _composeMmsImage(photo, {
         header: _hdrLine,
         owner:  _ownerTxt,
-        qrText: _buildViewerUrl(partNo, car, loc, _oName9, _oPhone9)
+        qrText: _viewUrl9
       }, function(composite){
         _compressForMms(composite || photo, function(jpeg){
           _queueRouteSms(code, phone, car, text, jpeg, eid, 'parkboard');
@@ -17144,6 +17311,30 @@ window._drawQRCanvas = function(container, text, size){
     if(_ownTxt){
       text += '\n' + _ownTxt.replace(/^👤\s*/,'').replace(/담당차주:\s*/,'담당차주:').replace(/\s{2,}/g,' ');
     }
+
+    /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
+    if(_getSmsMode()==='link'){
+      /* 팝업 QR 링크에서 상세정보를 뽑아 단축링크 페이로드 구성 */
+      var _pl = {};
+      try{
+        var _u9 = new URL(_popupQrUrl);
+        ['part','car','loc','on','op'].forEach(function(k){
+          var v = _u9.searchParams.get(k);
+          if(v) _pl[k] = v;
+        });
+      }catch(e){}
+      _makeShortLink(code, _pl, function(shortUrl){
+        var u = shortUrl || _popupQrUrl;
+        if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
+        _queueRouteSms(code, phone, '', text, '', 'manual_'+Date.now(), 'parkboard-manual', function(status){
+          if(status==='sent'){ setBtn('✅ 전송완료', '#16A34A', true); }
+          else { setBtn('📲 약도전송', '#B45309', false); }
+        });
+      });
+      return;
+    }
+
+    /* 🖼️ 이미지 모드(MMS 121원): 팝업창 모양 합성 이미지 첨부 */
     _composeMmsImage((img&&img.src)||'', {
       header: _hdrTxt,
       owner:  _ownTxt,
