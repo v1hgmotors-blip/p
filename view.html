@@ -144,10 +144,18 @@
   var oPhone = (qs('op')||'').replace(/[^0-9]/g,'');
 
   /* 헤더/담당차주 렌더 함수 (단축링크에서도 재사용) */
+  var keyNo = qs('kn'); /* ★ 차량 키번호 */
   function renderHeader(){
     if(car || loc){
       var h = document.getElementById('carHeader');
       h.textContent = '차량번호:' + (car||'-') + '  차량위치:' + (loc||'-');
+      /* ★ 키번호 — 녹색 글씨로 헤더 끝에 표시 */
+      if(keyNo){
+        var kSpan = document.createElement('span');
+        kSpan.style.cssText = 'color:#15803D;font-weight:900;';
+        kSpan.textContent = ' (키번호는 ' + keyNo + '번입니다)';
+        h.appendChild(kSpan);
+      }
       h.style.display = 'block';
     }
     if(oName || oPhone){
@@ -190,10 +198,28 @@
         if(valid.length){
           var box = document.getElementById('routeSteps');
           box.innerHTML = '';
+          /* ★ 주소 감지 (예: '수원시 권선구 평동로79번길45' 또는 '주소: ...') */
+          function _isAddr(t){
+            t = String(t||'');
+            if(/주소\s*[:：]/.test(t)) return true;
+            return /(시|군|구)\s*[가-힣]/.test(t) && /(로|길)\s*\d/.test(t);
+          }
           valid.forEach(function(s,i){
             var row = document.createElement('div'); row.className='step-row';
             var num = document.createElement('div'); num.className='step-num'; num.textContent = i+1;
-            var txt = document.createElement('div'); txt.className='step-txt'; txt.textContent = String(s.text).trim();
+            var txt = document.createElement('div'); txt.className='step-txt';
+            var stepText = String(s.text).trim();
+            txt.textContent = stepText;
+            /* ★ 주소면 길찾기 버튼 (카카오맵으로 열림) */
+            if(_isAddr(stepText)){
+              var q = stepText.replace(/^.*?주소\s*[:：]\s*/,'').trim();
+              var nav = document.createElement('a');
+              nav.href = 'https://map.kakao.com/link/search/' + encodeURIComponent(q);
+              nav.target = '_blank';
+              nav.textContent = '🗺️ 길찾기';
+              nav.style.cssText = 'display:inline-block;margin-left:8px;background:#16A34A;color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:900;vertical-align:middle;white-space:nowrap;';
+              txt.appendChild(nav);
+            }
             row.appendChild(num); row.appendChild(txt);
             box.appendChild(row);
           });
@@ -229,6 +255,7 @@
         loc = String(d.loc||loc||'');
         oName = String(d.on||oName||'');
         oPhone = String(d.op||oPhone||'').replace(/[^0-9]/g,'');
+        keyNo = String(d.kn||keyNo||''); /* ★ 키번호 */
         applyBiz(d.bz); /* ★ 업체명 */
         applyBizInfo(d.bi); /* ★ 업체정보 */
         renderHeader();

@@ -16627,6 +16627,7 @@ window._drawQRCanvas = function(container, text, size){
       if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
         var _sd = getSlot(slotIdx)||{};
         oName = String(_sd.owner||'').trim();
+        var oKeyNo = String(_sd.num||'').trim(); /* ★ 차량 키번호 (녹색 배지) */
         /* ★ 전화번호: 전용 필드(ownerPhone) 우선 → 없으면 메모/차주 필드에서 자동 추출 */
         oPhone = String(_sd.ownerPhone||'').replace(/[^0-9]/g,'');
         if(!oPhone){
@@ -16802,6 +16803,7 @@ window._drawQRCanvas = function(container, text, size){
             + '&loc='  + encodeURIComponent((partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)' + (_rowTxt ? ' ' + _rowTxt : ''))
             + (oName ? '&on=' + encodeURIComponent(oName) : '')   /* ★ 담당차주 이름 */
             + (oPhone ? '&op=' + encodeURIComponent(oPhone) : '') /* ★ 담당차주 전화 */
+            + (typeof oKeyNo!=='undefined' && oKeyNo ? '&kn=' + encodeURIComponent(oKeyNo) : '') /* ★ 키번호 */
             + (typeof _getBizNameGlobal==='function' && _getBizNameGlobal() ? '&bz=' + encodeURIComponent(_getBizNameGlobal()) : '')
             + (localStorage.getItem('pb_biz_info') ? '&bi=' + encodeURIComponent(localStorage.getItem('pb_biz_info')) : '')
             + (_dbu9 ? '&db=' + encodeURIComponent(_dbu9) : '');
@@ -17161,7 +17163,7 @@ window._drawQRCanvas = function(container, text, size){
   }
 
   /* ★ QR용 보기 페이지 링크 생성 (팝업 QR과 동일 규칙) */
-  function _buildViewerUrl(partNo, carTxt, locTxt, ownerName, ownerPhone){
+  function _buildViewerUrl(partNo, carTxt, locTxt, ownerName, ownerPhone, keyNo){
     try{
       var vBase = 'https://v1hgmotors-blip.github.io/p/view.html';
       if(location.protocol==='http:' || location.protocol==='https:'){
@@ -17177,6 +17179,7 @@ window._drawQRCanvas = function(container, text, size){
         + '&loc='  + encodeURIComponent(locTxt||'')
         + (ownerName ? '&on=' + encodeURIComponent(ownerName) : '')
         + (ownerPhone ? '&op=' + encodeURIComponent(ownerPhone) : '')
+        + (keyNo ? '&kn=' + encodeURIComponent(keyNo) : '')
         + (_getBizName() ? '&bz=' + encodeURIComponent(_getBizName()) : '')
         + (localStorage.getItem('pb_biz_info') ? '&bi=' + encodeURIComponent(localStorage.getItem('pb_biz_info')) : '')
         + (dbu ? '&db=' + encodeURIComponent(dbu) : '');
@@ -17227,6 +17230,7 @@ window._drawQRCanvas = function(container, text, size){
         if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
           var _sd9 = getSlot(slotIdx)||{};
           _oName9 = String(_sd9.owner||'').trim();
+          var _oKey9 = String(_sd9.num||'').trim(); /* ★ 차량 키번호 */
           /* ★ 전화번호: 전용 필드(ownerPhone) 우선 → 없으면 메모/차주 필드에서 자동 추출 */
           _oPhone9 = String(_sd9.ownerPhone||'').replace(/[^0-9]/g,'');
           if(!_oPhone9){
@@ -17243,6 +17247,11 @@ window._drawQRCanvas = function(container, text, size){
       if(_oName9 || _oPhone9){
         text += '\n담당차주:' + (_oName9||'-') + (_oPhone9 ? ' 📞 ' + _fmtPhone(_oPhone9) : '');
       }
+      /* ★ 업체정보 (구형폰 대비 텍스트로 포함) */
+      try{
+        var _bi9 = localStorage.getItem('pb_biz_info')||'';
+        if(_bi9) text += '\n' + _bi9;
+      }catch(e){}
 
       /* 선(先)기록 — 여러 기기가 같은 이벤트를 받아도 이 기기 기준 1회 */
       _markSmsSent(eid);
@@ -17250,11 +17259,11 @@ window._drawQRCanvas = function(container, text, size){
       /* 약도 이미지에 헤더+담당차주+QR 합성(팝업창 모양) → 압축 → 발송요청 push */
       var photo = _getPhoto(partNo);
       var _hdrLine = '차량번호:' + (car||'-') + ' 차량위치:' + loc;
-      var _viewUrl9 = _buildViewerUrl(partNo, car, loc, _oName9, _oPhone9);
+      var _viewUrl9 = _buildViewerUrl(partNo, car, loc, _oName9, _oPhone9, (typeof _oKey9!=='undefined'?_oKey9:''));
 
       /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
       if(_getSmsMode()==='link'){
-        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null }, function(shortUrl){
+        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null }, function(shortUrl){
           var u = shortUrl || _viewUrl9;
           if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
           _queueRouteSms(code, phone, car, text, '', eid, 'parkboard');
@@ -17381,6 +17390,11 @@ window._drawQRCanvas = function(container, text, size){
     if(_ownTxt){
       text += '\n' + _ownTxt.replace(/^👤\s*/,'').replace(/담당차주:\s*/,'담당차주:').replace(/\s{2,}/g,' ');
     }
+    /* ★ 업체정보 (구형폰 대비 텍스트로 포함) */
+    try{
+      var _biM = localStorage.getItem('pb_biz_info')||'';
+      if(_biM) text += '\n' + _biM;
+    }catch(e){}
 
     /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
     if(_getSmsMode()==='link'){
@@ -17388,7 +17402,7 @@ window._drawQRCanvas = function(container, text, size){
       var _pl = {};
       try{
         var _u9 = new URL(_popupQrUrl);
-        ['part','car','loc','on','op'].forEach(function(k){
+        ['part','car','loc','on','op','kn'].forEach(function(k){
           var v = _u9.searchParams.get(k);
           if(v) _pl[k] = v;
         });
