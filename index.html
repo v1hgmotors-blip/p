@@ -1956,6 +1956,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="btn btn-save" onclick="saveAndConnect()">💾</button>
       <button class="btn btn-clear" onclick="clearAllSlots()">🗑️</button>
       <button class="btn" onclick="openBackup2()" style="background:#1D4ED8;color:#fff;font-size:11px;">📦백업</button>
+      <button class="btn" onclick="openBizInfoEdit()" style="background:#0F766E;color:#fff;font-size:11px;">🏢업체정보</button>
       <span class="save-msg" id="saveMsg"></span>
     </div>
     <!-- ★ 키불출 자동 문자전송 (약도 MMS) 토글 -->
@@ -9935,6 +9936,10 @@ function applyRemoteSettings(data){
       }
     }
   }
+  /* ★ 업체정보 수신 반영 */
+  if(data.hasOwnProperty('bizInfo')){
+    try{ localStorage.setItem(LS_BIZ_INFO, String(data.bizInfo||'')); }catch(e){}
+  }
   /* 열 이름 — ★ 전체 덮어쓰기 대신 merge로 기존 열 이름 보존 */
   if(data.colNames){
     try{
@@ -11351,6 +11356,45 @@ function pwaBannerDismiss(){
 
 
 /* ── 백업/복원 함수 ── */
+/* ══ ★ 업체정보 (약도 알림 페이지 상단에 표시) ══════════
+   설정바 🏢업체정보 버튼 → 입력·저장 → 모든 기기 동기화 →
+   QR/문자 링크로 열리는 약도 페이지 제목 바로 아래에 텍스트 표시 */
+var LS_BIZ_INFO = 'pb_biz_info';
+function getBizInfo(){
+  try{ return localStorage.getItem(LS_BIZ_INFO)||''; }catch(e){ return ''; }
+}
+function openBizInfoEdit(){
+  var ov = document.getElementById('bizInfoOv');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'bizInfoOv';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99900;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML =
+      '<div style="background:#fff;border-radius:16px;padding:18px;max-width:460px;width:100%;box-shadow:0 16px 60px rgba(0,0,0,.4);">' +
+        '<div style="font-size:15px;font-weight:900;color:#3A1D1D;margin-bottom:6px;">🏢 업체정보 입력</div>' +
+        '<div style="font-size:11px;font-weight:700;color:#78716C;margin-bottom:10px;line-height:1.6;">약도 알림 페이지(QR·문자 링크) 제목 아래에 표시됩니다.<br>예) 주소 / 전화번호 / 영업시간 — 여러 줄 입력 가능</div>' +
+        '<textarea id="bizInfoText" rows="4" placeholder="예) 경기도 수원시 권선구 평동로79번길 45\n☎ 010-9045-4247" style="width:100%;box-sizing:border-box;border:2px solid #FCD34D;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:700;font-family:inherit;color:#3A1D1D;outline:none;resize:vertical;"></textarea>' +
+        '<div style="display:flex;gap:8px;margin-top:12px;">' +
+          '<button onclick="saveBizInfo()" style="flex:1;padding:11px;background:#0F766E;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">💾 저장 (모든 기기)</button>' +
+          '<button onclick="document.getElementById(\'bizInfoOv\').style.display=\'none\'" style="flex:1;padding:11px;background:#E2E8F0;color:#334155;border:none;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">닫기</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+  }
+  document.getElementById('bizInfoText').value = getBizInfo();
+  ov.style.display = 'flex';
+}
+function saveBizInfo(){
+  var v = (document.getElementById('bizInfoText')||{}).value || '';
+  v = v.trim();
+  try{ localStorage.setItem(LS_BIZ_INFO, v); }catch(e){}
+  /* 모든 기기 동기화 */
+  try{ if(typeof pushSettings==='function') pushSettings({ bizInfo: v }); }catch(e){}
+  document.getElementById('bizInfoOv').style.display = 'none';
+  showAlert('✅ 업체정보 저장됨 — 이후 발송되는 약도 알림부터 표시됩니다');
+  setTimeout(hideAlert, 3000);
+}
+
 function openBackup2(){
   var msg=document.getElementById('backup2Msg');
   var fi=document.getElementById('backup2FileInput');
@@ -16759,6 +16803,7 @@ window._drawQRCanvas = function(container, text, size){
             + (oName ? '&on=' + encodeURIComponent(oName) : '')   /* ★ 담당차주 이름 */
             + (oPhone ? '&op=' + encodeURIComponent(oPhone) : '') /* ★ 담당차주 전화 */
             + (typeof _getBizNameGlobal==='function' && _getBizNameGlobal() ? '&bz=' + encodeURIComponent(_getBizNameGlobal()) : '')
+            + (localStorage.getItem('pb_biz_info') ? '&bi=' + encodeURIComponent(localStorage.getItem('pb_biz_info')) : '')
             + (_dbu9 ? '&db=' + encodeURIComponent(_dbu9) : '');
         }
       }catch(e){ _qrUrl=''; }
@@ -17104,6 +17149,11 @@ window._drawQRCanvas = function(container, text, size){
       payload.t = Date.now();
       var _bz = _getBizName();
       if(_bz && !payload.bz) payload.bz = _bz; /* ★ 업체명 동봉 */
+      /* ★ 업체정보(주소·전화 등) 동봉 — 약도 페이지 제목 아래 표시 */
+      try{
+        var _bi = localStorage.getItem('pb_biz_info')||'';
+        if(_bi && !payload.bi) payload.bi = _bi;
+      }catch(e){}
       fbDb.ref('kd_rooms/'+code+'/links/'+key).set(payload).then(function(){
         cb(base + '?c=' + encodeURIComponent(code) + '&k=' + key);
       }).catch(function(){ cb(''); });
@@ -17128,6 +17178,7 @@ window._drawQRCanvas = function(container, text, size){
         + (ownerName ? '&on=' + encodeURIComponent(ownerName) : '')
         + (ownerPhone ? '&op=' + encodeURIComponent(ownerPhone) : '')
         + (_getBizName() ? '&bz=' + encodeURIComponent(_getBizName()) : '')
+        + (localStorage.getItem('pb_biz_info') ? '&bi=' + encodeURIComponent(localStorage.getItem('pb_biz_info')) : '')
         + (dbu ? '&db=' + encodeURIComponent(dbu) : '');
     }catch(e){ return ''; }
   }

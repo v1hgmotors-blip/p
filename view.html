@@ -69,6 +69,8 @@
 <body>
 <div class="wrap">
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
+  <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
+  <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★ 담당차주 + 전화걸기 -->
   <div class="owner-line" id="ownerLine">
@@ -115,6 +117,16 @@
     }catch(e){}
   }
   applyBiz(bz);
+  /* ★ 업체정보 텍스트 (여러 줄 지원) */
+  function applyBizInfo(info){
+    if(!info) return;
+    try{
+      var el = document.getElementById('bizInfo');
+      el.textContent = String(info);
+      el.style.display = 'block';
+    }catch(e){}
+  }
+  applyBizInfo(qs('bi'));
 
   var statusEl = document.getElementById('statusMsg');
   function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
@@ -218,6 +230,7 @@
         oName = String(d.on||oName||'');
         oPhone = String(d.op||oPhone||'').replace(/[^0-9]/g,'');
         applyBiz(d.bz); /* ★ 업체명 */
+        applyBizInfo(d.bi); /* ★ 업체정보 */
         renderHeader();
       }
       if(part){ loadPart(); }
