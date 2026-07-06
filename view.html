@@ -71,6 +71,10 @@
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
+  <!-- ★ 제휴점 정보 (현황판 제휴점 편집 → 상세 정보) — 줄에 전화번호가 있으면 전화걸기 버튼 -->
+  <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
+    <div id="promoLines"></div>
+  </div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★ 담당차주 + 전화걸기 -->
   <div class="owner-line" id="ownerLine">
@@ -179,6 +183,37 @@ function sharePage(){
     }catch(e){}
   }
   applyBizInfo(qs('bi'));
+  /* ★ 제휴점 정보 — 줄별 표시, 전화번호(010~) 포함 줄엔 📞 전화걸기 버튼 */
+  function applyPromo(info){
+    if(!info) return;
+    try{
+      var box = document.getElementById('promoLines');
+      box.innerHTML = '';
+      String(info).split(/\n/).forEach(function(line){
+        line = line.trim();
+        if(!line) return;
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:800;color:#E2E8F0;line-height:1.7;';
+        var span = document.createElement('span');
+        span.textContent = line;
+        row.appendChild(span);
+        var m = line.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        if(m){
+          var tel = m[0].replace(/[^0-9]/g,'');
+          var a = document.createElement('a');
+          a.href = 'tel:' + tel;
+          a.textContent = '📞 전화걸기';
+          a.style.cssText = 'background:#16A34A;color:#fff;text-decoration:none;padding:3px 10px;border-radius:7px;font-size:11px;font-weight:900;white-space:nowrap;';
+          row.appendChild(a);
+        }
+        box.appendChild(row);
+      });
+      if(box.children.length){
+        document.getElementById('promoBox').style.display = 'block';
+      }
+    }catch(e){}
+  }
+  applyPromo(qs('pt'));
 
   var statusEl = document.getElementById('statusMsg');
   function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
@@ -323,6 +358,7 @@ function sharePage(){
         keyNo = String(d.kn||keyNo||''); /* ★ 키번호 */
         applyBiz(d.bz); /* ★ 업체명 */
         applyBizInfo(d.bi); /* ★ 업체정보 */
+        applyPromo(d.pt); /* ★ 제휴점 정보 */
         renderHeader();
       }
       if(part){ loadPart(); }

@@ -1788,6 +1788,12 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
              onkeydown="if(event.key==='Enter')savePromoEdit()" />
     </div>
     <div>
+      <div class="memo-edit-label">📋 상세 정보 (약도 안내 페이지에 표시 — 여러 줄 가능)</div>
+      <textarea class="memo-edit-input" id="promoDetailText" rows="4"
+        placeholder="예) * 제휴점 타다할부 *&#10;본부장: 010-1234-5678 홍길동&#10;담당: 010-2345-6789 김담당 팀장"
+        style="resize:vertical;min-height:80px;font-size:13px;"></textarea>
+    </div>
+    <div>
       <div class="memo-edit-label" style="display:flex;justify-content:space-between;">
         <span>🔠 글씨 크기</span>
         <span class="promo-fs-val" id="promoFsVal">20px</span>
@@ -4168,6 +4174,11 @@ function loadHeaderMemoStyle(){
 }
 function openPromoEdit(){
   var cur=localStorage.getItem(LS_PROMO_TEXT)||'🔴 제휴점:skv1모터스 타다할부 🔴';
+  /* ★ 상세 정보 프리필 */
+  try{
+    var _pd=document.getElementById('promoDetailText');
+    if(_pd) _pd.value=localStorage.getItem('pb_promo_detail')||'';
+  }catch(e){}
   var fs=parseInt(localStorage.getItem(LS_PROMO_FS))||20;
   var col=localStorage.getItem(LS_PROMO_COLOR)||'#CC0000';
   _promoEditColor=col;
@@ -4214,8 +4225,12 @@ function savePromoEdit(){
   localStorage.setItem(LS_PROMO_COLOR,col);
   var pe=document.getElementById('hPromoText');
   if(pe){pe.textContent=txt;pe.style.fontSize=fs+'px';pe.style.color=col;}
+  /* ★ 상세 정보 저장 */
+  var _detail='';
+  try{ _detail=(document.getElementById('promoDetailText')||{}).value||''; _detail=_detail.trim(); }catch(e){}
+  try{ localStorage.setItem('pb_promo_detail', _detail); }catch(e){}
   /* Firebase 설정 동기화 */
-  pushSettings({promoText:txt, promoFs:parseInt(fs), promoColor:col});
+  pushSettings({promoText:txt, promoFs:parseInt(fs), promoColor:col, promoDetail:_detail});
   closePromoEdit();
 }
 
@@ -10039,6 +10054,9 @@ function applyRemoteSettings(data){
     }
   }
   /* 제휴점 문구 */
+  if(data.promoDetail!==undefined){
+    try{ localStorage.setItem('pb_promo_detail', String(data.promoDetail||'')); }catch(e){}
+  }
   if(data.promoText!==undefined){
     localStorage.setItem(LS_PROMO_TEXT,data.promoText);
     if(data.promoFs!==undefined) localStorage.setItem(LS_PROMO_FS,data.promoFs);
@@ -13231,16 +13249,18 @@ function _initPcScrollLimiter2(){
       if(typeof window._syncPartSteps==='function') window._syncPartSteps(_partNo, validSteps);
     }catch(ex){}
 
-    /* 합성 캔버스 생성 */
-    var cw=800;
+    /* 합성 캔버스 생성 — ★ 고해상도(1200px) + 사진/캔버스 원본 비율 유지 */
+    var cw=1200;
 
-    /* 높이 계산 — 캔버스가 없어도 최소 높이 보장 */
+    /* 높이 계산 — 실제 그리기 후 _finalizeSave에서 여백을 잘라내므로 넉넉히 잡음 */
     var drawH=0;
     try{
-      if(_canvas && _canvas.width>0 && _canvas.height>0) drawH=_canvas.height;
+      if(_canvas && _canvas.width>0 && _canvas.height>0){
+        drawH=Math.round(_canvas.height*((cw-20)/_canvas.width)); /* ★ 비율 반영 */
+      }
     }catch(ex){ drawH=0; }
-    var routeH=validSteps.length>0?(validSteps.length*40+60):0;
-    var photoH=(_bgPhoto&&_curTab!==2)?180:0;
+    var routeH=validSteps.length>0?(validSteps.length*60+90):0;
+    var photoH=(_bgPhoto&&_curTab!==2)?920:0; /* ★ 원본 비율 사진용 여유 (최종 crop) */
     var totalH=routeH+photoH+drawH+20;
     if(totalH<100) totalH=400; /* ★ 최소 높이 보장 */
 
@@ -13253,46 +13273,49 @@ function _initPcScrollLimiter2(){
 
     var yOff=10;
 
-    /* 경로 안내 구간 */
+    /* 경로 안내 구간 (1200px 기준 1.5배 스케일) */
     if(validSteps.length>0){
       cx.fillStyle='#334155';
       cx.beginPath();
-      var rh=validSteps.length*40+30;
-      _roundRect(cx,10,yOff,cw-20,rh,10);
+      var rh=validSteps.length*60+45;
+      _roundRect(cx,10,yOff,cw-20,rh,14);
       cx.fill();
       cx.fillStyle='#FEE500';
-      cx.font='bold 14px sans-serif';
-      cx.fillText('📋 경로 안내',20,yOff+22);
-      yOff+=36;
+      cx.font='bold 21px sans-serif';
+      cx.fillText('📋 경로 안내',30,yOff+33);
+      yOff+=54;
       validSteps.forEach(function(step,i){ if(!step||typeof step.text!=='string') return;
         /* 번호 원 */
         cx.beginPath();
-        cx.arc(30,yOff+14,12,0,Math.PI*2);
+        cx.arc(45,yOff+21,18,0,Math.PI*2);
         cx.fillStyle='#FF8C00'; cx.fill();
-        cx.fillStyle='#fff'; cx.font='bold 12px sans-serif';
+        cx.fillStyle='#fff'; cx.font='bold 18px sans-serif';
         cx.textAlign='center';
-        cx.fillText(i+1,30,yOff+18);
+        cx.fillText(i+1,45,yOff+27);
         cx.textAlign='left';
         /* 텍스트 */
-        cx.fillStyle='#fff'; cx.font='14px sans-serif';
-        cx.fillText(step.text.trim(), 50, yOff+18);
+        cx.fillStyle='#fff'; cx.font='21px sans-serif';
+        cx.fillText(step.text.trim(), 75, yOff+27);
         /* 연결선 */
         if(i<validSteps.length-1){
-          cx.strokeStyle='#475569'; cx.lineWidth=2;
-          cx.beginPath(); cx.moveTo(30,yOff+26); cx.lineTo(30,yOff+40); cx.stroke();
+          cx.strokeStyle='#475569'; cx.lineWidth=3;
+          cx.beginPath(); cx.moveTo(45,yOff+39); cx.lineTo(45,yOff+60); cx.stroke();
         }
-        yOff+=38;
+        yOff+=57;
       });
-      yOff+=10;
+      yOff+=15;
     }
 
     /* 첨부 사진 구간 (약도탭이 아닐 때 사진이 별도로 보임) */
     if(_bgPhoto && !(_canvas && _canvas.width>0 && _curTab===2)){
       var pImg=new Image();
       pImg.onload=function(){
-        var ph=Math.min(180,(cw-20)*pImg.height/pImg.width);
-        cx.drawImage(pImg,10,yOff,cw-20,ph);
-        yOff+=ph+10;
+        /* ★ 원본 비율 유지 + 최대 크기 (가로 꽉 채움, 세로 상한 900px) */
+        var _maxW=cw-20, _maxH=900;
+        var _sc=Math.min(_maxW/pImg.width, _maxH/pImg.height);
+        var _dw=Math.round(pImg.width*_sc), _dh=Math.round(pImg.height*_sc);
+        cx.drawImage(pImg,(cw-_dw)/2,yOff,_dw,_dh);
+        yOff+=_dh+10;
         _finalizeSave(comp,cx,yOff,cw);
       };
       pImg.src=_bgPhoto;
@@ -13301,8 +13324,9 @@ function _initPcScrollLimiter2(){
 
     /* 약도 캔버스 구간 — 캔버스가 있고 내용이 있을 때만 */
     if(_canvas && _canvas.width>0 && _canvas.height>0 && drawH>0){
-      cx.drawImage(_canvas,10,yOff,cw-20,_canvas.height);
-      yOff+=_canvas.height+10;
+      /* ★ 원본 비율 유지 스케일 */
+      cx.drawImage(_canvas,10,yOff,cw-20,drawH);
+      yOff+=drawH+10;
     }
 
     _finalizeSave(comp,cx,yOff,cw);
@@ -13315,7 +13339,8 @@ function _initPcScrollLimiter2(){
     final2.width=cw; final2.height=finalH;
     var cx2=final2.getContext('2d');
     cx2.drawImage(comp,0,0);
-    var dataUrl=final2.toDataURL('image/png');
+    /* ★ 고해상 사진 용량 절감 — JPEG 90% (배경이 채워져 있어 화질 손실 체감 없음) */
+    var dataUrl=final2.toDataURL('image/jpeg',0.9);
     /* ★ 저장 검증 */
     if(!dataUrl || dataUrl.length < 100){
       alert('이미지 생성 실패. 약도탭에서 내용을 그린 후 저장해 주세요.');
@@ -17189,6 +17214,14 @@ window._drawQRCanvas = function(container, text, size){
       try{
         var _bi = localStorage.getItem('pb_biz_info')||'';
         if(_bi && !payload.bi) payload.bi = _bi;
+      }catch(e){}
+      /* ★ 제휴점 정보 동봉 — 약도 페이지에 표시 (상세 우선, 없으면 헤더 한 줄) */
+      try{
+        var _pt = localStorage.getItem('pb_promo_detail')||'';
+        if(!_pt.trim()){
+          _pt = (localStorage.getItem('pb_promo_text')||'').replace(/[^0-9A-Za-z가-힣:\-\s]/g,'').trim();
+        }
+        if(_pt.trim() && !payload.pt) payload.pt = _pt.trim();
       }catch(e){}
       fbDb.ref('kd_rooms/'+code+'/links/'+key).set(payload).then(function(){
         cb(base + '?c=' + encodeURIComponent(code) + '&k=' + key);
