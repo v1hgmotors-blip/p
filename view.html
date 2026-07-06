@@ -94,9 +94,10 @@
   <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
   <!-- ★ 다운로드 / 공유 버튼 -->
-  <div id="actionBtns" style="display:flex;gap:10px;margin-top:16px;">
-    <button onclick="dlMap()" style="flex:1;padding:13px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
-    <button onclick="sharePage()" style="flex:1;padding:13px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+  <div id="actionBtns" style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+    <button onclick="dlMap()" style="flex:1;min-width:100px;padding:13px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
+    <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:13px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
+    <button onclick="sharePage()" style="flex:1;min-width:80px;padding:13px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
   </div>
   <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
 </div>
@@ -120,6 +121,12 @@ function _dlFallbackMapOnly(){
     }
   }catch(e){}
   return false;
+}
+/* ★ 약도 사진 1장만 다운로드 */
+function dlMapOnly(){
+  if(!_dlFallbackMapOnly()){
+    alert('다운로드할 약도 사진이 없습니다.');
+  }
 }
 function dlMap(){
   var btns = document.getElementById('actionBtns');
