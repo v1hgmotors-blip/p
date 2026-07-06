@@ -238,59 +238,72 @@ function sharePage(){
     return;
   }
 
-  /* 파트의 경로 안내 + 약도 사진 로드 */
+  /* 파트의 경로 안내 + 약도 사진 로드
+     ★ 사진(합성 약도)에는 경로안내가 이미 포함되어 있으므로,
+       사진이 있으면 페이지 경로 패널에는 주소 줄(길찾기 버튼)만 표시해 중복 제거 */
+  function _isAddr(t){
+    t = String(t||'');
+    if(/주소\s*[:：]/.test(t)) return true;
+    var hasArea = /(시|군|구)\s*[가-힣]/.test(t);
+    var hasRoad = /(로|길)\s*\d/.test(t);              /* 도로명: ~로/길 + 번지 */
+    var hasJibun = /[가-힣](동|리|읍|면|가)\s*\d/.test(t); /* 지번: ~동/리 + 번지 */
+    return hasArea && (hasRoad || hasJibun);
+  }
+  function _renderSteps(steps, addrOnly){
+    var valid = (steps||[]).filter(function(x){ return x && x.text && String(x.text).trim(); });
+    var rows = addrOnly ? valid.filter(function(x){ return _isAddr(x.text); }) : valid;
+    if(!rows.length) return false;
+    var box = document.getElementById('routeSteps');
+    box.innerHTML = '';
+    rows.forEach(function(x,i){
+      var row = document.createElement('div'); row.className='step-row';
+      var num = document.createElement('div'); num.className='step-num';
+      num.textContent = addrOnly ? '📍' : (i+1);
+      if(addrOnly){ num.style.background='#16A34A'; }
+      var txt = document.createElement('div'); txt.className='step-txt';
+      var stepText = String(x.text).trim();
+      txt.textContent = stepText;
+      if(_isAddr(stepText)){
+        var q = stepText.replace(/^.*?주소\s*[:：]\s*/,'').trim();
+        var nav = document.createElement('a');
+        nav.href = 'https://map.kakao.com/link/search/' + encodeURIComponent(q);
+        nav.target = '_blank';
+        nav.textContent = '🗺️ 길찾기';
+        nav.style.cssText = 'display:inline-block;margin-left:8px;background:#16A34A;color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:900;vertical-align:middle;white-space:nowrap;';
+        txt.appendChild(nav);
+      }
+      row.appendChild(num); row.appendChild(txt);
+      box.appendChild(row);
+    });
+    document.getElementById('routePanel').style.display = 'block';
+    return true;
+  }
   function loadPart(){
-    /* 경로 안내 단계 */
-    fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part).once('value').then(function(snap){
+    Promise.all([
+      fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part).once('value').then(function(s){ return s.val(); }).catch(function(){ return null; }),
+      fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part).once('value').then(function(s){ return s.val(); }).catch(function(){ return null; })
+    ]).then(function(res){
+      var stepsRaw = res[0], photo = res[1];
+      var steps = [];
       try{
-        var v = snap.val(), steps = [];
-        if(typeof v === 'string'){ steps = JSON.parse(v||'[]'); }
-        else if(Array.isArray(v)){ steps = v; }
-        var valid = (steps||[]).filter(function(s){ return s && s.text && String(s.text).trim(); });
-        if(valid.length){
-          var box = document.getElementById('routeSteps');
-          box.innerHTML = '';
-          /* ★ 주소 감지 (예: '수원시 권선구 평동로79번길45' 또는 '주소: ...') */
-          function _isAddr(t){
-            t = String(t||'');
-            if(/주소\s*[:：]/.test(t)) return true;
-            return /(시|군|구)\s*[가-힣]/.test(t) && /(로|길)\s*\d/.test(t);
-          }
-          valid.forEach(function(s,i){
-            var row = document.createElement('div'); row.className='step-row';
-            var num = document.createElement('div'); num.className='step-num'; num.textContent = i+1;
-            var txt = document.createElement('div'); txt.className='step-txt';
-            var stepText = String(s.text).trim();
-            txt.textContent = stepText;
-            /* ★ 주소면 길찾기 버튼 (카카오맵으로 열림) */
-            if(_isAddr(stepText)){
-              var q = stepText.replace(/^.*?주소\s*[:：]\s*/,'').trim();
-              var nav = document.createElement('a');
-              nav.href = 'https://map.kakao.com/link/search/' + encodeURIComponent(q);
-              nav.target = '_blank';
-              nav.textContent = '🗺️ 길찾기';
-              nav.style.cssText = 'display:inline-block;margin-left:8px;background:#16A34A;color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:900;vertical-align:middle;white-space:nowrap;';
-              txt.appendChild(nav);
-            }
-            row.appendChild(num); row.appendChild(txt);
-            box.appendChild(row);
-          });
-          document.getElementById('routePanel').style.display = 'block';
-          loadedAny = true; hideStatus();
-        }
+        if(typeof stepsRaw === 'string'){ steps = JSON.parse(stepsRaw||'[]'); }
+        else if(Array.isArray(stepsRaw)){ steps = stepsRaw; }
       }catch(e){}
-    }).catch(function(){});
+      var hasPhoto = (typeof photo === 'string' && photo.indexOf('data:image') === 0);
 
-    /* 약도 사진 */
-    fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part).once('value').then(function(snap){
-      var photo = snap.val();
-      if(typeof photo === 'string' && photo.indexOf('data:image') === 0){
+      /* 사진 표시 */
+      if(hasPhoto){
         var img = document.getElementById('mapImg');
         img.src = photo;
         document.getElementById('mapBox').style.display = 'block';
         loadedAny = true; hideStatus();
-      } else {
-        if(!loadedAny) showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
+      }
+      /* 경로 패널: 사진 있으면 주소만(중복 제거), 없으면 전체 표시 */
+      var shown = _renderSteps(steps, hasPhoto);
+      if(shown){ loadedAny = true; hideStatus(); }
+
+      if(!loadedAny){
+        showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
       }
     }).catch(function(){
       if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
