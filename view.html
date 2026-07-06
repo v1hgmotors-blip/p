@@ -67,7 +67,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
@@ -94,29 +94,57 @@
   <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
   <!-- ★ 다운로드 / 공유 버튼 -->
-  <div style="display:flex;gap:10px;margin-top:16px;">
+  <div id="actionBtns" style="display:flex;gap:10px;margin-top:16px;">
     <button onclick="dlMap()" style="flex:1;padding:13px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
     <button onclick="sharePage()" style="flex:1;padding:13px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
   </div>
-  <div class="foot" id="footTxt">수원에스케이v1자동차매매단지협동조합</div>
+  <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
 </div>
 
+<!-- html2canvas (화면 전체 다운로드용) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- Firebase (compat) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
-/* ★ 약도 사진 다운로드 */
-function dlMap(){
+/* ★ 화면 전체 다운로드 — 제휴점/차량위치/담당차주/경로/약도를 한 장으로 저장
+   html2canvas 로드 실패 시 약도 사진만 저장 (폴백) */
+function _dlFallbackMapOnly(){
   try{
     var img = document.getElementById('mapImg');
-    if(!img || !img.src || img.src.indexOf('data:image')!==0){
-      alert('다운로드할 약도 사진이 없습니다.'); return;
+    if(img && img.src && img.src.indexOf('data:image')===0){
+      var a=document.createElement('a');
+      a.href=img.src; a.download='약도_차량위치안내.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      return true;
     }
+  }catch(e){}
+  return false;
+}
+function dlMap(){
+  var btns = document.getElementById('actionBtns');
+  var wrap = document.getElementById('wrap');
+  if(typeof html2canvas === 'undefined' || !wrap){
+    if(!_dlFallbackMapOnly()) alert('다운로드에 실패했습니다.');
+    return;
+  }
+  /* 캡처 중 버튼은 잠깐 숨김 (결과 이미지에 버튼이 안 나오게) */
+  if(btns) btns.style.visibility = 'hidden';
+  html2canvas(wrap, {
+    backgroundColor: '#0F1E33',
+    scale: 2,                 /* 고해상도 */
+    useCORS: true,
+    logging: false
+  }).then(function(canvas){
+    if(btns) btns.style.visibility = '';
     var a = document.createElement('a');
-    a.href = img.src;
-    a.download = '약도_차량위치안내.png';
+    a.href = canvas.toDataURL('image/png');
+    a.download = '차량위치안내_전체.png';
     document.body.appendChild(a); a.click(); a.remove();
-  }catch(e){ alert('다운로드에 실패했습니다.'); }
+  }).catch(function(e){
+    if(btns) btns.style.visibility = '';
+    if(!_dlFallbackMapOnly()) alert('다운로드에 실패했습니다.');
+  });
 }
 /* ★ 페이지 공유 — 약도 이미지 + 위치 텍스트 + 링크 (카톡/문자 등 선택) */
 function sharePage(){
@@ -189,22 +217,26 @@ function sharePage(){
     try{
       var box = document.getElementById('promoLines');
       box.innerHTML = '';
-      String(info).split(/\n/).forEach(function(line){
-        line = line.trim();
-        if(!line) return;
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:800;color:#E2E8F0;line-height:1.7;';
-        var span = document.createElement('span');
-        span.textContent = line;
-        row.appendChild(span);
+      var _lines = String(info).split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+      _lines.forEach(function(line, idx){
         var m = line.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        var row = document.createElement('div');
         if(m){
+          /* 전화번호 줄: 좌측 텍스트(줄바꿈 허용) + 우측 전화걸기 버튼 (겹침 방지) */
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;color:#E2E8F0;line-height:1.55;padding:5px 0;'+(idx>0?'border-top:1px solid #24446E;':'');
+          var span = document.createElement('span');
+          span.style.cssText = 'flex:1;min-width:0;word-break:break-word;';
+          span.textContent = line;
           var tel = m[0].replace(/[^0-9]/g,'');
           var a = document.createElement('a');
           a.href = 'tel:' + tel;
           a.textContent = '📞 전화걸기';
-          a.style.cssText = 'background:#16A34A;color:#fff;text-decoration:none;padding:3px 10px;border-radius:7px;font-size:11px;font-weight:900;white-space:nowrap;';
-          row.appendChild(a);
+          a.style.cssText = 'flex-shrink:0;background:#16A34A;color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:900;white-space:nowrap;';
+          row.appendChild(span); row.appendChild(a);
+        } else {
+          /* 일반 줄(제목 등): 가운데 정렬 */
+          row.style.cssText = 'text-align:center;font-size:14px;font-weight:900;color:#FEE500;line-height:1.7;padding:2px 0 6px;';
+          row.textContent = line;
         }
         box.appendChild(row);
       });
