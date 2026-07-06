@@ -89,6 +89,11 @@
 
   <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
+  <!-- ★ 다운로드 / 공유 버튼 -->
+  <div style="display:flex;gap:10px;margin-top:16px;">
+    <button onclick="dlMap()" style="flex:1;padding:13px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
+    <button onclick="sharePage()" style="flex:1;padding:13px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+  </div>
   <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
 </div>
 
@@ -96,6 +101,53 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
+/* ★ 약도 사진 다운로드 */
+function dlMap(){
+  try{
+    var img = document.getElementById('mapImg');
+    if(!img || !img.src || img.src.indexOf('data:image')!==0){
+      alert('다운로드할 약도 사진이 없습니다.'); return;
+    }
+    var a = document.createElement('a');
+    a.href = img.src;
+    a.download = '약도_차량위치안내.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){ alert('다운로드에 실패했습니다.'); }
+}
+/* ★ 페이지 공유 — 약도 이미지 + 위치 텍스트 + 링크 (카톡/문자 등 선택) */
+function sharePage(){
+  var hdr = (document.getElementById('carHeader')||{}).textContent || '차량 위치 안내';
+  var own = (document.getElementById('ownerTxt')||{}).textContent || '';
+  var txt = hdr + (own ? '\n' + own : '');
+  var img = document.getElementById('mapImg');
+  var doShare = function(files){
+    var data = { title: document.title, text: txt, url: location.href };
+    if(files) data.files = files;
+    navigator.share(data).catch(function(e){
+      if(e && e.name !== 'AbortError'){ fallbackCopy(); }
+    });
+  };
+  var fallbackCopy = function(){
+    try{
+      navigator.clipboard.writeText(txt + '\n' + location.href).then(function(){
+        alert('링크가 복사되었습니다. 카톡/문자에 붙여넣어 공유하세요.');
+      });
+    }catch(e){ alert('공유가 지원되지 않는 브라우저입니다.'); }
+  };
+  if(!navigator.share){ fallbackCopy(); return; }
+  /* 약도 이미지가 있으면 파일로 첨부 시도 */
+  if(img && img.src && img.src.indexOf('data:image')===0 && navigator.canShare){
+    try{
+      fetch(img.src).then(function(r){ return r.blob(); }).then(function(b){
+        var f = new File([b], '약도.png', {type: b.type||'image/png'});
+        if(navigator.canShare({files:[f]})){ doShare([f]); }
+        else { doShare(null); }
+      }).catch(function(){ doShare(null); });
+    }catch(e){ doShare(null); }
+  } else {
+    doShare(null);
+  }
+}
 (function(){
   function qs(k){
     try{ return new URLSearchParams(location.search).get(k) || ''; }catch(e){ return ''; }
