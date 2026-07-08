@@ -2224,6 +2224,19 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       </button>
     </div>
 
+    <!-- ★ 서류 첨부 (출고서류) — kd_docs 분리 저장, 차량번호 기준 -->
+    <div class="m-section" id="docsSection">
+      <div class="m-label">📎 서류 첨부 (출고서류)</div>
+      <div id="docsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+      <input type="file" id="docFileInput" accept="image/*,application/pdf" multiple
+             style="display:none" onchange="handleDocFiles(this.files)">
+      <button type="button" onclick="document.getElementById('docFileInput').click()"
+              style="width:100%;padding:9px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">
+        ➕ 서류/사진 추가 (PDF·이미지)
+      </button>
+      <div id="docUploadStatus" style="font-size:11px;font-weight:700;color:#7C3AED;margin-top:4px;"></div>
+    </div>
+
     <div class="m-section">
       <div class="m-memo-label-row">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;flex-wrap:wrap;min-width:0;flex:1;">
@@ -2275,25 +2288,6 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 
       <textarea id="mMemoInput" class="m-memo" rows="2"
                 placeholder="메모를 입력하세요 (선택)"></textarea>
-    </div>
-
-    <!-- ★★ 출고서류 첨부 (PDF·이미지, 여러 장) — 약도 페이지에서 다운로드/인쇄/공유 -->
-    <div class="m-section" style="border-top:2px dashed var(--border);padding-top:10px;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-        <div class="m-label" style="margin-bottom:0;">📎 출고서류</div>
-        <label style="display:inline-flex;align-items:center;gap:6px;background:#0F766E;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">
-          ＋ 서류 첨부 (PDF·이미지)
-          <input type="file" id="mDocInput" accept="application/pdf,image/*" multiple
-                 onchange="onDocAttach(this.files)" style="display:none;">
-        </label>
-        <button type="button" onclick="clearAllDocs()" id="mDocClearBtn"
-                style="display:none;background:#DC2626;color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">전체삭제</button>
-      </div>
-      <div id="mDocList" style="display:flex;flex-direction:column;gap:6px;"></div>
-      <div style="font-size:11px;color:var(--text-sub);font-weight:700;line-height:1.6;margin-top:4px;">
-        • 이 차량의 출고서류를 첨부하면, 약도 안내 페이지에서 딜러가 다운로드·인쇄·공유할 수 있습니다<br>
-        • 원본은 계속 보관되고, 발송 링크만 3일 후 만료됩니다 (재키불출 시 다시 사용 가능)
-      </div>
     </div>
 
     <div class="m-dup-error" id="mDupError"></div>
@@ -9011,8 +9005,6 @@ function openModal(i){
   if(_oi) _oi.value=d.owner||'';
   var _opI=document.getElementById('mOwnerPhoneInput');
   if(_opI) _opI.value=d.ownerPhone||'';
-  /* ★ 출고서류 목록 로드 */
-  _loadSlotDocs(d);
   resetOwnerPanel();
   selStatus(d.disabled?'disabled':(d.status||'none'));
   document.getElementById('mDupError').classList.remove('show');
@@ -9020,6 +9012,8 @@ function openModal(i){
   /* ★ 복원 버튼 표시 */
   var _rb=document.getElementById('restoreBtn');
   if(_rb) _rb.style.display=(_slotHistory[i]&&_slotHistory[i].car)?'inline-block':'none';
+  /* ★ 서류 첨부 목록 로드 */
+  if(typeof loadSlotDocs==='function') loadSlotDocs();
   document.getElementById('modalOv').classList.add('show');
   setTimeout(function(){
     /* ★ BUG FIX: 모바일에서 자동 focus 하지 않음 → 키보드 자동 팝업 방지
@@ -9077,6 +9071,177 @@ function addEncarLog(idx, car, num, date, time, doneDate){
 }
 /* ══ 엔카 로그 끝 ══ */
 
+/* ══ 서류 첨부 (출고서류) — kd_docs 분리 저장, 차량번호 기준 키 ══
+   ★ 설계 원칙:
+   - 슬롯 데이터(pb_slots)에는 절대 저장하지 않음 (용량 폭증 방지, 사진과 동일한 이유)
+   - 별도 경로 kd_rooms/{code}/kd_docs/{차량번호키}/{docId} 에 분리 저장
+   - 이미지는 자동 압축(최대 가로 1280px, JPEG 72%), PDF는 4MB 이하만 허용
+   - 차량번호가 곧 키이므로, 슬롯이 나중에 다른 차량으로 바뀌어도 이전 서류가 섞이지 않음 */
+var _curDocs = {};
+
+function _docKeyFromCar(car){
+  car = String(car||'').trim();
+  if(!car) return '';
+  return car.replace(/[.#$\[\]\/\s]/g,'_');
+}
+function _pbCode(){
+  try{ return localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||''; }catch(e){ return ''; }
+}
+function _docsRoomRef(){
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb) return null;
+  return fbDb.ref('kd_rooms/'+code+'/kd_docs');
+}
+
+function loadSlotDocs(){
+  var box=document.getElementById('docsList');
+  if(!box) return;
+  _curDocs = {};
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  var key = _docKeyFromCar(car);
+  if(!key){ box.innerHTML='<div style="font-size:12px;font-weight:700;color:#94A3B8;">차량번호 입력 후 서류를 첨부할 수 있습니다.</div>'; return; }
+  var ref=_docsRoomRef();
+  if(!ref){ box.innerHTML='<div style="font-size:12px;font-weight:700;color:#94A3B8;">Firebase 연결 후 서류 첨부가 가능합니다.</div>'; return; }
+  box.innerHTML='<div style="font-size:12px;font-weight:700;color:#94A3B8;">불러오는 중...</div>';
+  ref.child(key).once('value').then(function(snap){
+    _curDocs = snap.val()||{};
+    _renderDocList();
+  }).catch(function(){
+    box.innerHTML='<div style="font-size:12px;font-weight:700;color:#EF4444;">서류 목록을 불러오지 못했습니다.</div>';
+  });
+}
+
+function _renderDocList(){
+  var box=document.getElementById('docsList');
+  if(!box) return;
+  var ids=Object.keys(_curDocs||{});
+  if(!ids.length){
+    box.innerHTML='<div style="font-size:12px;font-weight:700;color:#94A3B8;">첨부된 서류가 없습니다.</div>';
+    return;
+  }
+  box.innerHTML='';
+  ids.forEach(function(id){
+    var d=_curDocs[id]||{};
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;background:#F1F5F9;border-radius:8px;padding:6px 10px;';
+    var icon=(d.type==='pdf')?'📄':'🖼️';
+    var nameSpan=document.createElement('div');
+    nameSpan.style.cssText='flex:1;min-width:0;font-size:12px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.textContent=icon+' '+(d.name||'서류')+(d.size?' ('+Math.round(d.size/1024)+'KB)':'');
+    var delBtn=document.createElement('button');
+    delBtn.type='button';
+    delBtn.textContent='🗑️';
+    delBtn.style.cssText='flex-shrink:0;border:none;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
+    delBtn.onclick=function(){ deleteDoc(id); };
+    row.appendChild(nameSpan); row.appendChild(delBtn);
+    box.appendChild(row);
+  });
+}
+
+function deleteDoc(id){
+  if(!confirm('이 서류를 삭제할까요?')) return;
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  var key=_docKeyFromCar(car);
+  var ref=_docsRoomRef();
+  if(!ref||!key) return;
+  ref.child(key).child(id).remove().then(function(){
+    delete _curDocs[id];
+    _renderDocList();
+  }).catch(function(){ showAlert('⚠️ 서류 삭제에 실패했습니다.'); });
+}
+
+function handleDocFiles(files){
+  if(!files||!files.length) return;
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  var key=_docKeyFromCar(car);
+  if(!key){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); document.getElementById('docFileInput').value=''; return; }
+  var statusEl=document.getElementById('docUploadStatus');
+  var arr=Array.prototype.slice.call(files);
+  var idx=0;
+  function next(){
+    if(idx>=arr.length){
+      if(statusEl) statusEl.textContent='';
+      var fi=document.getElementById('docFileInput'); if(fi) fi.value='';
+      return;
+    }
+    var f=arr[idx++];
+    if(statusEl) statusEl.textContent='⏳ 처리 중... ('+idx+'/'+arr.length+') '+f.name;
+    var isPdf = /pdf$/i.test(f.type)||/\.pdf$/i.test(f.name);
+    if(isPdf){
+      if(f.size > 4*1024*1024){
+        showAlert('⚠️ PDF는 4MB 이하만 첨부 가능합니다: '+f.name);
+        next(); return;
+      }
+      var r=new FileReader();
+      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,next); };
+      r.onerror=function(){ next(); };
+      r.readAsDataURL(f);
+    } else if(/^image\//.test(f.type)){
+      _compressDocImage(f, function(dataUrl, size){
+        _saveDoc(key, f.name, 'image', dataUrl, size, next);
+      });
+    } else {
+      showAlert('⚠️ 지원하지 않는 파일 형식입니다: '+f.name);
+      next();
+    }
+  }
+  next();
+}
+
+function _compressDocImage(file, cb){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxW=1280;
+      var scale=Math.min(1, maxW/img.width);
+      var w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+      var canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      var dataUrl=canvas.toDataURL('image/jpeg',0.72);
+      var approxSize=Math.round(dataUrl.length*0.75);
+      cb(dataUrl, approxSize);
+    };
+    img.onerror=function(){ cb(e.target.result, file.size); };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function _saveDoc(key, name, type, dataUrl, size, cb){
+  var ref=_docsRoomRef();
+  if(!ref){ showAlert('⚠️ Firebase 연결 후 서류를 첨부할 수 있습니다.'); if(cb) cb(); return; }
+  var docId='d'+Date.now()+Math.floor(Math.random()*1000);
+  var payload={ name:name, type:type, data:dataUrl, size:size, at:Date.now() };
+  ref.child(key).child(docId).set(payload).then(function(){
+    _curDocs[docId]=payload;
+    _renderDocList();
+    if(cb) cb();
+  }).catch(function(){
+    showAlert('⚠️ 서류 저장 실패: '+name);
+    if(cb) cb();
+  });
+}
+
+/* ★ 차량번호를 수정하고 포커스를 벗어나면(모달이 열려있을 때) 서류 목록도 새로 불러옴
+   — 서류는 차량번호 기준으로 저장되므로, 번호를 바꾸면 다른 서류함을 보게 됨 */
+document.addEventListener('DOMContentLoaded', function(){
+  try{
+    var ci=document.getElementById('mCarInput');
+    if(ci){
+      ci.addEventListener('blur', function(){
+        var ov=document.getElementById('modalOv');
+        if(ov && ov.classList.contains('show') && typeof loadSlotDocs==='function') loadSlotDocs();
+      });
+    }
+  }catch(e){}
+});
+/* ══ 서류 첨부 끝 ══ */
+
 /* ══ 슬롯 히스토리 (이전데이터 복원) ══ */
 var _slotHistory = {};
 
@@ -9111,150 +9276,6 @@ function restoreSlot(){
   showAlert('↩️ 이전 데이터 복원 완료: '+prev.car);
 }
 /* ══ 히스토리 끝 ══ */
-/* ══════════ ★★ 출고서류 첨부 기능 ══════════
-   서류는 슬롯이 아니라 별도 경로 kd_docs/{code}/{docKey} 에 분리 저장.
-   슬롯에는 서류 목록(docKeys[])과 메타(docMeta[])만 저장 → 방이 가벼움.
-   약도 페이지는 발송 링크에 docMeta를 담아, 버튼 누를 때만 원본을 내려받음. */
-var _pendingDocs = null;   /* 편집 중 슬롯의 서류 목록 [{key,name,type,size}] */
-function _docCodeNow(){
-  return (localStorage.getItem(LS_CODE)||(_PB_DEFAULTS&&_PB_DEFAULTS.code)||'').replace(/[^a-zA-Z0-9가-힣_-]/g,'') || 'default';
-}
-function _slotDocIdNow(){
-  /* 현재 편집 슬롯의 좌표ID */
-  try{
-    var _pl=_gidxToPartLocal(activeSlot);
-    if(!_pl) return null;
-    var _id=(_getIds()[_pl.part]||[])[_pl.local];
-    return _id||null;
-  }catch(e){ return null; }
-}
-function _fmtSize(b){
-  b=Number(b)||0;
-  if(b<1024) return b+'B';
-  if(b<1024*1024) return Math.round(b/1024)+'KB';
-  return (b/1024/1024).toFixed(1)+'MB';
-}
-function _renderDocList(){
-  var box=document.getElementById('mDocList');
-  var clr=document.getElementById('mDocClearBtn');
-  if(!box) return;
-  box.innerHTML='';
-  var docs=_pendingDocs||[];
-  if(!docs.length){ if(clr) clr.style.display='none'; return; }
-  if(clr) clr.style.display='inline-block';
-  docs.forEach(function(d,i){
-    var isPdf=(d.type==='application/pdf'||/\.pdf$/i.test(d.name||''));
-    var row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:8px;background:#F1F5F9;border-radius:8px;padding:7px 10px;';
-    row.innerHTML='<span style="font-size:16px;">'+(isPdf?'📄':'🖼️')+'</span>'
-      +'<span style="flex:1;min-width:0;font-size:12px;font-weight:800;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(d.name||'서류')+'</span>'
-      +'<span style="font-size:10px;color:#94A3B8;font-weight:700;flex-shrink:0;">'+_fmtSize(d.size)+'</span>';
-    var del=document.createElement('button');
-    del.textContent='✕'; del.type='button';
-    del.style.cssText='flex-shrink:0;background:#DC2626;color:#fff;border:none;width:22px;height:22px;border-radius:6px;font-size:12px;font-weight:900;cursor:pointer;';
-    del.onclick=function(){ _removeDoc(i); };
-    row.appendChild(del);
-    box.appendChild(row);
-  });
-}
-function onDocAttach(files){
-  if(!files||!files.length) return;
-  if(!_pendingDocs) _pendingDocs=[];
-  var code=_docCodeNow();
-  var slotId=_slotDocIdNow();
-  if(!slotId){ alert('먼저 차량번호를 입력해 주세요.'); return; }
-  var MAX=8*1024*1024; /* 파일당 8MB 상한 */
-  Array.prototype.forEach.call(files, function(file){
-    if(file.size>MAX){ alert('"'+file.name+'"은 8MB를 초과합니다. 더 작은 파일로 첨부해 주세요.'); return; }
-    var reader=new FileReader();
-    reader.onload=function(){
-      var dataUrl=reader.result;
-      var isImg=/^image\//.test(file.type);
-      var finish=function(finalData, finalType, finalSize){
-        var docKey='d'+Date.now()+Math.floor(Math.random()*1000);
-        /* 원본은 kd_docs/{code}/{docKey} 에 분리 저장 */
-        try{
-          if(fbSlotsRef && fbDb){
-            fbDb.ref('kd_docs/'+code+'/'+docKey).set({
-              name:file.name, type:finalType, data:finalData, t:Date.now()
-            }).catch(function(e){ console.warn('[서류 업로드]',e); });
-          }
-        }catch(e){}
-        /* 로컬에도 임시 보관 (오프라인 대비) */
-        try{ localStorage.setItem('pb_doc_'+code+'_'+docKey, JSON.stringify({name:file.name,type:finalType,data:finalData})); }catch(e){}
-        _pendingDocs.push({key:docKey, name:file.name, type:finalType, size:finalSize});
-        _renderDocList();
-      };
-      if(isImg){
-        /* 이미지 압축 (긴 변 1600px, JPEG 80%) */
-        var img=new Image();
-        img.onload=function(){
-          try{
-            var mx=1600, w=img.width, h=img.height;
-            var sc=Math.min(1, mx/Math.max(w,h));
-            var cw=Math.round(w*sc), ch=Math.round(h*sc);
-            var cv=document.createElement('canvas'); cv.width=cw; cv.height=ch;
-            cv.getContext('2d').drawImage(img,0,0,cw,ch);
-            var out=cv.toDataURL('image/jpeg',0.8);
-            finish(out, 'image/jpeg', Math.round((out.length-22)*0.75));
-          }catch(e){ finish(dataUrl, file.type, file.size); }
-        };
-        img.onerror=function(){ finish(dataUrl, file.type, file.size); };
-        img.src=dataUrl;
-      } else {
-        /* PDF 등은 원본 그대로 */
-        finish(dataUrl, file.type||'application/pdf', file.size);
-      }
-    };
-    reader.readAsDataURL(file);
-  });
-  /* 입력 초기화 (같은 파일 재선택 가능하도록) */
-  var inp=document.getElementById('mDocInput'); if(inp) inp.value='';
-}
-function _removeDoc(i){
-  if(!_pendingDocs||i<0||i>=_pendingDocs.length) return;
-  var d=_pendingDocs[i];
-  var code=_docCodeNow();
-  /* 원본 삭제 */
-  try{ if(fbDb) fbDb.ref('kd_docs/'+code+'/'+d.key).remove().catch(function(){}); }catch(e){}
-  try{ localStorage.removeItem('pb_doc_'+code+'_'+d.key); }catch(e){}
-  _pendingDocs.splice(i,1);
-  _renderDocList();
-}
-function clearAllDocs(){
-  if(!_pendingDocs||!_pendingDocs.length) return;
-  if(!confirm('첨부한 출고서류를 모두 삭제할까요?')) return;
-  var code=_docCodeNow();
-  _pendingDocs.forEach(function(d){
-    try{ if(fbDb) fbDb.ref('kd_docs/'+code+'/'+d.key).remove().catch(function(){}); }catch(e){}
-    try{ localStorage.removeItem('pb_doc_'+code+'_'+d.key); }catch(e){}
-  });
-  _pendingDocs=[];
-  _renderDocList();
-}
-function _loadSlotDocs(slotData){
-  /* 모달 열 때 기존 서류 목록 복원 */
-  _pendingDocs=[];
-  try{
-    if(slotData && slotData.docMeta && Array.isArray(slotData.docMeta)){
-      _pendingDocs=slotData.docMeta.map(function(m){ return {key:m.k, name:m.n, type:m.tp, size:m.s||0}; });
-    }
-  }catch(e){ _pendingDocs=[]; }
-  _renderDocList();
-}
-function _saveDocsToSlot(slotDataObj){
-  /* 저장 시 슬롯에 docKeys/docMeta 기록 */
-  var docs=_pendingDocs||[];
-  if(docs.length){
-    slotDataObj.docKeys=docs.map(function(d){ return d.key; });
-    slotDataObj.docMeta=docs.map(function(d){ return {k:d.key, n:d.name, tp:d.type, s:d.size}; });
-  } else {
-    delete slotDataObj.docKeys;
-    delete slotDataObj.docMeta;
-  }
-  return slotDataObj;
-}
-
 function saveSlot(){
   if(activeSlot===null)return;
   var car=document.getElementById('mCarInput').value.trim();
@@ -9396,22 +9417,6 @@ function saveSlot(){
     encar:    isClear ? {date:'',time:'',done:false,doneDate:''} : _prevEncar,
     inspect:  isClear ? {date:'',done:false} : _newInspect
   };
-  /* ★ 출고서류: 초기화가 아니면 서류 정보 반영, 초기화면 원본도 삭제 */
-  if(isClear){
-    (function(){
-      try{
-        var _oldMeta=(s[activeSlot]&&s[activeSlot].docMeta)||( _pendingDocs||[] );
-        var code=_docCodeNow();
-        (_pendingDocs||[]).forEach(function(d){
-          if(fbDb) fbDb.ref('kd_docs/'+code+'/'+d.key).remove().catch(function(){});
-          try{ localStorage.removeItem('pb_doc_'+code+'_'+d.key); }catch(e){}
-        });
-      }catch(e){}
-      _pendingDocs=[];
-    })();
-  } else {
-    _saveDocsToSlot(s[activeSlot]);
-  }
   saveSlots(s);
   /* Firebase에도 동기화 */
   if(fbSlotsRef){
@@ -16847,13 +16852,11 @@ window._drawQRCanvas = function(container, text, size){
       var ownerLine = document.getElementById('partPhotoOwnerLine');
       var ownerTxt  = document.getElementById('partPhotoOwnerTxt');
       var ownerCall = document.getElementById('partPhotoOwnerCall');
-      var oName='', oPhone='', oDocMeta=null;
+      var oName='', oPhone='';
       if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){
         var _sd = getSlot(slotIdx)||{};
         oName = String(_sd.owner||'').trim();
         var oKeyNo = String(_sd.num||'').trim(); /* ★ 차량 키번호 (녹색 배지) */
-        /* ★ 출고서류 메타 (약도 페이지에서 다운로드/인쇄/공유) */
-        if(_sd.docMeta && Array.isArray(_sd.docMeta) && _sd.docMeta.length){ oDocMeta = _sd.docMeta; }
         /* ★ 전화번호: 전용 필드(ownerPhone) 우선 → 없으면 메모/차주 필드에서 자동 추출 */
         oPhone = String(_sd.ownerPhone||'').replace(/[^0-9]/g,'');
         if(!oPhone){
@@ -17059,8 +17062,7 @@ window._drawQRCanvas = function(container, text, size){
         loc:  (partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)' + (_rowTxt ? ' ' + _rowTxt : ''),
         on:   oName||null,
         op:   oPhone||null,
-        kn:   (typeof oKeyNo!=='undefined' && oKeyNo) ? oKeyNo : null,
-        dm:   (typeof oDocMeta!=='undefined' && oDocMeta) ? oDocMeta : null  /* ★ 출고서류 메타 */
+        kn:   (typeof oKeyNo!=='undefined' && oKeyNo) ? oKeyNo : null
       };
 
       if(qrContent.length > 0){  /* ★ 내용 있으면 항상 QR 표시 */
@@ -17543,7 +17545,6 @@ window._drawQRCanvas = function(container, text, size){
           var _sd9 = getSlot(slotIdx)||{};
           _oName9 = String(_sd9.owner||'').trim();
           var _oKey9 = String(_sd9.num||'').trim(); /* ★ 차량 키번호 */
-          var _oDoc9 = (_sd9.docMeta && Array.isArray(_sd9.docMeta) && _sd9.docMeta.length) ? _sd9.docMeta : null; /* ★ 출고서류 메타 */
           /* ★ 전화번호: 전용 필드(ownerPhone) 우선 → 없으면 메모/차주 필드에서 자동 추출 */
           _oPhone9 = String(_sd9.ownerPhone||'').replace(/[^0-9]/g,'');
           if(!_oPhone9){
@@ -17576,7 +17577,7 @@ window._drawQRCanvas = function(container, text, size){
 
       /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
       if(_getSmsMode()==='link'){
-        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null, dm:(typeof _oDoc9!=='undefined'?_oDoc9:null) }, function(shortUrl){
+        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null }, function(shortUrl){
           var u = shortUrl || _viewUrl9;
           if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
           _queueRouteSms(code, phone, car, text, '', eid, 'parkboard');
