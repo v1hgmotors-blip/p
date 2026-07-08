@@ -121,7 +121,7 @@
 
   <!-- ★ 다운로드 / 공유 버튼 -->
   <div id="actionBtns" style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
-    <button onclick="dlMap()" style="flex:1;min-width:100px;padding:13px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
+    <button onclick="dlMap()" style="flex:1;min-width:100px;padding:13px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 현재화면다운</button>
     <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:13px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
     <button onclick="sharePage()" style="flex:1;min-width:80px;padding:13px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
   </div>
@@ -167,11 +167,19 @@ function dlMap(){
   }
   /* 캡처 중 버튼은 잠깐 숨김 (결과 이미지에 버튼이 안 나오게) */
   if(btns) btns.style.visibility = 'hidden';
+  /* ★ FIX: windowWidth/width를 wrap의 실제 렌더링 너비로 고정
+     — 지정하지 않으면 html2canvas가 내부적으로 더 넓은 가상 뷰포트를 가정해
+       wrap(max-width:720px, margin:0 auto)이 가운데 정렬되며 좌우에 여백이 생김 */
+  var _w = wrap.scrollWidth, _h = wrap.scrollHeight;
   html2canvas(wrap, {
     backgroundColor: '#0F1E33',
     scale: 2,                 /* 고해상도 */
     useCORS: true,
-    logging: false
+    logging: false,
+    width: _w,
+    height: _h,
+    windowWidth: _w,
+    windowHeight: _h
   }).then(function(canvas){
     if(btns) btns.style.visibility = '';
     var a = document.createElement('a');
