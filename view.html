@@ -74,7 +74,7 @@
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div style="font-size:17px;font-weight:900;color:#93C5FD;margin-bottom:12px;text-align:center;line-height:1.5;">📄 출고서류 <span id="docCarNo" style="color:#FDE68A;"></span></div>
+    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
     <div id="docBtnRow" style="display:flex;gap:8px;flex-wrap:wrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:110px;padding:15px 8px;background:#166534;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 출고서류다운로드</button>
@@ -395,7 +395,7 @@ function sharePage(){
         var row = document.createElement('div');
         if(m){
           /* 전화번호 줄: 좌측 텍스트(줄바꿈 허용) + 우측 전화걸기 버튼 (겹침 방지) */
-          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;color:#E2E8F0;line-height:1.55;padding:5px 0;'+(idx>0?'border-top:1px solid #24446E;':'');
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:15px;font-weight:800;color:#E2E8F0;line-height:1.6;padding:7px 0;'+(idx>0?'border-top:1px solid #24446E;':'');
           var span = document.createElement('span');
           span.style.cssText = 'flex:1;min-width:0;word-break:break-word;';
           span.textContent = line;
@@ -403,11 +403,11 @@ function sharePage(){
           var a = document.createElement('a');
           a.href = 'tel:' + tel;
           a.textContent = '📞 전화걸기';
-          a.style.cssText = 'flex-shrink:0;background:#16A34A;color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:900;white-space:nowrap;';
+          a.style.cssText = 'flex-shrink:0;background:#16A34A;color:#fff;text-decoration:none;padding:8px 15px;border-radius:9px;font-size:14px;font-weight:900;white-space:nowrap;';
           row.appendChild(span); row.appendChild(a);
         } else {
           /* 일반 줄(제목 등): 가운데 정렬 */
-          row.style.cssText = 'text-align:center;font-size:14px;font-weight:900;color:#FEE500;line-height:1.7;padding:2px 0 6px;';
+          row.style.cssText = 'text-align:center;font-size:16px;font-weight:900;color:#FEE500;line-height:1.7;padding:2px 0 8px;';
           row.textContent = line;
         }
         box.appendChild(row);
