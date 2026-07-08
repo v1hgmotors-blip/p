@@ -9191,6 +9191,82 @@ function handleDocFiles(files){
   next();
 }
 
+/* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/common_docs 에 저장, 전 차량 공통 ══ */
+var _commonDocs = {};
+function _commonDocsRef(){
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb) return null;
+  return fbDb.ref('kd_rooms/'+code+'/common_docs');
+}
+function loadCommonDocs(){
+  var box=document.getElementById('commonDocList');
+  if(!box) return;
+  _commonDocs={};
+  var ref=_commonDocsRef();
+  if(!ref){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#94A3B8;">Firebase 연결 후 첨부 가능합니다.</div>'; return; }
+  box.innerHTML='<div style="font-size:11px;font-weight:700;color:#94A3B8;">불러오는 중...</div>';
+  ref.once('value').then(function(snap){
+    _commonDocs=snap.val()||{};
+    _renderCommonDocList();
+  }).catch(function(){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#EF4444;">목록을 불러오지 못했습니다.</div>'; });
+}
+function _renderCommonDocList(){
+  var box=document.getElementById('commonDocList');
+  if(!box) return;
+  var ids=Object.keys(_commonDocs||{});
+  if(!ids.length){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#94A3B8;">첨부된 공통서류가 없습니다.</div>'; return; }
+  box.innerHTML='';
+  ids.forEach(function(id){
+    var d=_commonDocs[id]||{};
+    var row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;background:#F1F5F9;border-radius:8px;padding:6px 10px;';
+    var icon=(d.type==='pdf')?'📄':'🖼️';
+    var nameSpan=document.createElement('div');
+    nameSpan.style.cssText='flex:1;min-width:0;font-size:12px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.textContent=icon+' '+(d.name||'서류')+(d.size?' ('+Math.round(d.size/1024)+'KB)':'');
+    var delBtn=document.createElement('button');
+    delBtn.type='button'; delBtn.textContent='🗑️';
+    delBtn.style.cssText='flex-shrink:0;border:none;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
+    delBtn.onclick=function(){ deleteCommonDoc(id); };
+    row.appendChild(nameSpan); row.appendChild(delBtn);
+    box.appendChild(row);
+  });
+}
+function onCommonDocAttach(files){
+  if(!files||!files.length) return;
+  var ref=_commonDocsRef();
+  if(!ref){ showAlert('⚠️ Firebase 연결 후 첨부 가능합니다.'); return; }
+  var arr=Array.prototype.slice.call(files);
+  (function next(){
+    if(!arr.length){ var fi=document.getElementById('commonDocInput'); if(fi) fi.value=''; return; }
+    var f=arr.shift();
+    var isPdf=(f.type==='application/pdf'||/\.pdf$/i.test(f.name||''));
+    if(isPdf){
+      if(f.size>4*1024*1024){ showAlert('⚠️ "'+f.name+'"은 4MB를 초과합니다.'); next(); return; }
+      var rd=new FileReader();
+      rd.onload=function(e){ _saveCommonDoc(f.name,'pdf',e.target.result,f.size,next); };
+      rd.readAsDataURL(f);
+    } else {
+      _compressDocImage(f, function(dataUrl,size){ _saveCommonDoc(f.name,'image',dataUrl,size,next); });
+    }
+  })();
+}
+function _saveCommonDoc(name,type,dataUrl,size,cb){
+  var ref=_commonDocsRef();
+  if(!ref){ if(cb)cb(); return; }
+  var docId='c'+Date.now()+Math.floor(Math.random()*1000);
+  var payload={ name:name, type:type, data:dataUrl, size:size, at:Date.now() };
+  ref.child(docId).set(payload).then(function(){
+    _commonDocs[docId]=payload; _renderCommonDocList(); if(cb)cb();
+  }).catch(function(){ showAlert('⚠️ 공통서류 저장 실패: '+name); if(cb)cb(); });
+}
+function deleteCommonDoc(id){
+  if(!confirm('이 공통서류를 삭제할까요?')) return;
+  var ref=_commonDocsRef();
+  if(!ref) return;
+  ref.child(id).remove().then(function(){ delete _commonDocs[id]; _renderCommonDocList(); }).catch(function(){});
+}
+
 function _compressDocImage(file, cb){
   var reader=new FileReader();
   reader.onload=function(e){
@@ -11596,6 +11672,15 @@ function openBizInfoEdit(){
         '<div style="font-size:15px;font-weight:900;color:#3A1D1D;margin-bottom:6px;">🏢 업체정보 입력</div>' +
         '<div style="font-size:11px;font-weight:700;color:#78716C;margin-bottom:10px;line-height:1.6;">약도 알림 페이지(QR·문자 링크) 제목 아래에 표시됩니다.<br>예) 주소 / 전화번호 / 영업시간 — 여러 줄 입력 가능</div>' +
         '<textarea id="bizInfoText" rows="4" placeholder="예) 경기도 수원시 권선구 평동로79번길 45\n☎ 010-9045-4247" style="width:100%;box-sizing:border-box;border:2px solid #FCD34D;border-radius:10px;padding:10px 12px;font-size:13px;font-weight:700;font-family:inherit;color:#3A1D1D;outline:none;resize:vertical;"></textarea>' +
+        '<div style="border-top:2px dashed #E2E8F0;margin-top:14px;padding-top:12px;">' +
+          '<div style="font-size:13px;font-weight:900;color:#0F766E;margin-bottom:4px;">📄 공통서류 (판매확인서 등)</div>' +
+          '<div style="font-size:11px;font-weight:700;color:#78716C;margin-bottom:8px;line-height:1.6;">모든 차량의 약도 페이지 「판매확인서 다운」 버튼에 공통으로 표시됩니다. (PDF·이미지)</div>' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;background:#0F766E;color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">' +
+            '＋ 공통서류 첨부' +
+            '<input type="file" id="commonDocInput" accept="application/pdf,image/*" multiple onchange="onCommonDocAttach(this.files)" style="display:none;">' +
+          '</label>' +
+          '<div id="commonDocList" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>' +
+        '</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;">' +
           '<button onclick="saveBizInfo()" style="flex:1;padding:11px;background:#0F766E;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">💾 저장 (모든 기기)</button>' +
           '<button onclick="document.getElementById(\'bizInfoOv\').style.display=\'none\'" style="flex:1;padding:11px;background:#E2E8F0;color:#334155;border:none;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">닫기</button>' +
@@ -11605,6 +11690,7 @@ function openBizInfoEdit(){
   }
   document.getElementById('bizInfoText').value = getBizInfo();
   ov.style.display = 'flex';
+  loadCommonDocs();
 }
 function saveBizInfo(){
   var v = (document.getElementById('bizInfoText')||{}).value || '';
