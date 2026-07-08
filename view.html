@@ -353,6 +353,11 @@ function sharePage(){
       });
     }).catch(function(){ alert('서류를 불러오지 못했습니다.'); });
   }
+  /* ★ BUG FIX: 위 함수들이 IIFE(클로저) 안에 있어 버튼의 onclick="docDownload()" 같은
+     전역 호출이 함수를 찾지 못하던 문제 → window에 명시적으로 노출 */
+  window.docDownload = docDownload;
+  window.docPrint = docPrint;
+  window.docShare = docShare;
 
   /* 파트의 경로 안내 + 약도 사진 로드
      ★ 사진(합성 약도)에는 경로안내가 이미 포함되어 있으므로,
