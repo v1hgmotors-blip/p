@@ -68,6 +68,12 @@
 </head>
 <body>
 <div class="wrap" id="wrap">
+  <!-- ★ 카톡 인앱브라우저 감지 시: 외부 브라우저 열기 안내 (다운로드 정상화) -->
+  <div id="inappBanner" style="display:none;background:#FEF3C7;border:2px solid #F59E0B;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
+    <div style="font-size:13px;font-weight:900;color:#92400E;line-height:1.6;margin-bottom:8px;">📥 서류 다운로드가 안 되나요?</div>
+    <div style="font-size:12px;font-weight:700;color:#92400E;line-height:1.6;margin-bottom:10px;">카카오톡 안에서는 파일 저장이 제한됩니다.<br>아래 버튼을 눌러 <b>기본 브라우저</b>로 열면 다운로드가 정상 작동합니다.</div>
+    <button onclick="openInExternal()" style="width:100%;padding:11px;background:#F59E0B;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🌐 크롬·사파리로 열기</button>
+  </div>
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
@@ -222,6 +228,39 @@ function sharePage(){
   function qs(k){
     try{ return new URLSearchParams(location.search).get(k) || ''; }catch(e){ return ''; }
   }
+  /* ★ 카톡·라인 등 인앱브라우저 감지 → 안내 배너 표시 */
+  (function(){
+    try{
+      var ua = navigator.userAgent || '';
+      var isInApp = /KAKAOTALK|Instagram|FBAN|FBAV|Line|NAVER|DaumApps/i.test(ua);
+      if(isInApp){
+        var b = document.getElementById('inappBanner');
+        if(b) b.style.display = 'block';
+      }
+    }catch(e){}
+  })();
+  /* ★ 외부 기본 브라우저로 열기 */
+  window.openInExternal = function(){
+    var url = location.href;
+    var ua = navigator.userAgent || '';
+    try{
+      if(/KAKAOTALK/i.test(ua)){
+        /* 카카오톡: 외부 브라우저 강제 열기 스킴 */
+        location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+        return;
+      }
+      if(/android/i.test(ua)){
+        /* 안드로이드: 크롬 인텐트 */
+        var noscheme = url.replace(/^https?:\/\//,'');
+        location.href = 'intent://' + noscheme + '#Intent;scheme=https;package=com.android.chrome;end';
+        return;
+      }
+      /* 그 외: 새 탭 시도 + 주소 복사 안내 */
+      window.open(url, '_blank');
+    }catch(e){
+      try{ navigator.clipboard.writeText(url); alert('주소가 복사되었습니다. 크롬/사파리에 붙여넣어 열어주세요.'); }catch(e2){}
+    }
+  };
   var code = qs('code') || qs('c');
   var part = qs('part');
   var car  = qs('car');
@@ -301,9 +340,27 @@ function sharePage(){
       .filter(function(d){ return d && d.data; });
   }
   function _dlOne(d, fallbackName){
-    var a=document.createElement('a');
-    a.href=d.data; a.download=d.name||fallbackName;
-    document.body.appendChild(a); a.click(); a.remove();
+    var name = d.name||fallbackName;
+    /* ★ 진단: 실제 다운로드되는 데이터 정보 표시 */
+    var head = String(d.data||'').slice(0,40);
+    var len = String(d.data||'').length;
+    _setDocStatus('▶ '+name+' | 형식:'+(head.slice(5,20))+' | 길이:'+len+'자');
+    if(!d.data || len<100){
+      _setDocStatus('⚠️ 서류 데이터가 비어있습니다 ('+name+', 길이:'+len+') — 저장이 안 됐거나 손상됨');
+      return;
+    }
+    try{
+      var blob = _dataUrlToBlob(d.data);
+      var url = URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url; a.download=name; a.rel='noopener';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ a.remove(); URL.revokeObjectURL(url); }, 4000);
+    }catch(e){
+      var a2=document.createElement('a');
+      a2.href=d.data; a2.download=name;
+      document.body.appendChild(a2); a2.click(); a2.remove();
+    }
   }
   /* ★ 출고서류 다운로드 — 리스트에서 골라 받기 */
   function _renderPickList(){
