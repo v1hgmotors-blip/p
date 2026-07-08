@@ -71,14 +71,10 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="wrap">
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
-  <!-- ★ 제휴점 정보 (현황판 제휴점 편집 → 상세 정보) — 줄에 전화번호가 있으면 전화걸기 버튼 -->
-  <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div id="promoLines"></div>
-  </div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★ 출고서류 다운로드/인쇄/공유 (서류 첨부된 경우에만 표시) -->
   <div class="docs-wrap" id="docsWrap">
@@ -98,35 +94,157 @@
   </div>
 
   <div class="map-box" id="mapBox">
-    <img id="mapImg" alt="약도">
+    <img id="mapImg" alt="약도" onclick="zoomMap()" style="cursor:zoom-in;">
+    <div style="text-align:center;font-size:11px;color:#94A3B8;font-weight:700;padding:4px 0 2px;">🔍 약도를 누르면 크게 볼 수 있습니다</div>
+  </div>
+  <!-- ★ 약도 전체화면 확대 뷰 (가로로 돌리면 화면 가득) -->
+  <div id="mapZoom" onclick="closeZoom()" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.95);align-items:center;justify-content:center;">
+    <img id="mapZoomImg" style="max-width:100%;max-height:100%;object-fit:contain;">
+    <div style="position:absolute;top:14px;right:18px;color:#fff;font-size:30px;font-weight:900;">✕</div>
   </div>
 
   <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
   <!-- ★ 다운로드 / 공유 버튼 -->
-  <div style="display:flex;gap:10px;margin-top:16px;">
-    <button onclick="dlMap()" style="flex:1;padding:13px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
-    <button onclick="sharePage()" style="flex:1;padding:13px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+  <div id="actionBtns" style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+    <button onclick="dlMap()" style="flex:1;min-width:100px;padding:13px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
+    <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:13px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
+    <button onclick="sharePage()" style="flex:1;min-width:80px;padding:13px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+  </div>
+  <!-- ★ 제휴점 정보 (하단 표시) -->
+  <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:12px 14px;margin:16px 0 0;">
+    <div id="promoLines"></div>
   </div>
   <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
 </div>
 
+<!-- html2canvas (화면 전체 다운로드용) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- Firebase (compat) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
-/* ★ 약도 사진 다운로드 */
-function dlMap(){
+/* ★ 출고서류 조회 (kd_docs, 차량번호 기준) — 현황판 서류첨부 기능과 연동
+   ★ BUG FIX: 이 함수들은 아래 IIFE 안에서 fdb/code 변수를 참조해야 해서 여기 두지만,
+   버튼의 onclick="docDownload()" 같은 전역 호출을 위해 window에 반드시 노출해야 함 */
+var _docsData = {};
+function _docKeyFromCar(carVal){
+  carVal = String(carVal||'').trim();
+  if(!carVal) return '';
+  return carVal.replace(/[.#$\[\]\/\s]/g,'_');
+}
+function _docsArray(){
+  return Object.keys(_docsData||{}).map(function(id){ return _docsData[id]; });
+}
+function docDownload(){
+  var docs=_docsArray();
+  if(!docs.length){ alert('첨부된 서류가 없습니다.'); return; }
+  docs.forEach(function(d,i){
+    setTimeout(function(){
+      try{
+        var a=document.createElement('a');
+        a.href=d.data;
+        a.download=d.name||('서류_'+(i+1)+(d.type==='pdf'?'.pdf':'.jpg'));
+        document.body.appendChild(a); a.click(); a.remove();
+      }catch(e){}
+    }, i*300);
+  });
+}
+function docPrint(){
+  var docs=_docsArray();
+  if(!docs.length){ alert('첨부된 서류가 없습니다.'); return; }
+  var w=window.open('', '_blank');
+  if(!w){ alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.'); return; }
+  var html='<html><head><title>출고서류 인쇄</title><style>body{margin:0;padding:0;}img,embed{width:100%;display:block;page-break-after:always;}</style></head><body>';
+  docs.forEach(function(d){
+    if(d.type==='pdf'){ html+='<embed src="'+d.data+'" type="application/pdf" style="width:100%;height:100vh;">'; }
+    else{ html+='<img src="'+d.data+'">'; }
+  });
+  html+='</body></html>';
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 600);
+}
+function docShare(){
+  var docs=_docsArray();
+  if(!docs.length){ alert('첨부된 서류가 없습니다.'); return; }
+  if(!navigator.share){ alert('이 브라우저는 공유 기능을 지원하지 않습니다. 다운로드를 이용해 주세요.'); return; }
+  Promise.all(docs.map(function(d,i){
+    return fetch(d.data).then(function(r){return r.blob();}).then(function(b){
+      return new File([b], d.name||('서류'+(i+1)), {type:b.type||(d.type==='pdf'?'application/pdf':'image/jpeg')});
+    });
+  })).then(function(files){
+    if(navigator.canShare && !navigator.canShare({files:files})){
+      alert('이 기기에서는 파일 공유가 지원되지 않습니다. 다운로드를 이용해 주세요.');
+      return;
+    }
+    navigator.share({ files:files, title:'출고서류' }).catch(function(e){
+      if(e && e.name!=='AbortError'){ alert('공유에 실패했습니다.'); }
+    });
+  }).catch(function(){ alert('서류를 불러오지 못했습니다.'); });
+}
+/* ★ BUG FIX: 위 함수들이 뒤이은 IIFE(클로저) 안의 loadDocsFor에서 채워지는
+   _docsData를 참조하지만, onclick 전역 호출을 위해 window에 노출해야 함 */
+window.docDownload = docDownload;
+window.docPrint = docPrint;
+window.docShare = docShare;
+
+/* ★ 화면 전체 다운로드 — 제휴점/차량위치/담당차주/경로/약도를 한 장으로 저장
+   html2canvas 로드 실패 시 약도 사진만 저장 (폴백) */
+function _dlFallbackMapOnly(){
   try{
     var img = document.getElementById('mapImg');
-    if(!img || !img.src || img.src.indexOf('data:image')!==0){
-      alert('다운로드할 약도 사진이 없습니다.'); return;
+    if(img && img.src && img.src.indexOf('data:image')===0){
+      var a=document.createElement('a');
+      a.href=img.src; a.download='약도_차량위치안내.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      return true;
     }
+  }catch(e){}
+  return false;
+}
+/* ★ 약도 사진 1장만 다운로드 */
+function dlMapOnly(){
+  if(!_dlFallbackMapOnly()){
+    alert('다운로드할 약도 사진이 없습니다.');
+  }
+}
+function dlMap(){
+  var btns = document.getElementById('actionBtns');
+  var wrap = document.getElementById('wrap');
+  if(typeof html2canvas === 'undefined' || !wrap){
+    if(!_dlFallbackMapOnly()) alert('다운로드에 실패했습니다.');
+    return;
+  }
+  /* 캡처 중 버튼은 잠깐 숨김 (결과 이미지에 버튼이 안 나오게) */
+  if(btns) btns.style.visibility = 'hidden';
+  html2canvas(wrap, {
+    backgroundColor: '#0F1E33',
+    scale: 2,                 /* 고해상도 */
+    useCORS: true,
+    logging: false
+  }).then(function(canvas){
+    if(btns) btns.style.visibility = '';
     var a = document.createElement('a');
-    a.href = img.src;
-    a.download = '약도_차량위치안내.png';
+    a.href = canvas.toDataURL('image/png');
+    a.download = '차량위치안내_전체.png';
     document.body.appendChild(a); a.click(); a.remove();
-  }catch(e){ alert('다운로드에 실패했습니다.'); }
+  }).catch(function(e){
+    if(btns) btns.style.visibility = '';
+    if(!_dlFallbackMapOnly()) alert('다운로드에 실패했습니다.');
+  });
+}
+/* ★ 약도 전체화면 확대 (가로로 돌리면 화면 가득) */
+function zoomMap(){
+  var z = document.getElementById('mapZoom');
+  var zi = document.getElementById('mapZoomImg');
+  var src = (document.getElementById('mapImg')||{}).src;
+  if(!src) return;
+  zi.src = src;
+  z.style.display = 'flex';
+}
+function closeZoom(){
+  var z = document.getElementById('mapZoom');
+  if(z) z.style.display = 'none';
 }
 /* ★ 페이지 공유 — 약도 이미지 + 위치 텍스트 + 링크 (카톡/문자 등 선택) */
 function sharePage(){
@@ -199,22 +317,26 @@ function sharePage(){
     try{
       var box = document.getElementById('promoLines');
       box.innerHTML = '';
-      String(info).split(/\n/).forEach(function(line){
-        line = line.trim();
-        if(!line) return;
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:800;color:#E2E8F0;line-height:1.7;';
-        var span = document.createElement('span');
-        span.textContent = line;
-        row.appendChild(span);
+      var _lines = String(info).split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+      _lines.forEach(function(line, idx){
         var m = line.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        var row = document.createElement('div');
         if(m){
+          /* 전화번호 줄: 좌측 텍스트(줄바꿈 허용) + 우측 전화걸기 버튼 (겹침 방지) */
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;color:#E2E8F0;line-height:1.55;padding:5px 0;'+(idx>0?'border-top:1px solid #24446E;':'');
+          var span = document.createElement('span');
+          span.style.cssText = 'flex:1;min-width:0;word-break:break-word;';
+          span.textContent = line;
           var tel = m[0].replace(/[^0-9]/g,'');
           var a = document.createElement('a');
           a.href = 'tel:' + tel;
           a.textContent = '📞 전화걸기';
-          a.style.cssText = 'background:#16A34A;color:#fff;text-decoration:none;padding:3px 10px;border-radius:7px;font-size:11px;font-weight:900;white-space:nowrap;';
-          row.appendChild(a);
+          a.style.cssText = 'flex-shrink:0;background:#16A34A;color:#fff;text-decoration:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:900;white-space:nowrap;';
+          row.appendChild(span); row.appendChild(a);
+        } else {
+          /* 일반 줄(제목 등): 가운데 정렬 */
+          row.style.cssText = 'text-align:center;font-size:14px;font-weight:900;color:#FEE500;line-height:1.7;padding:2px 0 6px;';
+          row.textContent = line;
         }
         box.appendChild(row);
       });
@@ -283,13 +405,8 @@ function sharePage(){
     return;
   }
 
-  /* ★ 출고서류 조회 (kd_docs, 차량번호 기준) — 현황판 서류첨부 기능과 연동 */
-  var _docsData = {};
-  function _docKeyFromCar(carVal){
-    carVal = String(carVal||'').trim();
-    if(!carVal) return '';
-    return carVal.replace(/[.#$\[\]\/\s]/g,'_');
-  }
+  /* ★ 출고서류 조회 트리거 — fdb/code 를 참조하므로 이 안에서 정의,
+     실제 다운로드/인쇄/공유 함수는 위쪽(전역)에 이미 정의되어 있음 */
   function loadDocsFor(carVal){
     var wrap = document.getElementById('docsWrap');
     var key = _docKeyFromCar(carVal);
@@ -304,60 +421,6 @@ function sharePage(){
       }
     }).catch(function(){ if(wrap) wrap.style.display='none'; });
   }
-  function _docsArray(){
-    return Object.keys(_docsData||{}).map(function(id){ return _docsData[id]; });
-  }
-  function docDownload(){
-    var docs=_docsArray();
-    if(!docs.length){ alert('첨부된 서류가 없습니다.'); return; }
-    docs.forEach(function(d,i){
-      setTimeout(function(){
-        try{
-          var a=document.createElement('a');
-          a.href=d.data;
-          a.download=d.name||('서류_'+(i+1)+(d.type==='pdf'?'.pdf':'.jpg'));
-          document.body.appendChild(a); a.click(); a.remove();
-        }catch(e){}
-      }, i*300);
-    });
-  }
-  function docPrint(){
-    var docs=_docsArray();
-    if(!docs.length){ alert('첨부된 서류가 없습니다.'); return; }
-    var w=window.open('', '_blank');
-    if(!w){ alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.'); return; }
-    var html='<html><head><title>출고서류 인쇄</title><style>body{margin:0;padding:0;}img,embed{width:100%;display:block;page-break-after:always;}</style></head><body>';
-    docs.forEach(function(d){
-      if(d.type==='pdf'){ html+='<embed src="'+d.data+'" type="application/pdf" style="width:100%;height:100vh;">'; }
-      else{ html+='<img src="'+d.data+'">'; }
-    });
-    html+='</body></html>';
-    w.document.open(); w.document.write(html); w.document.close();
-    setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 600);
-  }
-  function docShare(){
-    var docs=_docsArray();
-    if(!docs.length){ alert('첨부된 서류가 없습니다.'); return; }
-    if(!navigator.share){ alert('이 브라우저는 공유 기능을 지원하지 않습니다. 다운로드를 이용해 주세요.'); return; }
-    Promise.all(docs.map(function(d,i){
-      return fetch(d.data).then(function(r){return r.blob();}).then(function(b){
-        return new File([b], d.name||('서류'+(i+1)), {type:b.type||(d.type==='pdf'?'application/pdf':'image/jpeg')});
-      });
-    })).then(function(files){
-      if(navigator.canShare && !navigator.canShare({files:files})){
-        alert('이 기기에서는 파일 공유가 지원되지 않습니다. 다운로드를 이용해 주세요.');
-        return;
-      }
-      navigator.share({ files:files, title:'출고서류' }).catch(function(e){
-        if(e && e.name!=='AbortError'){ alert('공유에 실패했습니다.'); }
-      });
-    }).catch(function(){ alert('서류를 불러오지 못했습니다.'); });
-  }
-  /* ★ BUG FIX: 위 함수들이 IIFE(클로저) 안에 있어 버튼의 onclick="docDownload()" 같은
-     전역 호출이 함수를 찾지 못하던 문제 → window에 명시적으로 노출 */
-  window.docDownload = docDownload;
-  window.docPrint = docPrint;
-  window.docShare = docShare;
 
   /* 파트의 경로 안내 + 약도 사진 로드
      ★ 사진(합성 약도)에는 경로안내가 이미 포함되어 있으므로,
@@ -435,6 +498,15 @@ function sharePage(){
     /* ★ 단축링크: 상세정보(part/car/loc/담당차주)를 Firebase에서 읽어옴 */
     fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value').then(function(snap){
       var d = snap.val();
+      /* ★ 유효기간 3일 — 생성(d.t) 후 3일 지나면 만료 안내 */
+      if(d && typeof d === 'object' && d.t){
+        var _ageMs = Date.now() - Number(d.t);
+        var _limitMs = 3 * 24 * 60 * 60 * 1000; /* 3일 */
+        if(_ageMs > _limitMs){
+          showStatus('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 3일까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
+          return;
+        }
+      }
       if(d && typeof d === 'object'){
         part = String(d.part||part||'');
         car = String(d.car||car||'');
