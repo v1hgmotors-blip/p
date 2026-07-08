@@ -23,6 +23,15 @@
     background:#fff;border:2.5px solid #E03131;border-radius:12px;
     padding:10px 12px;margin-bottom:12px;letter-spacing:-.3px;line-height:1.45;
   }
+  /* ★ 차량이 더 이상 존재하지 않을 때(출고됨 등) 안내 스타일 */
+  .car-header.gone{
+    color:#475569;background:#F1F5F9;border-color:#94A3B8;font-size:14px;font-weight:800;line-height:1.7;
+  }
+  /* ★ 슬롯 메모 (실시간) */
+  .slot-memo{
+    display:none;font-size:13px;font-weight:700;color:#FDE68A;
+    background:#3A2E1A;border-radius:10px;padding:9px 12px;margin-bottom:12px;line-height:1.6;
+  }
   /* ★ 담당차주 줄 — 팝업과 동일 (남색 칩 + 연두 글씨 + 전화걸기) */
   .owner-line{
     display:none;
@@ -76,10 +85,10 @@
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
     <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
-    <div id="docBtnRow" style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button onclick="docAction('download')" style="flex:1;min-width:110px;padding:15px 8px;background:#166534;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 출고서류다운로드</button>
-      <button onclick="docAction('share')" style="flex:1;min-width:100px;padding:15px 8px;background:#6D28D9;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📤 출고서류공유</button>
-      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:110px;padding:15px 8px;background:#B45309;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📄 판매확인서 다운</button>
+    <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
+      <button onclick="docAction('download')" style="flex:1;min-width:0;padding:13px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
+      <button onclick="docAction('share')" style="flex:1;min-width:0;padding:13px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
+      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:13px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
     </div>
     <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
     <div id="docPickList" style="display:none;margin-top:10px;background:#0B1F38;border-radius:10px;padding:10px;"></div>
@@ -90,6 +99,8 @@
     <span id="ownerTxt"></span>
     <a class="owner-call" id="ownerCall" href="#" style="display:none;">📞 전화걸기</a>
   </div>
+  <!-- ★ 슬롯 메모 (실시간) -->
+  <div class="slot-memo" id="slotMemoBox"></div>
 
   <div class="panel" id="routePanel" style="display:none;">
     <div class="panel-title">📋 경로 안내</div>
@@ -437,8 +448,9 @@ function sharePage(){
   /* 헤더/담당차주 렌더 함수 (단축링크에서도 재사용) */
   var keyNo = qs('kn'); /* ★ 차량 키번호 */
   function renderHeader(){
+    var h = document.getElementById('carHeader');
+    h.classList.remove('gone');
     if(car || loc){
-      var h = document.getElementById('carHeader');
       h.textContent = '차량번호:' + (car||'-') + '  차량위치:' + (loc||'-');
       /* ★ 키번호 — 녹색 글씨로 헤더 끝에 표시 */
       if(keyNo){
@@ -458,7 +470,27 @@ function sharePage(){
       var oc = document.getElementById('ownerCall');
       if(oPhone){ oc.href = 'tel:' + oPhone; oc.style.display = 'inline-block'; }
       document.getElementById('ownerLine').style.display = 'flex';
+    } else {
+      document.getElementById('ownerLine').style.display = 'none';
     }
+  }
+  /* ★ 실시간 슬롯 메모 표시 */
+  function renderMemo(memo){
+    var box = document.getElementById('slotMemoBox');
+    if(!box) return;
+    if(memo){ box.textContent = '📝 ' + memo; box.style.display = 'block'; }
+    else { box.style.display = 'none'; }
+  }
+  /* ★ 차량이 더 이상 존재하지 않을 때(출고 등) — 위치/담당차주/메모/경로/약도 숨기고 안내만 표시 */
+  function showCarGone(){
+    var h = document.getElementById('carHeader');
+    h.classList.add('gone');
+    h.innerHTML = '🚫 차량이 출고되었거나 주차 위치 정보가 없습니다.<br>사무실로 문의 주세요.';
+    h.style.display = 'block';
+    document.getElementById('ownerLine').style.display = 'none';
+    document.getElementById('slotMemoBox').style.display = 'none';
+    document.getElementById('routePanel').style.display = 'none';
+    document.getElementById('mapBox').style.display = 'none';
   }
   renderHeader();
 
@@ -477,6 +509,86 @@ function sharePage(){
   }catch(e){
     showStatus('⚠️ 연결 오류가 발생했습니다.<br>다시 스캔해 주세요.');
     return;
+  }
+
+  /* ★★ 실시간 반영 — 위치/키번호/담당차주/메모를 pb_slots·pb_settings 실시간 리스너로 추적
+     (링크에 담긴 스냅샷이 아니라, 지금 이 순간의 현황판 데이터를 그대로 따라감)
+     차량이 슬롯에서 사라지면(출고 등) 안내 문구로 전환됨 */
+  var _lastPartLoaded = null;
+  function _maybeReloadPart(newPart){
+    if(newPart && String(newPart) !== String(_lastPartLoaded)){
+      _lastPartLoaded = newPart;
+      part = String(newPart);
+      loadedAny = false;
+      document.getElementById('mapBox').style.display = 'none';
+      document.getElementById('routePanel').style.display = 'none';
+      loadPart();
+    }
+  }
+  function startLiveTracking(targetCar){
+    var carD = String(targetCar||'').replace(/[^0-9]/g,'');
+    if(!carD || !fdb) return;
+    var _liveSlots=null, _liveSettings=null;
+    function recompute(){
+      if(_liveSlots===null || _liveSettings===null) return; /* 두 값 다 도착할 때까지 대기 */
+      var slots=_liveSlots, st=_liveSettings;
+      var slotKey=null, slot=null, keys=Object.keys(slots);
+      for(var i=0;i<keys.length;i++){
+        var s0=slots[keys[i]];
+        var d0=String((s0&&s0.car)||'').replace(/[^0-9]/g,'');
+        if(d0 && d0===carD){ slotKey=keys[i]; slot=s0; break; }
+      }
+      if(!slot && carD.length>=4){
+        var l4=carD.slice(-4);
+        for(var j=0;j<keys.length;j++){
+          var s1=slots[keys[j]];
+          var d1=String((s1&&s1.car)||'').replace(/[^0-9]/g,'');
+          if(d1 && d1.slice(-4)===l4){ slotKey=keys[j]; slot=s1; break; }
+        }
+      }
+      if(!slot){ showCarGone(); return; }
+      var numParts=parseInt(st.numParts)||3, defC=parseInt(st.colsPerPart)||10, defR=parseInt(st.rowsPerPart)||4;
+      var pC=[],pR=[],pO=[],off=0;
+      for(var p=1;p<=numParts;p++){
+        var c=parseInt(st.partColCounts&&st.partColCounts[String(p)])||defC;
+        var r=parseInt(st.partRowCounts&&st.partRowCounts[String(p)])||defR;
+        pC.push(c);pR.push(r);pO.push(off);off+=c*r;
+      }
+      var pi=-1, col=0, row=-1;
+      var cm=String(slotKey||'').match(/^C_(\d+)_(\d+)_(\d+)$/);
+      if(cm){
+        pi=parseInt(cm[1],10)-1; col=parseInt(cm[2],10); row=parseInt(cm[3],10)-1;
+      } else {
+        var gi=parseInt(slotKey,10);
+        if(!isNaN(gi)){
+          for(var q=0;q<numParts;q++){ if(gi>=pO[q]&&gi<pO[q]+pC[q]*pR[q]){pi=q;break;} }
+          if(pi>=0){ var local=gi-pO[pi]; col=(local%pC[pi])+1; row=Math.floor(local/pC[pi]); }
+        }
+      }
+      var newLoc='', newPart=null;
+      if(pi>=0 && pi<numParts && col>=1 && row>=0){
+        var fb=pR[pi]-row;
+        var pl=(st.partLabels&&(st.partLabels[String(pi+1)]||st.partLabels[pi+1]))||((pi+1)+'파트');
+        var cn=(st.colNames&&st.colNames['p'+(pi+1)+'c'+col])||(col+'열');
+        newLoc=pl+'-'+cn+'번 (줄)'+(fb>=1&&fb<=pR[pi]?' '+fb+'번째 칸':'');
+        newPart=pi+1;
+      }
+      /* ★ 실시간 값으로 전역 상태 갱신 */
+      car = targetCar;
+      loc = newLoc;
+      keyNo = String((slot&&slot.num)||'').trim();
+      oName = String((slot&&slot.owner)||'').trim();
+      oPhone = String((slot&&slot.ownerPhone)||'').replace(/[^0-9]/g,'');
+      if(!oPhone){
+        var m=(String((slot&&slot.memo)||'')+' '+String((slot&&slot.owner)||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        if(m) oPhone=m[0].replace(/[^0-9]/g,'');
+      }
+      renderHeader();
+      renderMemo(String((slot&&slot.memo)||'').trim());
+      if(newPart) _maybeReloadPart(newPart);
+    }
+    fdb.ref('kd_rooms/'+code+'/pb_slots').on('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
+    fdb.ref('kd_rooms/'+code+'/pb_settings').on('value', function(snap){ _liveSettings = snap.val()||{}; recompute(); });
   }
 
   /* 파트의 경로 안내 + 약도 사진 로드
@@ -577,12 +689,16 @@ function sharePage(){
         applyPromo(d.pt); /* ★ 제휴점 정보 */
         renderHeader();
       }
+      if(car){ startLiveTracking(car); } /* ★ 실시간 반영 시작 */
+      _lastPartLoaded = part;
       if(part){ loadPart(); }
       else { showStatus('⚠️ 링크 정보가 만료되었거나 없습니다.'); }
     }).catch(function(){
       showStatus('⚠️ 링크 정보를 불러오지 못했습니다.<br>네트워크를 확인해 주세요.');
     });
   } else {
+    if(car){ startLiveTracking(car); } /* ★ 실시간 반영 시작 */
+    _lastPartLoaded = part;
     loadPart();
   }
 
