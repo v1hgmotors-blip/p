@@ -71,10 +71,6 @@
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
-  <!-- ★ 제휴점 정보 (현황판 제휴점 편집 → 상세 정보) — 줄에 전화번호가 있으면 전화걸기 버튼 -->
-  <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div id="promoLines"></div>
-  </div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★ 담당차주 + 전화걸기 -->
   <div class="owner-line" id="ownerLine">
@@ -104,6 +100,10 @@
     <button onclick="dlMap()" style="flex:1;min-width:100px;padding:13px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
     <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:13px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
     <button onclick="sharePage()" style="flex:1;min-width:80px;padding:13px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+  </div>
+  <!-- ★ 제휴점 정보 (하단 표시) -->
+  <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:12px 14px;margin:16px 0 0;">
+    <div id="promoLines"></div>
   </div>
   <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
 </div>

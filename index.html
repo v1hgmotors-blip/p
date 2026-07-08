@@ -1965,6 +1965,16 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="btn" onclick="openBizInfoEdit()" style="background:#0F766E;color:#fff;font-size:11px;">🏢업체정보</button>
       <span class="save-msg" id="saveMsg"></span>
     </div>
+    <!-- ★★ 요금발생차단 마스터 스위치 — OFF면 모든 발송(문자·알림톡·약도전송) 전면 차단 -->
+    <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;background:#7F1D1D;border-radius:10px;padding:6px 10px;">
+      <span class="storage-mode-label" style="color:#FECACA;">🚫 요금발생차단</span>
+      <label class="storage-mode-switch" title="켜면 모든 발송(문자·알림톡·약도전송)이 차단되어 요금이 발생하지 않습니다. 팝업·QR·캡처는 그대로 사용 가능.">
+        <input type="checkbox" id="feeBlockSwitch" onchange="onFeeBlockChange(this.checked)">
+        <span class="storage-mode-slider"></span>
+      </label>
+      <span class="storage-mode-badge both" id="feeBlockBadge" style="background:#334155;">발송 허용중</span>
+      <span style="font-size:10px;color:#FCA5A5;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">켜면 문자·알림톡·약도전송 전면 차단 (팝업·QR·캡처는 정상)</span>
+    </div>
     <!-- ★ 키불출 자동 문자전송 (약도 MMS) 토글 -->
     <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;">
       <span class="storage-mode-label">📲 자동문자</span>
@@ -3183,15 +3193,16 @@ var _ownerDelMode = false;
 /* ★ 기본 차주 목록 (하드코딩, 선택만 가능 / 삭제 불가)
    ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
-  { n:'김준성',         p:'010-9045-4247' },
-  { n:'이서찬',         p:'010-3687-1785' },
-  { n:'김경수',         p:'010-4697-1883' },
-  { n:'송욱',           p:'010-3716-8602' },
-  { n:'송일석',         p:'010-9666-6588' },
-  { n:'신정우',         p:'010-8927-3421' },
-  { n:'김진희',         p:'010-9045-4247' },
-  { n:'KANVLADIMIR',   p:'010-5808-3711' },
-  { n:'TSOYYURIYGEORGIEVICH', p:'010-7609-7787' }
+  { n:'김준성',         p:'01090454247' },
+  { n:'이서찬',         p:'00000000000' },
+  { n:'김경수',         p:'00000000000' },
+  { n:'송욱',           p:'00000000000' },
+  { n:'송일석',         p:'00000000000' },
+  { n:'신정우',         p:'00000000000' },
+  { n:'김진희',         p:'00000000000' },
+  { n:'KIMALEKSANDR',  p:'00000000000' },
+  { n:'KANVLADIMIR',   p:'00000000000' },
+  { n:'YUN ANASTASIYA', p:'00000000000' }
 ];
 
 function getOwnerList() {
@@ -9950,6 +9961,10 @@ function applyRemoteSettings(data){
       }
     }
   }
+  /* ★ 요금발생차단 수신 반영 (전 기기 공통) */
+  if(data.hasOwnProperty('feeBlock')){
+    try{ if(typeof window._applyFeeBlockRemote==='function') window._applyFeeBlockRemote(String(data.feeBlock)); }catch(e){}
+  }
   /* ★ 업체정보 수신 반영 */
   if(data.hasOwnProperty('bizInfo')){
     try{ localStorage.setItem(LS_BIZ_INFO, String(data.bizInfo||'')); }catch(e){}
@@ -16687,7 +16702,13 @@ window._drawQRCanvas = function(container, text, size){
     try{ _smsEnabled = localStorage.getItem(LS_AUTO_SMS)==='1'; }catch(e){}
     /* ★ 약도전송 버튼 상태 초기화 (이전 전송완료 표시 제거) */
     var _mBtn = document.getElementById('partPhotoManualSendBtn');
-    if(_mBtn){ _mBtn.disabled=false; _mBtn.textContent='📲 약도전송'; _mBtn.style.background='#B45309'; }
+    if(_mBtn){
+      _mBtn.disabled=false; _mBtn.textContent='📲 약도전송'; _mBtn.style.background='#B45309'; _mBtn.style.cursor='pointer';
+      /* ★ 요금발생차단 ON이면 버튼 회색 비활성 */
+      if(window._isFeeBlocked && window._isFeeBlocked()){
+        _mBtn.disabled=true; _mBtn.textContent='🚫 발송 차단중'; _mBtn.style.background='#64748B'; _mBtn.style.cursor='not-allowed';
+      }
+    }
     if(!_smsEnabled){
       /* 문자전송 관련 UI 전부 숨김 — 공유/인쇄/다운로드/QR은 그대로 */
       if(smsBtn) smsBtn.style.display = 'none';
@@ -16967,6 +16988,44 @@ window._drawQRCanvas = function(container, text, size){
      ━ 중복 방지: 이벤트 id별 1회만 발송 (localStorage 기록)
      ══════════════════════════════════════════════════════ */
   var LS_AUTO_SMS = 'pb_auto_sms';           /* '1' = 켜짐 */
+  /* ★★ 요금발생차단 마스터 스위치 — '1'이면 모든 발송 차단 (전 기기 공통) */
+  var LS_FEE_BLOCK = 'pb_fee_block';
+  window._isFeeBlocked = function(){
+    try{ return localStorage.getItem(LS_FEE_BLOCK) === '1'; }catch(e){ return false; }
+  };
+  function _updateFeeBlockBadge(on){
+    var b=document.getElementById('feeBlockBadge');
+    var sw=document.getElementById('feeBlockSwitch');
+    if(sw) sw.checked = on;
+    if(b){
+      b.textContent = on ? '🚫 발송 차단중 (무료)' : '발송 허용중';
+      b.style.background = on ? '#DC2626' : '#334155';
+    }
+  }
+  window.onFeeBlockChange = function(on){
+    try{ localStorage.setItem(LS_FEE_BLOCK, on?'1':'0'); }catch(e){}
+    /* 전 기기 공통 동기화 */
+    try{ if(typeof pushSettings==='function') pushSettings({ feeBlock: on?'1':'0' }); }catch(e){}
+    _updateFeeBlockBadge(on);
+    if(typeof showAlert==='function'){
+      showAlert(on
+        ? '🚫 요금발생차단 ON — 모든 발송이 차단됩니다 (팝업·QR·캡처는 정상 사용)'
+        : '✅ 요금발생차단 OFF — 발송이 다시 허용됩니다');
+      setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); }, 4000);
+    }
+    /* 검색 키불출 약도전송 버튼 상태 갱신 */
+    try{ if(typeof _refreshManualSendBtnState==='function') _refreshManualSendBtnState(); }catch(e){}
+  };
+  window._applyFeeBlockRemote = function(v){
+    var on = (v==='1');
+    try{ localStorage.setItem(LS_FEE_BLOCK, on?'1':'0'); }catch(e){}
+    _updateFeeBlockBadge(on);
+  };
+  (function(){
+    function apply(){ _updateFeeBlockBadge(_isFeeBlocked()); }
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', apply);
+    else apply();
+  })();
   var LS_SMS_SENT = 'pb_sms_sent_ids';       /* {eventId: timestamp} */
   var LS_SMS_MODE = 'pb_sms_mode';           /* ★ 'link'(기본, LMS 49.5원) | 'mms'(이미지 121원) */
 
@@ -17272,6 +17331,7 @@ window._drawQRCanvas = function(container, text, size){
   /* ★ 자동 발송 본체 — 키불출앱 이벤트 수신 지점에서 호출 */
   window._autoSendRouteSms = function(partNo, entry, slotLabel, slotIdx){
     try{
+      if(window._isFeeBlocked && window._isFeeBlocked()) return;      /* ★ 요금발생차단 ON → 전면 차단 */
       if(localStorage.getItem(LS_AUTO_SMS)!=='1') return;             /* 토글 꺼짐 */
       if(typeof fbDb==='undefined' || !fbDb) return;                  /* Firebase 미연결 */
       var phone = String((entry&&entry.phone)||'').replace(/[^0-9]/g,'');
@@ -17407,6 +17467,11 @@ window._drawQRCanvas = function(container, text, size){
   /* ★ 📲 약도전송 (수동) — 검색 키불출 등 번호가 없을 때, 팝업에 번호를 직접 입력해 발송
      문자서버(자동문자와 동일 경로)로 약도 이미지 MMS 발송. 서버 미연동 시 문자앱으로 대체 */
   window._sendManualRouteSms = function(){
+    /* ★ 요금발생차단 ON → 전면 차단 */
+    if(window._isFeeBlocked && window._isFeeBlocked()){
+      alert('🚫 요금발생차단이 켜져 있어 발송이 차단되어 있습니다.\n현장에서는 팝업 화면·QR 스캔을 이용해 주세요.\n(Firebase 설정에서 「요금발생차단」을 끄면 발송됩니다)');
+      return;
+    }
     /* ★ 자동문자 꺼짐 = 모든 문자전송 차단 */
     if(localStorage.getItem(LS_AUTO_SMS)!=='1'){
       alert('📲 자동문자가 꺼져 있어 문자전송이 비활성화되어 있습니다.\nFirebase 설정에서 「자동문자」를 켜주세요.');
