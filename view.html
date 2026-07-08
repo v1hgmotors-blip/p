@@ -74,11 +74,12 @@
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div style="font-size:13px;font-weight:900;color:#93C5FD;margin-bottom:10px;">📄 출고서류</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button onclick="docAction('download')" style="flex:1;min-width:100px;padding:12px 8px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 출고서류다운로드</button>
-      <button onclick="docAction('share')" style="flex:1;min-width:90px;padding:12px 8px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📤 출고서류공유</button>
-      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:100px;padding:12px 8px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📄 판매확인서 다운</button>
+    <div style="font-size:17px;font-weight:900;color:#93C5FD;margin-bottom:12px;text-align:center;line-height:1.5;">📄 출고서류 <span id="docCarNo" style="color:#FDE68A;"></span></div>
+    <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
+    <div id="docBtnRow" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="docAction('download')" style="flex:1;min-width:110px;padding:15px 8px;background:#166534;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 출고서류다운로드</button>
+      <button onclick="docAction('share')" style="flex:1;min-width:100px;padding:15px 8px;background:#6D28D9;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📤 출고서류공유</button>
+      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:110px;padding:15px 8px;background:#B45309;color:#fff;border:none;border-radius:11px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">📄 판매확인서 다운</button>
     </div>
     <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
     <div id="docPickList" style="display:none;margin-top:10px;background:#0B1F38;border-radius:10px;padding:10px;"></div>
@@ -264,10 +265,23 @@ function sharePage(){
     try{
       fdb.ref('kd_rooms/'+code+'/kd_docs/'+key).once('value').then(function(snap){
         var v = snap.val();
+        var box = document.getElementById('docBox');
+        if(box) box.style.display = 'block'; /* ★ 서류 없어도 영역 표시 */
+        var cn = document.getElementById('docCarNo');
+        if(cn && car) cn.textContent = '차량번호:' + car;
         if(v && typeof v==='object' && Object.keys(v).length){
+          /* 서류 있음 → 버튼 표시 */
           _carDocs = v;
-          var box = document.getElementById('docBox');
-          if(box) box.style.display = 'block';
+          var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
+          var none=document.getElementById('docNoneMsg'); if(none) none.style.display='none';
+        } else {
+          /* 서류 없음 → 안내 문구, 다운로드/공유 버튼 숨김 (판매확인서 버튼은 별도 유지) */
+          var row=document.getElementById('docBtnRow');
+          if(row){
+            var dl=row.querySelector('button[onclick*="download"]'); if(dl) dl.style.display='none';
+            var sh=row.querySelector('button[onclick*="share"]'); if(sh) sh.style.display='none';
+          }
+          var none=document.getElementById('docNoneMsg'); if(none) none.style.display='block';
         }
       }).catch(function(){});
     }catch(e){}
