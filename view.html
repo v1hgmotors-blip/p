@@ -264,8 +264,8 @@ function sharePage(){
         fdb.ref('kd_docs/'+code+'/'+key).once('value').then(function(s){
           var v = s.val();
           if(v && v.data){ _docCache[key]=v; resolve(v); }
-          else reject(new Error('없음'));
-        }).catch(reject);
+          else reject(new Error('서류 원본 없음 (key='+key+')'));
+        }).catch(function(e){ reject(e); });
       }catch(e){ reject(e); }
     });
   }
@@ -278,15 +278,21 @@ function sharePage(){
     while(n--) u8[n]=bin.charCodeAt(n);
     return new Blob([u8], {type:mime});
   }
-  function docAction(mode){
+  window.docAction = function docAction(mode){
     if(!_docMeta || !_docMeta.length){ _setDocStatus('첨부된 서류가 없습니다.'); return; }
     _setDocStatus('⏳ 서류를 불러오는 중...');
     /* 모든 서류 원본 로드 */
-    Promise.all(_docMeta.map(function(m){ return _fetchDoc(m.k).catch(function(){ return null; }); }))
+    Promise.all(_docMeta.map(function(m){ return _fetchDoc(m.k).catch(function(e){ return {__err:String(e&&e.message||e), __key:m.k}; }); }))
     .then(function(results){
-      var docs=[];
-      results.forEach(function(r,i){ if(r) docs.push({meta:_docMeta[i], data:r}); });
-      if(!docs.length){ _setDocStatus('⚠️ 서류를 불러오지 못했습니다. (만료되었거나 삭제됨)'); return; }
+      var docs=[], errs=[];
+      results.forEach(function(r,i){
+        if(r && r.data){ docs.push({meta:_docMeta[i], data:r}); }
+        else if(r && r.__err){ errs.push(r.__err); }
+      });
+      if(!docs.length){
+        _setDocStatus('⚠️ 서류를 불러오지 못했습니다. (code='+code+') '+(errs[0]||''));
+        return;
+      }
       _setDocStatus('');
       if(mode==='download'){
         docs.forEach(function(x,idx){
