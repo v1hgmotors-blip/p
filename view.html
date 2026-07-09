@@ -70,6 +70,14 @@
     animation:sp 0.9s linear infinite;margin-bottom:10px;
   }
   @keyframes sp{to{transform:rotate(360deg);}}
+  /* ★ 출고서류 박스 — 차량번호 깜박임 */
+  @keyframes docCarNoBlink{
+    0%,100%{opacity:1;}
+    50%{opacity:.25;}
+  }
+  #docCarNo.blink{
+    animation:docCarNoBlink 1s ease-in-out infinite;
+  }
   .foot{
     text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:18px;
   }
@@ -83,7 +91,7 @@
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
+    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:0;padding:13px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
