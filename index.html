@@ -2527,6 +2527,23 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   </div>
 </div>
 
+<!-- ★ 검색 키불출 — 딜러정보(이름/전화번호/소속상사) 입력 미니팝업 -->
+<div id="searchIssueInfoOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8600;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);" onclick="if(event.target===this)_cancelSearchIssueInfo()">
+  <div style="background:#fff;border-radius:16px;padding:22px 20px;max-width:320px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35);">
+    <div id="searchIssueInfoTitle" style="font-size:15px;font-weight:900;color:#1E293B;margin-bottom:4px;letter-spacing:-.2px;">차량번호:- 키불출이력</div>
+    <div style="font-size:12px;color:#64748B;margin-bottom:14px;">딜러 정보를 입력하고 저장하면 약도가 표시됩니다.</div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;">
+      <input id="searchIssueInfoName" type="text" placeholder="이름" style="border:1.5px solid #CBD5E1;border-radius:9px;padding:10px 12px;font-size:14px;font-weight:700;color:#1E293B;outline:none;box-sizing:border-box;width:100%;">
+      <input id="searchIssueInfoPhone" type="tel" placeholder="전화번호" style="border:1.5px solid #CBD5E1;border-radius:9px;padding:10px 12px;font-size:14px;font-weight:700;color:#1E293B;outline:none;box-sizing:border-box;width:100%;">
+      <input id="searchIssueInfoPr" type="text" placeholder="소속상사" style="border:1.5px solid #CBD5E1;border-radius:9px;padding:10px 12px;font-size:14px;font-weight:700;color:#1E293B;outline:none;box-sizing:border-box;width:100%;" onkeydown="if(event.key==='Enter')_saveSearchIssueInfo();">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" onclick="_cancelSearchIssueInfo()" style="flex:1;background:#F1F5F9;color:#64748B;border:none;border-radius:10px;padding:11px 0;font-size:14px;font-weight:800;cursor:pointer;">취소</button>
+      <button type="button" onclick="_saveSearchIssueInfo()" style="flex:1.4;background:#3B82F6;color:#fff;border:none;border-radius:10px;padding:11px 0;font-size:14px;font-weight:900;cursor:pointer;">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- 전체초기화 확인 팝업 -->
 <div class="reset-confirm-ov" id="resetConfirmOv">
   <div class="reset-confirm-card">
@@ -8325,16 +8342,20 @@ function _removeSearchBadge(slotIdx){
    (src:'search'로 표시해서 주차현황판 자신은 이 항목을 다시 처리하지 않음 — 위 hist.forEach 참고)
    ★ FIX: 방 전체(kd_rooms/{code})가 아니라 hist 경로만 읽고 쓰도록 변경
      — 방 전체를 읽으면 첨부서류·사진까지 통째로 내려받아 느려지거나 실패할 수 있었음 */
-function _pushSearchDispatchToHist(slotIdx, carNo){
-  console.log('[검색키불출→키불출앱 전달 시작]', {slotIdx:slotIdx, carNo:carNo});
+function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, dealerPr){
+  console.log('[검색키불출→키불출앱 전달 시작]', {slotIdx:slotIdx, carNo:carNo, dealerName:dealerName, dealerPhone:dealerPhone, dealerPr:dealerPr});
   if(!fbDb){ console.warn('[검색키불출→키불출앱 전달 중단] fbDb 없음(Firebase 미연결)'); return; }
   if(!carNo){ console.warn('[검색키불출→키불출앱 전달 중단] 차량번호가 비어있음 — 슬롯에 차량번호가 저장되어 있는지 확인 필요'); return; }
   var code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
   if(!code){ console.warn('[검색키불출→키불출앱 전달 중단] 공유코드 없음'); return; }
+  var _dName  = dealerName  || '';
+  var _dPhone = dealerPhone || '';
+  var _dPr    = dealerPr    || '';
   try{
     var histRef = fbDb.ref('kd_rooms/' + code + '/hist');
     var id = Date.now();
-    var entry = { id:id, car:carNo, name:'', phone:'', pr:'', src:'search',
+    var committedId = id; /* ★ transaction 커밋 시 실제 사용된 id로 갱신됨 */
+    var entry = { id:id, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx,
       timestamp: new Date().toLocaleString('ko-KR') };
     /* ★ FIX: once('value')로 읽은 뒤 set()으로 통째로 덮어쓰던 방식 →
        동시에 다른 기기가 키불출(hist 쓰기)을 하면 그 사이에 서로 덮어써서
@@ -8348,15 +8369,23 @@ function _pushSearchDispatchToHist(slotIdx, carNo){
       var maxExisting = hist.reduce(function(mx,h){ return (h&&h.id>mx)?h.id:mx; }, 0);
       var tid = Math.max(id, maxExisting+1);
       while(hist.some(function(h){ return h && h.id===tid; })){ tid++; }
-      var e2 = { id:tid, car:carNo, name:'', phone:'', pr:'', src:'search',
+      var e2 = { id:tid, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx,
         timestamp: new Date().toLocaleString('ko-KR') };
-      hist.push(e2);
-      if(hist.length > 200) hist = hist.slice(hist.length-200);
+      /* ★ BUG FIX: push(맨 뒤 추가) → unshift(맨 앞 추가)로 변경.
+         키불출앱은 이력이 최신순(앞쪽)이라고 가정하고 syncPushNow에서
+         getHistory().slice(0,50)만 서버로 재전송함 — 맨 뒤에 추가하면
+         전체 이력이 50건을 넘는 경우 이 검색항목이 잘려나가 반납확인 시
+         서버/로컬 모두에서 사라지는 문제가 있었음 */
+      hist.unshift(e2);
+      committedId = tid; /* ★ transaction 재시도 대비 — 실제 커밋되는 id 추적 */
+      /* ★ BUG FIX: slice(hist.length-200)(오래된 항목 유지) → slice(0,200)(최신 항목 유지)
+         맨 앞에 추가하는 방식으로 바뀌었으므로 트림도 앞쪽 200건을 남기도록 수정 */
+      if(hist.length > 200) hist = hist.slice(0, 200);
       return hist;
     }, function(error, committed, snapshot){
       if(error){ console.error('[검색키불출→키불출앱 전달 실패]', error); return; }
       if(!committed){ console.warn('[검색키불출→키불출앱 전달 취소됨] transaction 커밋 안 됨'); return; }
-      _searchHistIds[slotIdx] = id;
+      _searchHistIds[slotIdx] = committedId;
       fbDb.ref('kd_rooms/' + code + '/updatedAt').set(Date.now());
       /* ★ 팝업 전용 채널 — push()는 키가 항상 유니크하고 시간순 정렬되므로
          transaction 없이도 안전함 (동시쓰기 경합 걱정 없음) */
@@ -8431,7 +8460,9 @@ function _addSearchIssueBadge(slotIdx){
   _searchBadgeSlots[slotIdx] = 'issue';
 }
 
-/* ★ 키불출 처리 → 키반납확인 배지로 교체 + 슬롯 깜박임 (PC 전용) */
+/* ★ 검색 키불출 버튼 클릭 → 배지 교체 전에 딜러정보(이름/전화번호/소속상사) 입력 미니팝업 먼저 표시
+   저장 버튼을 눌러야 기존 배지교체+약도팝업+공유hist전달 로직(_doSearchIssueConfirmed)이 진행됨 */
+var _pendingSearchIssueSlot = null;
 function _doSearchIssue(slotIdx){
   var el = document.getElementById('slot_'+slotIdx);
   if(!el) return;
@@ -8444,6 +8475,48 @@ function _doSearchIssue(slotIdx){
       document.activeElement.blur();
     }
   }catch(e){}
+
+  _pendingSearchIssueSlot = slotIdx;
+  var _slotDataPre = getSlot(slotIdx);
+  var _carNoPre = _slotDataPre ? (_slotDataPre.car||'') : '';
+  var _titleEl = document.getElementById('searchIssueInfoTitle');
+  if(_titleEl) _titleEl.textContent = '차량번호:' + (_carNoPre||'-') + ' 키불출이력';
+  var _nEl = document.getElementById('searchIssueInfoName');  if(_nEl) _nEl.value = '';
+  var _pEl = document.getElementById('searchIssueInfoPhone'); if(_pEl) _pEl.value = '';
+  var _cEl = document.getElementById('searchIssueInfoPr');    if(_cEl) _cEl.value = '';
+  var _ov = document.getElementById('searchIssueInfoOv');
+  if(_ov){ _ov.style.display = 'flex'; }
+  if(_nEl){ setTimeout(function(){ _nEl.focus(); }, 50); }
+}
+
+/* ★ 딜러정보 미니팝업 — 취소 (키불출 처리 자체를 취소, 배지 변경 없음) */
+function _cancelSearchIssueInfo(){
+  var _ov = document.getElementById('searchIssueInfoOv');
+  if(_ov) _ov.style.display = 'none';
+  _pendingSearchIssueSlot = null;
+}
+
+/* ★ 딜러정보 미니팝업 — 저장 → 기존 키불출 처리(배지교체+약도팝업+공유hist전달) 진행 */
+function _saveSearchIssueInfo(){
+  var slotIdx = _pendingSearchIssueSlot;
+  if(slotIdx===null || typeof slotIdx==='undefined') return;
+  var _nEl = document.getElementById('searchIssueInfoName');
+  var _pEl = document.getElementById('searchIssueInfoPhone');
+  var _cEl = document.getElementById('searchIssueInfoPr');
+  var dealerName  = _nEl ? _nEl.value.trim() : '';
+  var dealerPhone = _pEl ? _pEl.value.trim() : '';
+  var dealerPr    = _cEl ? _cEl.value.trim() : '';
+  var _ov = document.getElementById('searchIssueInfoOv');
+  if(_ov) _ov.style.display = 'none';
+  _pendingSearchIssueSlot = null;
+  _doSearchIssueConfirmed(slotIdx, dealerName, dealerPhone, dealerPr);
+}
+
+/* ★ 키불출 처리 → 키반납확인 배지로 교체 + 슬롯 깜박임 (PC 전용)
+   ★ 딜러정보 미니팝업에서 저장을 눌러야 호출됨 (dealerName/dealerPhone/dealerPr 전달) */
+function _doSearchIssueConfirmed(slotIdx, dealerName, dealerPhone, dealerPr){
+  var el = document.getElementById('slot_'+slotIdx);
+  if(!el) return;
 
   /* 키불출 배지 제거 */
   var issueBadge = el.querySelector('.slot-search-issue-badge');
@@ -8483,12 +8556,12 @@ function _doSearchIssue(slotIdx){
     }catch(ex2){}
     var _reason = '🔑 키불출 ' + (_carNo||'');
     var _slotSuffix = _slotLabel ? (' — ' + _slotLabel + '번') : '';
-    console.log('[검색키불출] 슬롯 차량번호 확인', {slotIdx:slotIdx, _carNo:_carNo, _slotData:_slotData});
+    console.log('[검색키불출] 슬롯 차량번호 확인', {slotIdx:slotIdx, _carNo:_carNo, _slotData:_slotData, dealerName:dealerName, dealerPhone:dealerPhone, dealerPr:dealerPr});
     if(typeof window._showPartPhotoPopup === 'function'){
-      window._showPartPhotoPopup(_partNo, _reason, _slotSuffix, '', slotIdx);
+      window._showPartPhotoPopup(_partNo, _reason, _slotSuffix, dealerPhone||'', slotIdx);
     }
-    /* ★ 키불출앱 화면에도 약도 팝업이 뜨도록 공유 hist에 전달 */
-    _pushSearchDispatchToHist(slotIdx, _carNo);
+    /* ★ 키불출앱 화면에도 약도 팝업이 뜨도록 공유 hist에 전달 (딜러 이름/전화번호/소속상사 포함) */
+    _pushSearchDispatchToHist(slotIdx, _carNo, dealerName, dealerPhone, dealerPr);
   }catch(ex){}
   _saveSearchReturn();
   _updateKeyIssueBanner(); /* ★ 키불출 후 배너 표시 */
@@ -8845,8 +8918,12 @@ function closeKeyReturnPopup(){
   document.getElementById('keyReturnPopupOv').classList.remove('show');
 }
 
-/* 반납된 차량: dispatchSet에서 제거 → reapplyBlinks에서 배지 자동 제거 처리됨 */
-function _applyReturnBadges(retArr, prevRetArr){
+/* 반납된 차량: dispatchSet에서 제거 → reapplyBlinks에서 배지 자동 제거 처리됨
+   ★ hist 파라미터 추가 — _searchHistIds(현재 탭의 메모리 전용, 새로고침/다른 기기에서는 비어있음)에
+     의존하지 않고도, hist 항목 자체에 저장된 slotIdx로 반납확인 배지를 정리할 수 있도록 함
+     (키불출앱에서 반납확인을 눌렀을 때 이 화면이 새로고침된 상태여도, 또는 발급한 기기가 아니어도
+      정상적으로 배지가 사라지게 하기 위한 FIX) */
+function _applyReturnBadges(retArr, prevRetArr, hist){
   /* retArr에 새로 추가된 항목(반납) → dispatchSet에서 제거 후 reapplyBlinks */
   if(!retArr || !retArr.length) return;
   var changed = false;
@@ -8857,14 +8934,29 @@ function _applyReturnBadges(retArr, prevRetArr){
 
   /* ★ 검색 키불출로 등록된 항목이 다른 화면(키불출앱 등)에서 반납 확인된 경우
      → 이 화면(주차현황판)의 검색 키불출 배지도 함께 정리 */
+  var _handledSlots = {};
   if(typeof _searchHistIds !== 'undefined'){
     Object.keys(_searchHistIds).forEach(function(slotIdx){
       var hid = String(_searchHistIds[slotIdx]);
       if(retArr.indexOf(hid) !== -1){
         delete _searchHistIds[slotIdx];
+        _handledSlots[slotIdx] = true;
         if(_searchBadgeSlots[slotIdx] === 'return'){
           _removeSearchBadge(parseInt(slotIdx));
         }
+      }
+    });
+  }
+  /* ★ FIX: hist 항목의 slotIdx 필드로 보조 매칭 — _searchHistIds에 없던 경우
+     (새로고침했거나, 발급하지 않은 다른 기기인 경우) 대비 */
+  if(Array.isArray(hist)){
+    hist.forEach(function(e){
+      if(!e || e.src!=='search' || typeof e.slotIdx!=='number') return;
+      var hid = String(e.id);
+      var slotIdx = e.slotIdx;
+      if(_handledSlots[slotIdx]) return;
+      if(retArr.indexOf(hid) !== -1 && _searchBadgeSlots[slotIdx] === 'return'){
+        _removeSearchBadge(slotIdx);
       }
     });
   }
@@ -9012,6 +9104,9 @@ function handleData(data){
         dispatchSet[String(e.id)] = e;
     });
     _prevRetArr = retArr.slice(); /* ★ 초기 반납 배열 저장 */
+    /* ★ FIX: 새로고침 직후에도, 이미 반납확인된 검색 키불출 항목의 배지가
+       남아있다면 hist의 slotIdx로 찾아서 정리 */
+    _applyReturnBadges(retArr, [], hist);
     reapplyBlinks(); updateAlertBar(); return;
   }
 
@@ -9022,13 +9117,13 @@ function handleData(data){
   _prevRetArr = retArr.slice(); /* 다음 비교를 위해 갱신 */
 
   if(!kdChanged){
-    _applyReturnBadges(retArr, prevRetArr);
+    _applyReturnBadges(retArr, prevRetArr, hist);
     retArr.forEach(function(id){ if(dispatchSet[id]) delete dispatchSet[id]; });
     reapplyBlinks(); updateAlertBar(); return;
   }
   prevUpdatedAt = updAt;
 
-  _applyReturnBadges(retArr, prevRetArr);
+  _applyReturnBadges(retArr, prevRetArr, hist);
 
   retArr.forEach(function(id){
     if(dispatchSet[id]) delete dispatchSet[id];
