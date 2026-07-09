@@ -665,6 +665,17 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     box-shadow:0 1px 3px rgba(0,0,0,.4) !important;
     z-index:11 !important;
   }
+  /* ★ 서류첨부 점: 모바일에서 초록 점으로, slot-num 아래 좌측에 표시 */
+  .slot-doc-icon{
+    width:9px !important; height:9px !important;
+    top:calc(var(--slot-num-sz,22px) * 0.28 + 1px) !important;
+    left:2px !important;
+    background:#10B981 !important;
+    border:1.5px solid #fff !important;
+    border-radius:50% !important;
+    box-shadow:0 1px 3px rgba(0,0,0,.4) !important;
+    z-index:11 !important;
+  }
   /* 차량번호 위치 조정 */
   .slot-car{
     margin-top: calc(var(--slot-num-sz,22px) * 0.76);
@@ -754,6 +765,23 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     background:#EF4444;color:#fff;overflow:visible;
   }
   /* .slot-cam-icon::after{content:'📷';}  <-- 중복 방지를 위해 제거 */
+}
+/* 서류 첨부 아이콘 - 모바일: 초록 점, PC: 배지(📄) — 카메라 아이콘 반대쪽(좌측)에 표시 */
+.slot-doc-icon{
+  position:absolute;top:3px;left:3px;
+  z-index:4;pointer-events:none;
+  background:#10B981;
+  border-radius:50%;
+  width:7px;height:7px;
+  font-size:0;line-height:1;
+  padding:0;overflow:hidden;
+}
+@media(min-width:600px){
+  .slot-doc-icon{
+    width:auto;height:auto;border-radius:4px;
+    padding:1px 4px;font-size:9px;font-weight:900;
+    background:#10B981;color:#fff;overflow:visible;
+  }
 }
 @keyframes encarCountBlink{
   0%,100%{opacity:1;}
@@ -1006,6 +1034,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   }
   /* 카메라 아이콘: 배지 상승분 보상 */
   .slot-cam-icon {
+    top: calc(var(--slot-num-sz, 22px) * 0.28 + 2px) !important;
+  }
+  /* 서류첨부 아이콘: 배지 상승분 보상 */
+  .slot-doc-icon {
     top: calc(var(--slot-num-sz, 22px) * 0.28 + 2px) !important;
   }
   /* ★ 하단 배지 묶음: absolute → flex 공간 미차지 → 메모 텍스트 항상 표시 */
@@ -2641,6 +2673,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
    ═══════════════════════════════════════════ */
 var TOTAL=120;
 var LS_ENCAR_LOG='pb_encar_log';
+var LS_DOC_FLAGS='pb_doc_flags'; /* ★ 서류첨부(📄) 표시용 경량 캐시 */
 var LS_SLOTS='pb_slots_v7', LS_URL='pb_fb_url', LS_CODE='pb_code';
 
 /* ════════════════════════════════════════════════════════════════
@@ -3545,7 +3578,7 @@ function resetOwnerPanel() {
 }
 
 var LS_PARTS=['pb_part1_extra','pb_part2_extra','pb_part3_extra'];
-var fbApp=null, fbDb=null, fbRef=null, fbSlotsRef=null, fbSettingsRef=null, fbEncarLogRef=null;
+var fbApp=null, fbDb=null, fbRef=null, fbSlotsRef=null, fbSettingsRef=null, fbEncarLogRef=null, fbDocFlagsRef=null;
 
 /* ── Firebase v7 업데이트 헬퍼 ──
    전역인덱스 키({0:data}) 또는 파트키({p1_0:data}) 모두 처리 → v7 파트키로 변환 */
@@ -6977,6 +7010,7 @@ function onStorageModeSwitchChange(isLocalOnly){
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
+    try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
     fbConnected = false;
     _fbSyncReady = true; /* 로컬 모드에서는 잠금 해제 */
     _fbLockShow(false);
@@ -7981,6 +8015,15 @@ function renderSlot(el,idx){
     var _badge2=document.createElement('div');
     _badge2.className='slot-encar-badge'; _badge2.textContent='📸'+ec.time;
     el.appendChild(_badge2);
+  }
+  /* ── 서류 첨부 아이콘: 차량번호 기준으로 서류가 있으면 📄 표시 (모바일은 초록 점) ── */
+  if(d.car && typeof _docFlags!=='undefined'){
+    var _dkey = typeof _docKeyFromCar==='function' ? _docKeyFromCar(d.car) : '';
+    if(_dkey && _docFlags[_dkey]){
+      var _docIcon=document.createElement('div');
+      _docIcon.className='slot-doc-icon'; _docIcon.textContent='📄';
+      el.appendChild(_docIcon);
+    }
   }
 }
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -9311,6 +9354,26 @@ function addEncarLog(idx, car, num, date, time, doneDate){
    - 차량번호가 곧 키이므로, 슬롯이 나중에 다른 차량으로 바뀌어도 이전 서류가 섞이지 않음 */
 var _curDocs = {};
 
+/* ★ 서류첨부 표시(📄) 전용 경량 플래그 맵 — 차량번호키 → true
+   실제 서류(이미지/PDF 데이터)는 무겁기 때문에 전체 슬롯을 그릴 때마다 불러오지 않고,
+   "이 차량에 서류가 있다/없다"만 담은 가벼운 플래그를 kd_doc_flags 경로에 별도 저장/구독한다. */
+var _docFlags = (function(){ try{ return JSON.parse(localStorage.getItem(LS_DOC_FLAGS)||'{}'); }catch(e){ return {}; } })();
+function _saveDocFlagsCache(){ try{ localStorage.setItem(LS_DOC_FLAGS, JSON.stringify(_docFlags)); }catch(e){} }
+function _docFlagsRef(){
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb) return null;
+  return fbDb.ref('kd_rooms/'+code+'/kd_doc_flags');
+}
+/* 플래그 변경 후 화면에 보이는 슬롯들만 다시 그려 📄 아이콘 갱신 */
+function _refreshDocIconsOnGrid(){
+  if(typeof TOTAL==='undefined') return;
+  for(var i=0;i<TOTAL;i++){
+    var el=document.getElementById('slot_'+i);
+    if(el && typeof renderSlot==='function') renderSlot(el,i);
+  }
+  if(typeof reapplyBlinks==='function') reapplyBlinks();
+}
+
 function _docKeyFromCar(car){
   car = String(car||'').trim();
   if(!car) return '';
@@ -9382,6 +9445,14 @@ function deleteDoc(id){
     delete _curDocs[id];
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
+    /* ★ 남은 서류가 없으면 📄 플래그도 함께 제거 */
+    if(!Object.keys(_curDocs||{}).length && _docFlags[key]){
+      delete _docFlags[key];
+      _saveDocFlagsCache();
+      var fref=_docFlagsRef();
+      if(fref) fref.child(key).remove().catch(function(){});
+      _refreshDocIconsOnGrid();
+    }
   }).catch(function(){ showAlert('⚠️ 서류 삭제에 실패했습니다.'); });
 }
 
@@ -9535,6 +9606,14 @@ function _saveDoc(key, name, type, dataUrl, size, cb){
     _curDocs[docId]=payload;
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
+    /* ★ 서류첨부 플래그 갱신 (📄 아이콘 표시용, 실패해도 서류 저장 자체엔 영향 없음) */
+    if(!_docFlags[key]){
+      _docFlags[key]=true;
+      _saveDocFlagsCache();
+      var fref=_docFlagsRef();
+      if(fref) fref.child(key).set(true).catch(function(){});
+      _refreshDocIconsOnGrid();
+    }
     if(cb) cb();
   }).catch(function(){
     showAlert('⚠️ 서류 저장 실패: '+name);
@@ -10202,7 +10281,8 @@ function confirmClearAll(){
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
-  fbRef=null; fbSlotsRef=null; fbSettingsRef=null; fbEncarLogRef=null;
+  try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
+  fbRef=null; fbSlotsRef=null; fbSettingsRef=null; fbEncarLogRef=null; fbDocFlagsRef=null;
   fbDb=null; fbApp=null; fbConnected=false;
   setDot('off','미연결');
 
@@ -10310,7 +10390,8 @@ function confirmLocalClear() {
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
-  fbRef=null; fbSlotsRef=null; fbSettingsRef=null; fbEncarLogRef=null;
+  try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
+  fbRef=null; fbSlotsRef=null; fbSettingsRef=null; fbEncarLogRef=null; fbDocFlagsRef=null;
   fbConnected=false;
 
   /* ── 2. 이 기기 localStorage 삭제 (백업 제외) ── */
@@ -11472,6 +11553,15 @@ function connectFb(url,code){
       }catch(e){}
       _encarUpdateCount();
     },function(err){console.warn('[엔카로그동기화]',err);});
+
+    /* ★ 서류첨부(📄) 플래그 실시간 동기화 — 실제 서류 데이터는 불러오지 않고 있음/없음만 구독 */
+    if(fbDocFlagsRef){try{fbDocFlagsRef.off('value');}catch(e){}}
+    fbDocFlagsRef=fbDb.ref('kd_rooms/'+code+'/kd_doc_flags');
+    fbDocFlagsRef.on('value',function(snap){
+      _docFlags = snap.val()||{};
+      _saveDocFlagsCache();
+      _refreshDocIconsOnGrid();
+    },function(err){console.warn('[서류플래그동기화]',err);});
 
     /* ★ PIN 사용안함 상태 실시간 동기화 리스너 */
     if(typeof PIN !== 'undefined' && typeof PIN.startListener === 'function'){
@@ -13354,6 +13444,7 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
+    try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
     fbConnected=false;
 
     /* localStorage 교체 (백업 메타 키 보존) */
