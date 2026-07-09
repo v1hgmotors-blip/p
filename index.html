@@ -2160,7 +2160,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 </div>
 
   <!-- ★ 빌드 정보 뱃지 -->
-  <div id="buildBadge">🕐 skv1motors 빌드: 2026-04-27 22:10 KST &nbsp;|&nbsp; 한결_주차현황판 &nbsp;|&nbsp; <span id="storageUsageBadge" onclick="_openStorageDetail()">💾 용량 계산중...</span></div>
+  <div id="buildBadge">🕐 빌드: 2026-04-27 22:10 KST &nbsp;|&nbsp; 한결_주차현황선택팝업 &nbsp;|&nbsp; <span id="storageUsageBadge" onclick="_openStorageDetail()">💾 용량 계산중...</span></div>
 </div><!-- /mainWrap -->
 
 <!-- ★ 저장용량 상세 팝업 -->
@@ -3257,7 +3257,7 @@ var DEFAULT_OWNER_LIST = [
   { n:'신정우',         p:'01089273421' },
   { n:'김진희',         p:'01091394655' },
   { n:'박윤상',         p:'01094174097' },
-  { n:'KANVLADIMIR', p:'01058083711' },
+  { n:'KANVLADIMIR',   p:'01058083711' },
   { n:'TSOYYURIYGEORGIEVICH', p:'01076097787' }
 ];
 
@@ -8179,6 +8179,7 @@ function clearSearch(){
 
 /* ══ 🔍 검색 연동 키불출/키반납확인 배지 ══ */
 var _searchBadgeSlots = {}; /* slotIdx → 'issue' | 'return' */
+var _searchHistIds = {};    /* ★ slotIdx → 키불출앱 전달용 hist 항목 id (반납 시 정리용) */
 var LS_SEARCH_RETURN = 'pb_search_return_v1'; /* 키반납확인 대기 슬롯 영속 저장 */
 
 /* ★ Firebase search_return ref 헬퍼 */
@@ -8320,6 +8321,58 @@ function _removeSearchBadge(slotIdx){
   _updateKeyIssueBanner(); /* ★ 키반납확인 후 배너 업데이트 */
 }
 
+/* ★ 주차현황판 검색 키불출 → 키불출앱에도 약도 팝업이 뜨도록 공유 hist에 항목 추가
+   (src:'search'로 표시해서 주차현황판 자신은 이 항목을 다시 처리하지 않음 — 위 hist.forEach 참고)
+   ★ FIX: 방 전체(kd_rooms/{code})가 아니라 hist 경로만 읽고 쓰도록 변경
+     — 방 전체를 읽으면 첨부서류·사진까지 통째로 내려받아 느려지거나 실패할 수 있었음 */
+function _pushSearchDispatchToHist(slotIdx, carNo){
+  if(!fbDb || !carNo) return;
+  var code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
+  if(!code) return;
+  try{
+    var histRef = fbDb.ref('kd_rooms/' + code + '/hist');
+    /* ★ id는 키불출앱과 동일하게 숫자(Date.now())여야 함 — 키불출앱이 b.id-a.id로 정렬하므로
+       문자열 id를 쓰면 정렬이 깨짐 */
+    var id = Date.now();
+    var entry = { id:id, car:carNo, name:'', phone:'', pr:'', src:'search',
+      timestamp: new Date().toLocaleString('ko-KR') };
+    histRef.once('value').then(function(snap){
+      var hist = Array.isArray(snap.val()) ? snap.val().slice() : [];
+      /* ★ 같은 밀리초 충돌 방지 — 이미 동일 id가 있으면 +1 */
+      while(hist.some(function(h){ return h && h.id===id; })){ id++; entry.id=id; }
+      hist.push(entry);
+      if(hist.length > 200) hist = hist.slice(hist.length-200); /* 무한 누적 방지 */
+      return histRef.set(hist).then(function(){
+        return fbDb.ref('kd_rooms/' + code + '/updatedAt').set(Date.now());
+      });
+    }).then(function(){
+      _searchHistIds[slotIdx] = id;
+    }).catch(function(e){ console.warn('[검색키불출→키불출앱 전달 실패]', e); });
+  }catch(e){}
+}
+/* 검색 키반납확인 시 — 키불출앱 쪽에도 반납되었음을 알림(returned 배열에 추가)
+   ★ FIX: returned 경로만 읽고 쓰도록 변경 (방 전체 다운로드 방지) */
+function _cleanupSearchDispatchHist(slotIdx){
+  var id = _searchHistIds[slotIdx];
+  if(!id) return;
+  delete _searchHistIds[slotIdx];
+  if(!fbDb) return;
+  var code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
+  if(!code) return;
+  try{
+    var retRef = fbDb.ref('kd_rooms/' + code + '/returned');
+    retRef.once('value').then(function(snap){
+      var retArr = Array.isArray(snap.val()) ? snap.val().map(String) : [];
+      if(retArr.indexOf(String(id)) === -1){
+        retArr.push(String(id));
+        return retRef.set(retArr).then(function(){
+          return fbDb.ref('kd_rooms/' + code + '/updatedAt').set(Date.now());
+        });
+      }
+    }).catch(function(){});
+  }catch(e){}
+}
+
 /* ★ 키불출 배지 추가 (PC 전용 — 모바일은 배지 미표시) */
 function _addSearchIssueBadge(slotIdx){
   /* ★ 모바일에서는 배지 추가하지 않음 */
@@ -8405,6 +8458,8 @@ function _doSearchIssue(slotIdx){
     if(typeof window._showPartPhotoPopup === 'function'){
       window._showPartPhotoPopup(_partNo, _reason, _slotSuffix, '', slotIdx);
     }
+    /* ★ 키불출앱 화면에도 약도 팝업이 뜨도록 공유 hist에 전달 */
+    _pushSearchDispatchToHist(slotIdx, _carNo);
   }catch(ex){}
   _saveSearchReturn();
   _updateKeyIssueBanner(); /* ★ 키불출 후 배너 표시 */
@@ -8418,6 +8473,7 @@ function _doSearchReturn(slotIdx){
       document.activeElement.blur();
     }
   }catch(e){}
+  _cleanupSearchDispatchHist(slotIdx); /* ★ 키불출앱 쪽에도 반납 처리 알림 */
   _removeSearchBadge(slotIdx); /* 내부에서 _saveSearchReturn() 호출 */
   showAlert('✅ 키반납 확인 완료');
   setTimeout(hideAlert, 2000);
@@ -8617,7 +8673,8 @@ function _addDispatchBadge(slotIdx, entry){
   el.appendChild(badge);
   /* ★ 키불출앱 배지 추가 시 배너 업데이트 */
   setTimeout(function(){ _updateKeyIssueBanner(); }, 50);
-  /* ★ 키불출앱 이벤트 시 해당 파트 사진 팝업 — 차량번호 + 슬롯위치 포함 */
+  /* ★ 키불출앱 이벤트 — 약도 팝업은 키불출앱 화면에서만 표시 (주차현황판에서는 표시 안 함)
+     ※ 배지 표시와 자동문자(SMS) 발송만 이 화면에서 처리 */
   try{
     var _partNo2 = slotToPart(slotIdx);
     var _carNo2 = typeof entry==='object' ? (entry.car||'') : '';
@@ -8630,16 +8687,7 @@ function _addDispatchBadge(slotIdx, entry){
         _slotLabel2 = getColName(_pl2.part, _col2);
       }
     }catch(ex3){}
-    var _reason2 = '🔑 키불출앱 ' + (_carNo2||'');
-    var _slotSuffix2 = _slotLabel2 ? (' — ' + _slotLabel2 + '번') : '';
-    /* ★ 키불출앱에서 들어온 딜러 전화번호 → 약도 팝업에 전달 (문자전송용) */
-    var _phone2 = (typeof entry==='object') ? (entry.phone||'') : '';
-    if(typeof window._showPartPhotoPopup === 'function'){
-      setTimeout(function(){
-        window._showPartPhotoPopup(_partNo2, _reason2, _slotSuffix2, _phone2, slotIdx);
-      }, 200);
-    }
-    /* ★ 자동문자 켜짐 시 — 딜러 번호로 약도 MMS 자동 발송 요청 */
+    /* ★ 자동문자 켜짐 시 — 딜러 번호로 약도 MMS 자동 발송 요청 (팝업과 무관하게 유지) */
     if(typeof window._autoSendRouteSms === 'function'){
       window._autoSendRouteSms(_partNo2, entry, _slotLabel2, slotIdx);
     }
@@ -8777,6 +8825,20 @@ function _applyReturnBadges(retArr, prevRetArr){
     if(dispatchSet[id]){ delete dispatchSet[id]; changed = true; }
   });
   if(changed) reapplyBlinks();
+
+  /* ★ 검색 키불출로 등록된 항목이 다른 화면(키불출앱 등)에서 반납 확인된 경우
+     → 이 화면(주차현황판)의 검색 키불출 배지도 함께 정리 */
+  if(typeof _searchHistIds !== 'undefined'){
+    Object.keys(_searchHistIds).forEach(function(slotIdx){
+      var hid = String(_searchHistIds[slotIdx]);
+      if(retArr.indexOf(hid) !== -1){
+        delete _searchHistIds[slotIdx];
+        if(_searchBadgeSlots[slotIdx] === 'return'){
+          _removeSearchBadge(parseInt(slotIdx));
+        }
+      }
+    });
+  }
 }
 
 /* ── 🔔 키불출 팝업 ── */
@@ -8915,7 +8977,9 @@ function handleData(data){
     prevUpdatedAt = updAt; isFirstLoad = false;
     dispatchSet = {};
     hist.forEach(function(e){
-      if(e && e.car && !retArr.includes(String(e.id)))
+      /* ★ 주차현황판 검색 키불출로 생성된 항목(src:'search')은 키불출앱 전달용일 뿐
+         이 화면 자체의 배지/팝업 로직(dispatchSet)에는 포함하지 않음 — 이미 검색 배지로 처리됨 */
+      if(e && e.car && e.src!=='search' && !retArr.includes(String(e.id)))
         dispatchSet[String(e.id)] = e;
     });
     _prevRetArr = retArr.slice(); /* ★ 초기 반납 배열 저장 */
@@ -8942,7 +9006,8 @@ function handleData(data){
   });
 
   hist.forEach(function(e){
-    if(e && e.car && !retArr.includes(String(e.id))){
+    /* ★ 검색 키불출 항목(src:'search')은 키불출앱 전달용 — 이 화면 자체 처리에서는 제외 */
+    if(e && e.car && e.src!=='search' && !retArr.includes(String(e.id))){
       if(!dispatchSet[String(e.id)]){ showDispatchPopup(e); }
       dispatchSet[String(e.id)] = e;
     }
@@ -9552,6 +9617,15 @@ function refreshStorageBadge(){
       if(document.getElementById('storageDetailOv') && document.getElementById('storageDetailOv').classList.contains('show')){
         _renderStorageDetail();
       }
+      /* ★ 다운로드량 추정 — 용량 계산과 별도로 비동기 진행, 끝나면 캐시에 합쳐서 재렌더 */
+      if(db.connected){
+        _calcViewStats(function(vs){
+          if(_storageUsageCache) _storageUsageCache.views = vs;
+          if(document.getElementById('storageDetailOv') && document.getElementById('storageDetailOv').classList.contains('show')){
+            _renderStorageDetail();
+          }
+        });
+      }
     });
   }catch(e){
     _storageUsageBusy = false;
@@ -9580,6 +9654,22 @@ function _renderStorageDetail(){
   } else if(db.timeout){
     html += '<div style="font-size:11px;font-weight:700;color:#D97706;margin-top:6px;">※ 데이터가 많아 일부 항목 조회가 지연되었습니다. 표시된 값은 실제보다 작을 수 있습니다.</div>';
   }
+
+  /* ★ 다운로드량(대역폭) 추정 섹션 */
+  var vs = d.views;
+  if(db.connected && vs && !vs.error){
+    var perView = db.total||0;
+    var est7  = perView * (vs.d7||0);
+    var est30 = perView * (vs.d30||0);
+    html += '<div style="height:8px;"></div>'
+      +'<div class="storage-detail-row"><span>👁️ 최근 7일 조회수</span><b>'+(vs.d7||0)+'회</b></div>'
+      +'<div class="storage-detail-row"><span>👁️ 최근 30일 조회수</span><b>'+(vs.d30||0)+'회</b></div>'
+      +'<div class="storage-detail-row highlight"><span>📊 최근 7일 예상 다운로드</span><b>'+_fmtBytes(est7)+'</b></div>'
+      +'<div class="storage-detail-row highlight"><span>📊 최근 30일 예상 다운로드</span><b>'+_fmtBytes(est30)+'</b></div>'
+      +'<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;line-height:1.5;">※ "조회수 × 1회 접속당 DB 용량"으로 계산한 참고용 추정치이며, 실제 Firebase 다운로드 사용량과는 차이가 있을 수 있습니다. 정확한 값은 Firebase 콘솔 → Usage and billing에서 확인하세요.</div>';
+  } else if(db.connected){
+    html += '<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;">📊 다운로드량 추정 계산 중...</div>';
+  }
   body.innerHTML = html;
 }
 function _openStorageDetail(){
@@ -9597,8 +9687,71 @@ function _closeStorageDetail(){
   var ov=document.getElementById('storageDetailOv');
   if(ov) ov.classList.remove('show');
 }
+
+/* ══ 📊 다운로드량(대역폭) 추정 — 최근 조회 횟수 기반 ══
+   ★ Firebase 다운로드 사용량은 클라이언트에서 직접 알 수 없으므로,
+     "이 룸이 열린 횟수(조회수)" × "1회 접속시 대략 내려받는 데이터량(=DB 총 용량)"으로 추정.
+   ★ 실제 청구 다운로드량과는 차이가 있을 수 있는 참고용 추정치입니다. */
+function _viewLogDateKey(d){
+  d = d || new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+/* 오늘 조회수 +1 (세션당 1회만 — 새로고침 남발로 부풀려지는 것 방지) */
+function _logRoomView(){
+  try{
+    var code=_pbCode();
+    if(!code || typeof fbDb==='undefined' || !fbDb) return;
+    var sKey='pb_view_logged_'+code;
+    if(sessionStorage.getItem(sKey)) return; /* 이미 이 세션에서 기록함 */
+    sessionStorage.setItem(sKey,'1');
+    var dateKey=_viewLogDateKey();
+    var ref=fbDb.ref('kd_rooms/'+code+'/pb_view_log/'+dateKey);
+    ref.transaction(function(cur){ return (cur||0)+1; }).catch(function(e){
+      /* transaction 미지원 환경 대비 fallback */
+      ref.once('value').then(function(snap){
+        ref.set((snap.val()||0)+1);
+      }).catch(function(){});
+    });
+  }catch(e){}
+}
+/* 최근 N일 조회수 합계 + 오래된 기록(60일 이상) 정리 */
+function _calcViewStats(cb){
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb){ cb({d7:0, d30:0, total:0}); return; }
+  var ref=fbDb.ref('kd_rooms/'+code+'/pb_view_log');
+  ref.once('value').then(function(snap){
+    var data=snap.val()||{};
+    var now=new Date();
+    var d7=0, d30=0, total=0;
+    var staleKeys=[];
+    Object.keys(data).forEach(function(k){
+      var cnt=Number(data[k])||0;
+      total+=cnt;
+      var parts=k.split('-');
+      if(parts.length===3){
+        var dt=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2]));
+        var diffDays=Math.floor((now-dt)/86400000);
+        if(diffDays<7) d7+=cnt;
+        if(diffDays<30) d30+=cnt;
+        if(diffDays>60) staleKeys.push(k);
+      }
+    });
+    if(staleKeys.length){
+      var upd={};
+      staleKeys.forEach(function(k){ upd[k]=null; });
+      ref.update(upd).catch(function(){});
+    }
+    cb({d7:d7, d30:d30, total:total});
+  }).catch(function(){ cb({d7:0, d30:0, total:0, error:true}); });
+}
+
 /* 앱 시작 시 자동 계산 (Firebase 연결까지 약간의 시간을 두고 실행) */
-function _initStorageBadge(){ setTimeout(refreshStorageBadge, 1500); }
+function _initStorageBadge(){
+  setTimeout(function(){
+    _logRoomView();     /* ★ 조회수 기록 (다운로드량 추정용) */
+    refreshStorageBadge();
+  }, 1500);
+}
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded', _initStorageBadge);
 } else {
