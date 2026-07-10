@@ -6084,8 +6084,10 @@ function _doRemovePartCol(pNum){
 
   /* ① 마지막 열 데이터 삭제 */
   var ids=_getIds(), data=_getData();
+  var _removedCarsCol=[];
   for(var r2=0; r2<rows; r2++){
     var rid = _coordId(pNum, cur, r2+1);
+    if(data[rid] && data[rid].car) _removedCarsCol.push(data[rid].car);
     delete data[rid];
   }
   var newIds=[];
@@ -6132,6 +6134,8 @@ function _doRemovePartCol(pNum){
 
   showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'열 — 총 '+TOTAL+'칸');
   setTimeout(hideAlert,2000);
+  /* ★ 삭제된 열에 있던 차량들의 서류도 함께 정리 — 같은 번호 재사용 시 예전 서류 방지 */
+  _removedCarsCol.forEach(function(c){ if(typeof _deleteCarDocs==='function') _deleteCarDocs(c); });
 }
 function addPartRow(pNum){
   var oldR=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART;
@@ -6174,8 +6178,10 @@ function _doRemovePartRow(pNum){
   _saveUndoSnapshot('removePartRow p'+pNum);
   /* 마지막 행 데이터 삭제 (좌표 ID로 직접 접근) */
   var ids=_getIds(), data=_getData();
+  var _removedCarsRow=[];
   for(var cc2=0; cc2<cols; cc2++){
     var rid=_coordId(pNum, cc2+1, cur);
+    if(data[rid] && data[rid].car) _removedCarsRow.push(data[rid].car);
     delete data[rid];
   }
   /* _ids 배열에서 마지막 행 제거 */
@@ -6187,6 +6193,8 @@ function _doRemovePartRow(pNum){
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
+  /* ★ 삭제된 행에 있던 차량들의 서류도 함께 정리 — 같은 번호 재사용 시 예전 서류 방지 */
+  _removedCarsRow.forEach(function(c){ if(typeof _deleteCarDocs==='function') _deleteCarDocs(c); });
 }
 function addPart(){
   if(NUM_PARTS>=MAX_PARTS){showAlert('⚠️ 최대 '+MAX_PARTS+'개');setTimeout(hideAlert,2500);return;}
@@ -9657,6 +9665,142 @@ function _saveDoc(key, name, type, dataUrl, size, cb){
   });
 }
 
+/* ★ 서류 첨부 "이전(migration)" — 같은 칸에서 차량번호 표기만 바뀐 경우
+   (예: "5640" → "경기50가5640") 서류 저장 키(차량번호 기준)가 달라지면서
+   기존에 첨부된 서류가 안 보이게 되는 문제를 방지한다.
+   - 실제 서류(사진/PDF) 데이터를 다시 업로드하지 않고, Firebase 노드 자체를
+     새 키로 "이동"만 시키므로 용량이 전혀 늘지 않는다 (복사 후 삭제가 아니라
+     한 번의 multi-path update로 old를 null 처리 + new에 값 연결).
+   - 이미 새 키 쪽에 서류가 있는 경우(우연히 같은 번호를 쓰는 다른 차량 등)를
+     대비해 기존 서류를 덮어쓰지 않고 합쳐(merge) 넣는다. docId가 타임스탬프+
+     랜덤 기반이라 충돌 가능성은 사실상 없다. */
+function _migrateCarDocs(oldCarText, newCarText){
+  var oldKey=_docKeyFromCar(oldCarText);
+  var newKey=_docKeyFromCar(newCarText);
+  if(!oldKey || !newKey || oldKey===newKey) return;
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb) return;
+  var roomRef=_docsRoomRef();
+  if(!roomRef) return;
+  roomRef.child(oldKey).once('value').then(function(oldSnap){
+    var oldDocs=oldSnap.val();
+    if(!oldDocs || !Object.keys(oldDocs).length) return; /* 옮길 서류 없음 */
+    roomRef.child(newKey).once('value').then(function(newSnap){
+      var newDocs=newSnap.val()||{};
+      var merged=Object.assign({}, newDocs, oldDocs); /* docId 충돌 가능성 사실상 없음 */
+      var updates={};
+      updates['kd_docs/'+newKey]=merged;
+      updates['kd_docs/'+oldKey]=null;
+      updates['kd_doc_flags/'+newKey]=true;
+      updates['kd_doc_flags/'+oldKey]=null;
+      fbDb.ref('kd_rooms/'+code).update(updates).then(function(){
+        console.log('[서류 이전] "'+oldCarText+'" → "'+newCarText+'" ('+Object.keys(oldDocs).length+'건)');
+        delete _docFlags[oldKey];
+        _docFlags[newKey]=true;
+        _saveDocFlagsCache();
+        /* 모달이 아직 이 슬롯(새 차량번호)을 보여주고 있으면 서류 목록도 즉시 갱신 */
+        var carEl=document.getElementById('mCarInput');
+        if(carEl && _docKeyFromCar(carEl.value.trim())===newKey){
+          _curDocs=merged;
+          _renderDocList();
+          if(typeof refreshStorageBadge==='function') refreshStorageBadge();
+        }
+        _refreshDocIconsOnGrid();
+      }).catch(function(e){ console.warn('[서류 이전 실패]', e); });
+    }).catch(function(e){ console.warn('[서류 이전 대상 조회 실패]', e); });
+  }).catch(function(e){ console.warn('[서류 이전 원본 조회 실패]', e); });
+}
+
+/* ★ 서류 보관함(archive) — 즉시 영구삭제 대신, 정해진 기간 동안은 별도 경로에 보관했다가
+   자동으로 정리한다.
+   - 경로: kd_rooms/{code}/kd_docs_archive/{연월(yyyymm)}/{차량번호키} = {carText, archivedAt, docs:{...}}
+   - 판매완료 등으로 실수했을 때 잠깐은 복구 여지를 남기고, 결국엔 자동 삭제되어
+     용량이 무한정 쌓이지 않게 한다.
+   - 보관 중에도 실제 데이터가 그대로 남아있는 것이므로 DB 저장 용량/과금에는
+     보관 여부와 무관하게 그대로 반영된다 (아래 _purgeOldDocArchive 참고). */
+var DOC_ARCHIVE_RETENTION_DAYS = 90; /* 보관 기간(일) — 이 기간이 지나면 완전 자동 삭제 */
+function _docArchiveBucket(d){
+  d = d || new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth()+1);
+  if(m.length<2) m='0'+m;
+  return ''+y+m; /* 예: '202607' — 문자열 비교로 정렬 가능하도록 6자리 고정 */
+}
+
+/* ★ 차량 서류 삭제 → 실제로는 "보관함으로 이동" — 차량이 슬롯을 떠날 때
+   (판매완료/사용안함/칸 초기화/열·행 삭제) 첨부됐던 서류를 라이브 경로(kd_docs)에서는
+   즉시 비워서 나중에 같은 차량번호가 재사용돼도 예전 서류가 섞이지 않게 하고,
+   실제 파일 데이터는 kd_docs_archive로 옮겨 보관 기간 동안 유지한다. */
+function _deleteCarDocs(carText){
+  var key=_docKeyFromCar(carText);
+  if(!key) return;
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb) return;
+  var roomRef=fbDb.ref('kd_rooms/'+code);
+  var bucket=_docArchiveBucket();
+  var archivePath='kd_docs_archive/'+bucket+'/'+key;
+
+  roomRef.child('kd_docs/'+key).once('value').then(function(liveSnap){
+    var liveDocs=liveSnap.val();
+    var updates={};
+    updates['kd_docs/'+key]=null;
+    updates['kd_doc_flags/'+key]=null;
+    if(!liveDocs || !Object.keys(liveDocs).length){
+      /* 실제 서류가 없으면 보관할 것도 없음 — 플래그만 정리하고 끝 */
+      roomRef.update(updates).catch(function(e){ console.warn('[서류 정리 실패]', e); });
+      return;
+    }
+    roomRef.child(archivePath).once('value').then(function(arSnap){
+      var existing=arSnap.val();
+      var existingDocs=(existing && existing.docs) || {};
+      var mergedDocs=Object.assign({}, existingDocs, liveDocs); /* docId 충돌 사실상 없음 */
+      updates[archivePath]={ carText:carText, archivedAt:Date.now(), docs:mergedDocs };
+      roomRef.update(updates).then(function(){
+        console.log('[서류 보관] "'+carText+'" → 보관함('+bucket+') 이동 완료 ('+Object.keys(liveDocs).length+'건)');
+      }).catch(function(e){ console.warn('[서류 보관 실패]', e); });
+    }).catch(function(e){ console.warn('[서류 보관함 조회 실패]', e); });
+  }).catch(function(e){ console.warn('[서류 원본 조회 실패]', e); });
+
+  /* 로컬 캐시 즉시 정리 (Firebase 응답을 기다리지 않고 화면부터 반영) */
+  if(_docFlags[key]){
+    delete _docFlags[key];
+    _saveDocFlagsCache();
+  }
+  var carEl=document.getElementById('mCarInput');
+  if(carEl && _docKeyFromCar(carEl.value.trim())===key){
+    _curDocs={};
+    if(typeof _renderDocList==='function') _renderDocList();
+  }
+  _refreshDocIconsOnGrid();
+}
+
+/* ★ 보관함 자동 정리 — 앱 접속 시 1회, 보관 기간(DOC_ARCHIVE_RETENTION_DAYS)이 지난
+   연월 버킷을 통째로 완전 삭제한다. shallow REST 호출로 "버킷 이름(연월) 목록"만
+   가볍게 확인하므로 실제 서류 데이터를 내려받지 않는다. */
+var _docArchivePurgeDone = {};
+function _purgeOldDocArchive(url, code){
+  if(!url || !code) return;
+  if(_docArchivePurgeDone[code]) return;
+  _docArchivePurgeDone[code]=true;
+  var base=String(url).replace(/\/+$/,'');
+  var archUrl=base+'/kd_rooms/'+encodeURIComponent(code)+'/kd_docs_archive.json?shallow=true';
+  fetch(archUrl).then(function(res){ return res.ok ? res.json() : null; }).then(function(buckets){
+    if(!buckets || typeof buckets!=='object') return;
+    var cutoff=new Date();
+    cutoff.setDate(cutoff.getDate()-DOC_ARCHIVE_RETENTION_DAYS);
+    var cutoffBucket=_docArchiveBucket(cutoff);
+    var toDelete=Object.keys(buckets).filter(function(bk){ return bk < cutoffBucket; });
+    if(!toDelete.length) return;
+    var updates={};
+    toDelete.forEach(function(bk){ updates['kd_docs_archive/'+bk]=null; });
+    if(typeof fbDb==='undefined' || !fbDb) return;
+    fbDb.ref('kd_rooms/'+code).update(updates).then(function(){
+      console.log('[서류 보관함 자동정리] '+toDelete.length+'개월치 완전삭제: '+toDelete.join(', '));
+    }).catch(function(e){ console.warn('[서류 보관함 정리 실패]', e); });
+  }).catch(function(e){ console.warn('[서류 보관함 조회 실패]', e); });
+}
+
+
 /* ★ 차량번호를 수정하고 포커스를 벗어나면(모달이 열려있을 때) 서류 목록도 새로 불러옴
    — 서류는 차량번호 기준으로 저장되므로, 번호를 바꾸면 다른 서류함을 보게 됨 */
 document.addEventListener('DOMContentLoaded', function(){
@@ -9739,12 +9883,12 @@ function _calcDbStorageUsage(cb){
 
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb){
-    done({connected:false, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0});
+    done({connected:false, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
     return;
   }
   var roomRef;
   try{ roomRef = fbDb.ref('kd_rooms/'+code); }catch(e){
-    done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0});
+    done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
     return;
   }
 
@@ -9757,7 +9901,8 @@ function _calcDbStorageUsage(cb){
     _fbGetPath(roomRef, 'pb_part_canvases', 10000),
     _fbGetPath(roomRef, 'pb_slots', 8000),
     _fbGetPath(roomRef, 'pb_settings', 6000),
-    _fbGetPath(roomRef, 'pb_daily_backup', 6000)
+    _fbGetPath(roomRef, 'pb_daily_backup', 6000),
+    _fbGetPath(roomRef, 'kd_docs_archive', 10000)
   ]).then(function(results){
     try{
       var byPath={};
@@ -9814,25 +9959,45 @@ function _calcDbStorageUsage(cb){
       if(byPath.pb_daily_backup.timeout) anyTimeout=true;
       if(backups) backupCount = Object.keys(backups).length;
 
+      /* ★ 서류 보관함(kd_docs_archive) — 판매완료 등으로 정리된 서류가 보관 기간
+         동안 임시로 머무는 곳. 실제 데이터가 그대로 있으므로 용량 계산에 포함한다. */
+      var archiveSize=0, archiveCount=0;
+      var docArchive = byPath.kd_docs_archive.val;
+      if(byPath.kd_docs_archive.timeout) anyTimeout=true;
+      if(docArchive){
+        Object.keys(docArchive).forEach(function(bucketKey){
+          var bucket=docArchive[bucketKey]||{};
+          Object.keys(bucket).forEach(function(carKey){
+            archiveCount++;
+            var entry=bucket[carKey]||{};
+            var docsInEntry=entry.docs||{};
+            Object.keys(docsInEntry).forEach(function(docId){
+              var d=docsInEntry[docId]||{};
+              archiveSize += _byteLen(d.data)+_byteLen(d.name);
+            });
+          });
+        });
+      }
+
       var attachTotal = docsSize + commonSize;
-      var total = docsSize + commonSize + photosSize + canvasSize + otherSize;
+      var total = docsSize + commonSize + photosSize + canvasSize + otherSize + archiveSize;
 
       done({
         connected:true, timeout:anyTimeout, total: total, attach: attachTotal,
         docs: docsSize, common: commonSize,
         photos: photosSize, canvases: canvasSize, other: otherSize,
-        backupCount: backupCount
+        backupCount: backupCount, archive: archiveSize, archiveCount: archiveCount
       });
     }catch(e){
-      done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0});
+      done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
     }
   }).catch(function(){
-    done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0});
+    done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
   });
 
   /* ★ 최종 안전망 — 위 로직이 어떤 이유로든 done()을 못 부르는 극단적 상황 대비 */
   setTimeout(function(){
-    done({connected:false, error:true, timeout:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0});
+    done({connected:false, error:true, timeout:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
   }, 15000);
 }
 
@@ -9874,7 +10039,7 @@ function refreshStorageBadge(){
 function _renderStorageDetail(){
   var body=document.getElementById('storageDetailBody');
   if(!body) return;
-  var d = _storageUsageCache || {local:0, db:{connected:false,total:0,attach:0,docs:0,common:0,photos:0,canvases:0,other:0,backupCount:0}};
+  var d = _storageUsageCache || {local:0, db:{connected:false,total:0,attach:0,docs:0,common:0,photos:0,canvases:0,other:0,backupCount:0,archive:0,archiveCount:0}};
   var db = d.db||{};
   var html =
      '<div class="storage-detail-row"><span>📎 차량별 첨부서류</span><b>'+_fmtBytes(db.docs||0)+'</b></div>'
@@ -9883,7 +10048,8 @@ function _renderStorageDetail(){
     +'<div class="storage-detail-row"><span>🖼️ 파트 위치사진</span><b>'+_fmtBytes(db.photos||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>✏️ 약도 그림데이터</span><b>'+_fmtBytes(db.canvases||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>⚙️ 기타(슬롯·설정 등)</span><b>'+_fmtBytes(db.other||0)+'</b></div>'
-    +'<div class="storage-detail-row total"><span>☁️ DB 합계 (백업이력 제외)</span><b>'+_fmtBytes(db.total||0)+'</b></div>'
+    +'<div class="storage-detail-row"><span>🗃️ 서류 보관함 ('+(db.archiveCount||0)+'건, '+DOC_ARCHIVE_RETENTION_DAYS+'일 후 자동삭제)</span><b>'+_fmtBytes(db.archive||0)+'</b></div>'
+    +'<div class="storage-detail-row total"><span>☁️ DB 합계 (백업이력 제외, 보관함 포함)</span><b>'+_fmtBytes(db.total||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>🗄️ 일별 백업 이력</span><b>'+(db.backupCount||0)+'건</b></div>'
     +'<div class="storage-detail-row local"><span>📱 이 기기 로컬 저장공간</span><b>'+_fmtBytes(d.local||0)+'</b></div>';
   if(db.connected===false && !db.error){
@@ -10135,6 +10301,9 @@ function saveSlot(){
   var _prevNum   = (s[activeSlot] && s[activeSlot].num   !== undefined) ? s[activeSlot].num   : '0';
   var _prevEncar = (s[activeSlot] && s[activeSlot].encar)               ? s[activeSlot].encar : {time:'',done:false};
   var _prevInspect = (s[activeSlot] && s[activeSlot].inspect)           ? s[activeSlot].inspect : {date:'',done:false};
+  /* ★ 서류 첨부 이전(migration)용 — 같은 칸의 차량번호가 "수정"된 것인지 확인하기 위해
+     덮어쓰기 전 원래 차량번호를 기억해둔다 (예: "5640" → "경기50가5640") */
+  var _prevCarForDocs = (s[activeSlot] && s[activeSlot].car) ? s[activeSlot].car : '';
 
   /* ★ 성능검사 날짜 모달 입력값 읽기 */
   var _inspInp = document.getElementById('inspectDateInput');
@@ -10181,6 +10350,17 @@ function saveSlot(){
   }
   _inspectApplyBlinks();
   refreshSlot(activeSlot);
+  /* ★ 서류 정리
+     - 판매완료/사용안함으로 차량번호가 지워지는 경우: 첨부됐던 서류를 함께 삭제한다.
+       (나중에 같은 차량번호가 다른 차량에 재사용되어 슬롯에 저장돼도 예전 서류가
+       남아있다가 잘못 표시되는 일이 없도록)
+     - 같은 칸에서 차량번호 "표기"만 수정된 경우(예: 5640 → 경기50가5640): 새 차량이
+       들어온 게 아니므로 서류를 삭제하지 않고 새 키로 이전(migration)한다. */
+  if(isClear && _prevCarForDocs && typeof _deleteCarDocs==='function'){
+    _deleteCarDocs(_prevCarForDocs);
+  } else if(!isClear && _prevCarForDocs && car && _prevCarForDocs.trim()!==car && typeof _migrateCarDocs==='function'){
+    _migrateCarDocs(_prevCarForDocs, car);
+  }
   /* ★ 차량 카운트 배지 즉시 갱신 (오프라인 포함) */
   if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
   closeModal();
@@ -10250,6 +10430,7 @@ function clearSlot(){
   if(activeSlot===null)return;
   var s=getSlots();
   _backupSlot(activeSlot); /* ★ 초기화 전 백업 */
+  var _clearedCar = (s[activeSlot] && s[activeSlot].car) ? s[activeSlot].car : '';
   /* 슬롯 완전 삭제 (encar, inspect 포함) */
   delete s[activeSlot];
   saveSlots(s);
@@ -10260,6 +10441,8 @@ function clearSlot(){
   refreshSlot(activeSlot);
   _encarUpdateCount();
   _inspectApplyBlinks();
+  /* ★ 첨부돼 있던 서류도 함께 삭제 — 같은 차량번호 재사용 시 예전 서류가 남지 않도록 */
+  if(_clearedCar && typeof _deleteCarDocs==='function') _deleteCarDocs(_clearedCar);
   closeModal();
 }
 function clearAllSlots(){ openResetConfirm(); } /* ★ 비밀번호 모달로 통합 */
@@ -11601,6 +11784,8 @@ function connectFb(url,code){
 
     /* ★ 서류 플래그 보정(백필) — 이 접속에서 처음 연결될 때 1회, 기존 서류에 빠진 플래그를 채움 */
     try{ _backfillDocFlags(url, code); }catch(e){ console.warn('[서류플래그 보정 호출 실패]', e); }
+    /* ★ 서류 보관함 자동정리 — 보관 기간 지난 연월 버킷 완전 삭제 (접속당 1회) */
+    try{ _purgeOldDocArchive(url, code); }catch(e){ console.warn('[서류 보관함 정리 호출 실패]', e); }
 
     /* ★ PIN 사용안함 상태 실시간 동기화 리스너 */
     if(typeof PIN !== 'undefined' && typeof PIN.startListener === 'function'){
