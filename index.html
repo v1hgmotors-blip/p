@@ -18699,8 +18699,62 @@ window._drawQRCanvas = function(container, text, size){
     }catch(e){ console.warn('[약도문자] 오류:', e); notify('failed'); }
   }
 
+  /* ★★ 약도 알림톡 발송 요청 (dispatch_req) — 키불출앱 자동전송과 동일 경로.
+     서버(onKeyDispatch)가 차량번호로 위치를 계산해 카카오 알림톡을 우선 발송하고,
+     카톡 미수신자는 문자로 자동 대체함. (키불출앱 on/off 토글과 무관하게 동작)
+     onStatus: 'sent'|'failed'|'timeout' 콜백, via: 'alimtalk'|기타 */
+  function _queueRouteDispatch(code, phone, car, name, eid, onStatus){
+    var notify = function(s, via){ try{ if(typeof onStatus==='function') onStatus(s, via); }catch(e){} };
+    try{
+      if(typeof fbDb==='undefined' || !fbDb){ notify('failed'); return; }
+      var reqRef = fbDb.ref('kd_rooms/'+code+'/dispatch_req').push();
+      reqRef.set({
+        eid:    eid,
+        car:    String(car||''),
+        phone:  phone,
+        name:   String(name||''),
+        status: 'pending',
+        t:      Date.now()
+      }).then(function(){
+        if(typeof showAlert==='function') showAlert('🗺️ '+_fmtPhone(phone)+' 로 약도 발송 요청됨...');
+        var done=false;
+        var off=function(){ try{ reqRef.off(); }catch(e){} };
+        reqRef.on('value', function(snap){
+          var v=snap.val();
+          if(!v || done) return;
+          if(v.status==='sent'){
+            done=true; off();
+            var via=(v.via==='alimtalk')?'알림톡':'문자';
+            _greenToast('✅ 전송완료! 약도 '+via+' 발송 → '+_fmtPhone(phone));
+            if(typeof hideAlert==='function') hideAlert();
+            notify('sent', v.via);
+          } else if(v.status==='failed'){
+            done=true; off();
+            if(typeof showAlert==='function') showAlert('❌ 약도 발송 실패 ('+(v.error||'서버 오류')+')');
+            notify('failed');
+          } else if(v.status==='duplicate'){
+            done=true; off();
+            _greenToast('✅ 이미 발송된 건입니다 → '+_fmtPhone(phone));
+            notify('sent', 'duplicate');
+          }
+        });
+        setTimeout(function(){
+          if(!done){
+            off();
+            if(typeof showAlert==='function') showAlert('⏳ 문자서버 응답 없음 — 서버(Cloud Functions) 연동 상태를 확인하세요');
+            notify('timeout');
+          }
+        }, 60000);
+      }).catch(function(e){
+        console.warn('[약도 알림톡] 발송요청 실패:', e);
+        if(typeof showAlert==='function') showAlert('❌ 발송요청 실패 — 네트워크를 확인하세요');
+        notify('failed');
+      });
+    }catch(e){ console.warn('[약도 알림톡] 오류:', e); notify('failed'); }
+  }
+
   /* ★ 📲 약도전송 (수동) — 검색 키불출 등 번호가 없을 때, 팝업에 번호를 직접 입력해 발송
-     문자서버(자동문자와 동일 경로)로 약도 이미지 MMS 발송. 서버 미연동 시 문자앱으로 대체 */
+     ★ 카카오 알림톡 우선 발송(→ 미수신자는 문자 자동 대체) — dispatch_req 경로. 서버 미연동 시 문자앱으로 대체 */
   window._sendManualRouteSms = function(){
     /* ★ 요금발생차단 ON → 전면 차단 */
     if(window._isFeeBlocked && window._isFeeBlocked()){
@@ -18764,49 +18818,33 @@ window._drawQRCanvas = function(container, text, size){
       if(_biM) text += '\n' + _biM;
     }catch(e){}
 
-    /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
-    if(_getSmsMode()==='link'){
-      /* 팝업 시점에 저장해 둔 상세정보 우선 사용 (QR이 단축링크라 URL 파싱 불가) */
-      var _pl = {};
-      if(window._popupLinkPay && typeof window._popupLinkPay === 'object'){
-        _pl = Object.assign({}, window._popupLinkPay);
-      } else {
-        try{
-          var _u9 = new URL(_popupQrUrl);
-          ['part','car','loc','on','op','kn'].forEach(function(k){
-            var v = _u9.searchParams.get(k);
-            if(v) _pl[k] = v;
-          });
-        }catch(e){}
-      }
-      _makeShortLink(code, _pl, function(shortUrl){
-        var u = shortUrl || _popupQrUrl;
-        if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
-        _queueRouteSms(code, phone, '', text, '', 'manual_'+Date.now(), 'parkboard-manual', function(status){
-          if(status==='sent'){ setBtn('✅ 전송완료', '#16A34A', true); }
-          else { setBtn('📲 약도전송', '#B45309', false); }
-        });
-      });
+    /* ★★ 카카오 알림톡 발송 (dispatch_req) — 키불출앱 자동전송과 동일 경로.
+       서버가 차량번호로 위치를 계산해 알림톡 우선 발송(→ 미수신자는 문자 자동 대체).
+       ※ 키불출앱의 「약도 알림톡 자동전송」 on/off 토글과 무관하게, 이 버튼을 누르면 발송됨. */
+    var _pl2 = (window._popupLinkPay && typeof window._popupLinkPay==='object') ? window._popupLinkPay : {};
+    var _car2 = String(_pl2.car||'').trim();
+    if(!_car2){
+      /* 헤더 텍스트에서 차량번호 백업 추출 (예: "차량번호:0734 차량위치:...") */
+      var _mc = ((_hdrTxt||'').match(/차량번호[:：]\s*([0-9A-Za-z가-힣\-]+)/)||[]);
+      _car2 = _mc[1] || '';
+    }
+    if(!_car2){
+      alert('차량번호를 확인할 수 없어 약도 알림톡을 보낼 수 없습니다.\n팝업을 닫고 다시 열어 주세요.');
+      setBtn('📲 약도전송', '#B45309', false);
       return;
     }
-
-    /* 🖼️ 이미지 모드(MMS 121원): 팝업창 모양 합성 이미지 첨부 */
-    _composeMmsImage((img&&img.src)||'', {
-      header: _hdrTxt,
-      owner:  _ownTxt,
-      qrText: _popupQrUrl
-    }, function(composite){
-      _compressForMms(composite || ((img&&img.src)||''), function(jpeg){
-        _queueRouteSms(code, phone, '', text, jpeg, 'manual_'+Date.now(), 'parkboard-manual', function(status){
-          /* ★ 발송 결과에 따라 버튼 색 변경 */
-          if(status==='sent'){
-            setBtn('✅ 전송완료', '#16A34A', true); /* 녹색 고정 — 팝업 다시 열면 초기화 */
-          } else {
-            setBtn('📲 약도전송', '#B45309', false); /* 실패/응답없음 → 재시도 가능 */
-          }
-        });
-      });
+    var _nm2 = String((_pl2.on!=null?_pl2.on:'') || _ownTxt || '')
+                 .replace(/^👤\s*/,'').replace(/📞[\s\S]*$/,'').replace(/담당차주:\s*/,'').trim();
+    _queueRouteDispatch(code, phone, _car2, _nm2, 'manual_'+Date.now(), function(status, via){
+      if(status==='sent'){
+        var lbl = (via==='alimtalk') ? '✅ 알림톡 전송완료'
+                : (via==='duplicate' ? '✅ 전송완료' : '✅ 문자 전송완료');
+        setBtn(lbl, '#16A34A', true);
+      } else {
+        setBtn('📲 약도전송', '#B45309', false);
+      }
     });
+    return;
   };
 
   /* ★ 자동문자 토글 */
