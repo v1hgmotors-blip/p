@@ -525,10 +525,17 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     transition:font-size .15s;
   }
   .part-label-pc-extra::placeholder{ color:rgba(254,229,0,.35); font-size:clamp(13px,2vw,22px); }
-  .part-label-row1,
-  .part-label-row2{ position:relative; z-index:2; pointer-events:none; }
-  .part-label-row1 > *,
-  .part-label-row2 > *{ pointer-events:auto; }
+  /* ★ BUG FIX: 구역명 입력란(part-label-pc-extra) 클릭 불안정 문제.
+     아래 규칙은 원래 row1/row2의 빈 공간 클릭을 통과시켜 그 밑에 겹쳐진
+     구역명 입력란이 클릭되게 하려는 의도였는데, 다른 곳에 있는
+     ".part-label *{ pointer-events:auto; }" 규칙과 우선순위(specificity)가
+     동점이라 소스 순서상 나중에 선언된 그 규칙에 덮어써져서 row1/row2 컨테이너가
+     클릭을 도로 가로채 버렸음. ".part-label" 하위 선택자로 명시해 우선순위를
+     더 높여서 확실히 이기도록 수정. */
+  .part-label .part-label-row1,
+  .part-label .part-label-row2{ position:relative; z-index:2; pointer-events:none; }
+  .part-label .part-label-row1 > *,
+  .part-label .part-label-row2 > *{ pointer-events:auto; }
 }
 
 /* ══ 접기/펼치기 ══ */
