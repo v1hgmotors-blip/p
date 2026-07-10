@@ -17613,6 +17613,7 @@ window._drawQRCanvas = function(container, text, size){
   var _popupTimer = null;
   var _popupPhone = '';   /* ★ 키불출앱에서 들어온 딜러 전화번호 */
   var _popupQrUrl = '';   /* ★ 현재 팝업의 QR 링크 (수동 약도전송 합성용) */
+  var _pbSavedHref = null; /* ★ 약도 팝업 열릴 때 원래 주소 저장 (삼성 '출처로 이동' 대응) */
   /* ★ 010-1234-5678 형태로 표시 */
   function _fmtPhone(p){
     var d = String(p||'').replace(/[^0-9]/g,'');
@@ -18125,6 +18126,19 @@ window._drawQRCanvas = function(container, text, size){
 
     document.getElementById('partPhotoPopupOv').classList.add('show');
 
+    /* ★★ 삼성 갤러리 '출처로 이동' 대응 —
+       약도 팝업은 현황판 위에 뜨는 레이어라, 이 화면을 캡처하면 주소(출처)가 '전체 현황판'이 됨.
+       팝업이 열려있는 동안만 주소창을 약도(view.html) 링크로 바꿔주면,
+       그 화면을 캡처한 뒤 '출처로 이동'을 눌러도 전체 현황판이 아닌 약도 페이지로 연결됨.
+       (같은 사이트 내 주소 변경이라 안전하며, 닫으면 원래 주소로 복구) */
+    try{
+      var _pbView = _popupQrUrl || _qrUrl || '';
+      if(_pbView && /^https?:\/\//.test(_pbView) && _pbView.indexOf('view.html') !== -1){
+        if(_pbSavedHref === null){ _pbSavedHref = location.href; }
+        history.replaceState(history.state, '', _pbView);
+      }
+    }catch(e){}
+
     /* 20초 후 자동 닫기 */
     if(_popupTimer) clearTimeout(_popupTimer);
     _popupTimer = setTimeout(function(){ window._closePartPhotoPopup(); }, 55000);
@@ -18133,6 +18147,13 @@ window._drawQRCanvas = function(container, text, size){
   window._closePartPhotoPopup = function(){
     document.getElementById('partPhotoPopupOv').classList.remove('show');
     if(_popupTimer){ clearTimeout(_popupTimer); _popupTimer=null; }
+    /* ★ 팝업 닫힐 때 주소창을 원래(현황판) 주소로 복구 */
+    try{
+      if(_pbSavedHref !== null){
+        history.replaceState(history.state, '', _pbSavedHref);
+        _pbSavedHref = null;
+      }
+    }catch(e){}
   };
 
   /* ★ 녹색 전송완료 토스트 알림 */
