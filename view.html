@@ -13,19 +13,19 @@
   }
   .wrap{max-width:720px;margin:0 auto;}
   .top-title{
-    text-align:center;font-size:23px;font-weight:900;color:#FEE500;
-    padding:10px 0 14px;letter-spacing:-.3px;line-height:1.35;
+    text-align:center;font-size:16px;font-weight:900;color:#FEE500;
+    padding:8px 0 14px;letter-spacing:-.3px;
   }
   /* 차량번호/차량위치 헤더 — 팝업과 동일 스타일 */
   .car-header{
     display:none;
-    font-size:21px;font-weight:900;color:#E8590C;text-align:center;
+    font-size:16px;font-weight:900;color:#E8590C;text-align:center;
     background:#fff;border:2.5px solid #E03131;border-radius:12px;
-    padding:14px 14px;margin-bottom:12px;letter-spacing:-.3px;line-height:1.5;
+    padding:10px 12px;margin-bottom:12px;letter-spacing:-.3px;line-height:1.45;
   }
   /* ★ 차량이 더 이상 존재하지 않을 때(출고됨 등) 안내 스타일 */
   .car-header.gone{
-    color:#475569;background:#F1F5F9;border-color:#94A3B8;font-size:17px;font-weight:800;line-height:1.7;
+    color:#475569;background:#F1F5F9;border-color:#94A3B8;font-size:14px;font-weight:800;line-height:1.7;
   }
   /* ★ 슬롯 메모 (실시간) */
   .slot-memo{
@@ -36,13 +36,13 @@
   .owner-line{
     display:none;
     align-items:center;gap:10px;flex-wrap:wrap;
-    font-size:18px;font-weight:900;color:#7CE38B;
+    font-size:14px;font-weight:900;color:#7CE38B;
     background:#16305A;border-radius:12px;
-    padding:13px 16px;margin-bottom:12px;letter-spacing:-.3px;
+    padding:10px 14px;margin-bottom:12px;letter-spacing:-.3px;
   }
   .owner-call{
     background:#16A34A;color:#fff;text-decoration:none;
-    padding:10px 18px;border-radius:9px;font-size:16px;font-weight:900;
+    padding:8px 16px;border-radius:9px;font-size:13px;font-weight:900;
   }
   .panel{
     background:#1E3A5F;border-radius:14px;padding:14px 16px;margin-bottom:12px;
@@ -70,14 +70,6 @@
     animation:sp 0.9s linear infinite;margin-bottom:10px;
   }
   @keyframes sp{to{transform:rotate(360deg);}}
-  /* ★ 출고서류 박스 — 차량번호 깜박임 */
-  @keyframes docCarNoBlink{
-    0%,100%{opacity:1;}
-    50%{opacity:.25;}
-  }
-  #docCarNo.blink{
-    animation:docCarNoBlink 1s ease-in-out infinite;
-  }
   .foot{
     text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:18px;
   }
@@ -87,11 +79,11 @@
 <div class="wrap" id="wrap">
   <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
-  <div id="bizInfo" style="display:none;text-align:center;font-size:16px;font-weight:800;color:#BFDBFE;line-height:1.75;margin:-4px 0 16px;padding:0 8px;white-space:pre-line;"></div>
+  <div id="bizInfo" style="display:none;text-align:center;font-size:13px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-6px 0 14px;padding:0 8px;white-space:pre-line;"></div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
+    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:0;padding:13px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
