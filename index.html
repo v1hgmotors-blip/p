@@ -9388,6 +9388,42 @@ function _docsRoomRef(){
   return fbDb.ref('kd_rooms/'+code+'/kd_docs');
 }
 
+/* ★ 서류 플래그 보정(백필) — 앱 접속 시 1회
+   새 기능(kd_doc_flags) 적용 전에 이미 첨부되어 있던 서류들은 플래그가 기록된 적이 없어
+   📄 아이콘이 표시되지 않는 문제가 있었음. 이를 보정하기 위해, 실제 서류(사진/PDF) 데이터는
+   전혀 받지 않고 shallow REST 호출로 kd_docs / kd_doc_flags의 "키 목록"만 가볍게 확인한 뒤,
+   서류는 있는데 플래그가 없는 차량키만 골라 kd_doc_flags에 채워 넣는다. */
+var _docFlagsBackfillDone = {};
+function _backfillDocFlags(url, code){
+  if(!url || !code) return;
+  if(_docFlagsBackfillDone[code]) return; /* 코드당 1회만 실행 */
+  _docFlagsBackfillDone[code] = true;
+  var base = String(url).replace(/\/+$/,'');
+  var docsUrl  = base + '/kd_rooms/' + encodeURIComponent(code) + '/kd_docs.json?shallow=true';
+  var flagsUrl = base + '/kd_rooms/' + encodeURIComponent(code) + '/kd_doc_flags.json?shallow=true';
+  Promise.all([
+    fetch(docsUrl).then(function(res){ return res.ok ? res.json() : null; }).catch(function(){ return null; }),
+    fetch(flagsUrl).then(function(res){ return res.ok ? res.json() : null; }).catch(function(){ return null; })
+  ]).then(function(results){
+    var carKeys = results[0], existingFlags = results[1] || {};
+    if(!carKeys || typeof carKeys !== 'object') return; /* 서류 자체가 없으면 보정 불필요 */
+    var updates = {};
+    var missingCount = 0;
+    for(var k in carKeys){
+      if(carKeys[k] && !existingFlags[k]){
+        updates[k] = true;
+        missingCount++;
+      }
+    }
+    if(!missingCount) return; /* 보정할 것 없음 */
+    var fref = _docFlagsRef();
+    if(!fref) return;
+    fref.update(updates).then(function(){
+      console.log('[서류플래그 보정] '+missingCount+'건 보정 완료');
+    }).catch(function(e){ console.warn('[서류플래그 보정 실패]', e); });
+  }).catch(function(e){ console.warn('[서류플래그 보정 조회 실패]', e); });
+}
+
 function loadSlotDocs(){
   var box=document.getElementById('docsList');
   if(!box) return;
@@ -11562,6 +11598,9 @@ function connectFb(url,code){
       _saveDocFlagsCache();
       _refreshDocIconsOnGrid();
     },function(err){console.warn('[서류플래그동기화]',err);});
+
+    /* ★ 서류 플래그 보정(백필) — 이 접속에서 처음 연결될 때 1회, 기존 서류에 빠진 플래그를 채움 */
+    try{ _backfillDocFlags(url, code); }catch(e){ console.warn('[서류플래그 보정 호출 실패]', e); }
 
     /* ★ PIN 사용안함 상태 실시간 동기화 리스너 */
     if(typeof PIN !== 'undefined' && typeof PIN.startListener === 'function'){
