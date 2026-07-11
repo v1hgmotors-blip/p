@@ -112,6 +112,10 @@
     background:#E03131;border-color:#B91C1C;color:#fff;font-weight:900;
     animation:amPulse 1.2s ease-in-out infinite;
   }
+  .amNear{
+    font-size:9px;font-weight:800;color:#334155;letter-spacing:-.5px;
+    background:#DBEAFE;border-color:#93C5FD;
+  }
   @keyframes amPulse{
     0%,100%{ box-shadow:0 0 0 2px rgba(224,49,49,.30); }
     50%    { box-shadow:0 0 0 6px rgba(224,49,49,.55); }
@@ -195,8 +199,11 @@
    html2canvas 로드 실패 시 약도 사진만 저장 (폴백) */
 function _dlFallbackMapOnly(){
   try{
+    var box = document.getElementById('mapBox');
     var img = document.getElementById('mapImg');
-    if(img && img.src && img.src.indexOf('data:image')===0){
+    /* ★ 사진 박스가 실제 표시 중일 때만 — 자동 약도로 전환된 뒤 남아있는 옛 사진 다운 방지 */
+    var boxVisible = box && box.style.display !== 'none';
+    if(boxVisible && img && img.src && img.src.indexOf('data:image')===0){
       var a=document.createElement('a');
       a.href=img.src; a.download='약도_차량위치안내.png';
       document.body.appendChild(a); a.click(); a.remove();
@@ -205,11 +212,36 @@ function _dlFallbackMapOnly(){
   }catch(e){}
   return false;
 }
-/* ★ 약도 사진 1장만 다운로드 */
+/* ★ 약도 사진 1장만 다운로드 — 등록 사진이 있으면 사진을,
+   자동 약도(격자)가 표시 중이면 격자를 이미지로 캡처해 저장 */
 function dlMapOnly(){
-  if(!_dlFallbackMapOnly()){
-    alert('다운로드할 약도 사진이 없습니다.');
+  /* 1) 등록 사진이 있으면 사진 다운로드 */
+  if(_dlFallbackMapOnly()) return;
+  /* 2) 자동 약도(격자)가 표시 중이면 격자 캡처 다운로드 */
+  var am = document.getElementById('autoMapBox');
+  var amVisible = am && am.style.display !== 'none' && am.innerHTML;
+  if(amVisible && typeof html2canvas !== 'undefined'){
+    html2canvas(am, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      /* ★ 격자가 가로 스크롤로 잘려있어도 전체 폭을 캡처 */
+      width: am.scrollWidth,
+      height: am.scrollHeight,
+      windowWidth: am.scrollWidth,
+      windowHeight: am.scrollHeight
+    }).then(function(canvas){
+      var a=document.createElement('a');
+      a.href=canvas.toDataURL('image/png');
+      a.download='약도_차량위치안내.png';
+      document.body.appendChild(a); a.click(); a.remove();
+    }).catch(function(){
+      alert('약도 이미지 생성에 실패했습니다.');
+    });
+    return;
   }
+  alert('다운로드할 약도가 없습니다.');
 }
 function dlMap(){
   var btns = document.getElementById('actionBtns');
@@ -698,6 +730,24 @@ function sharePage(){
           _cnames.push((st.colNames&&st.colNames['p'+(pi+1)+'c'+_cc])||(_cc+'열'));
         }
         _autoMapData = { partLabel:pl, cols:pC[pi], rows:pR[pi], col:col, row:row, fb:fb, colNames:_cnames };
+        /* ★ 같은 파트의 다른 칸 차량번호 지도 (자동 약도 주변 표시용) */
+        var _cellCars={};
+        for(var z=0;z<keys.length;z++){
+          var sz=slots[keys[z]]; if(!sz) continue;
+          var carz=String(sz.car||'').replace(/[^0-9]/g,''); if(!carz) continue;
+          var pz=-1,cz=0,rz=-1;
+          var cmz=String(keys[z]).match(/^C_(\d+)_(\d+)_(\d+)$/);
+          if(cmz){ pz=parseInt(cmz[1],10)-1; cz=parseInt(cmz[2],10); rz=parseInt(cmz[3],10)-1; }
+          else{
+            var giz=parseInt(keys[z],10);
+            if(!isNaN(giz)){
+              for(var qz=0;qz<numParts;qz++){ if(giz>=pO[qz]&&giz<pO[qz]+pC[qz]*pR[qz]){pz=qz;break;} }
+              if(pz>=0){ var lz=giz-pO[pz]; cz=(lz%pC[pz])+1; rz=Math.floor(lz/pC[pz]); }
+            }
+          }
+          if(pz===pi && cz>=1 && rz>=0){ _cellCars[cz+'_'+rz]=carz.slice(-4); }
+        }
+        _autoMapData.cellCars=_cellCars;
       }
       /* ★ 실시간 값으로 전역 상태 갱신 */
       car = targetCar;
@@ -783,7 +833,12 @@ function sharePage(){
       html+='<tr><td style="font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;">'+kan+'칸</td>';
       for(var c2=1;c2<=cols;c2++){
         var isT=(c2===d.col && r===d.row);
-        html+= isT ? '<td class="amCell amTarget">📍</td>' : '<td class="amCell"></td>';
+        if(isT){ html+='<td class="amCell amTarget">📍</td>'; continue; }
+        /* ★ 주변 차량번호 표시 — 📍 같은 열의 앞·뒤 칸, 그리고 1칸(첫째 줄) 전체 */
+        var _showN = (c2===d.col && (r===d.row-1 || r===d.row+1)) || (r===rows-1);
+        var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
+        if(_showN && _cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
+        else{ html+='<td class="amCell"></td>'; }
       }
       html+='</tr>';
     }
