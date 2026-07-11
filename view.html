@@ -101,6 +101,21 @@
   #parkLocToggle.open{
     background:#334155;color:#fff;animation:none;box-shadow:none;
   }
+  /* ★ 자동 약도 격자 셀 */
+  #autoMapBox table{ border-collapse:separate;border-spacing:4px;margin:0 auto; }
+  .amCell{
+    width:30px;height:30px;min-width:30px;background:#EEF2F7;
+    border:1.5px solid #CBD5E1;border-radius:6px;text-align:center;
+    vertical-align:middle;padding:0;font-size:15px;line-height:30px;
+  }
+  .amTarget{
+    background:#E03131;border-color:#B91C1C;color:#fff;font-weight:900;
+    animation:amPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes amPulse{
+    0%,100%{ box-shadow:0 0 0 2px rgba(224,49,49,.30); }
+    50%    { box-shadow:0 0 0 6px rgba(224,49,49,.55); }
+  }
 </style>
 </head>
 <body>
@@ -144,6 +159,9 @@
       <img id="mapImg" alt="약도" onclick="zoomMap()" style="cursor:zoom-in;">
       <div style="text-align:center;font-size:11px;color:#94A3B8;font-weight:700;padding:4px 0 2px;">🔍 약도를 누르면 크게 볼 수 있습니다</div>
     </div>
+
+    <!-- ★ 자동 약도 (등록 사진 없을 때, 현황판 격자 기반으로 본인 차 칸 표시) -->
+    <div id="autoMapBox" style="display:none;background:#fff;border-radius:14px;padding:12px 10px;margin-bottom:12px;"></div>
 
     <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
@@ -573,6 +591,7 @@ function sharePage(){
     document.getElementById('slotMemoBox').style.display = 'none';
     document.getElementById('routePanel').style.display = 'none';
     document.getElementById('mapBox').style.display = 'none';
+    _hideAutoMap(); /* ★ 자동 약도도 숨김 */
   }
   renderHeader();
 
@@ -584,6 +603,10 @@ function sharePage(){
   if(car){ try{ loadCarDocs(car); }catch(e){} }
 
   var loadedAny = false;
+  /* ★ 자동 약도 상태 */
+  var _autoMapData = null;   /* 현재 차량의 격자 위치 정보 */
+  var _partHasPhoto = null;  /* null=미확인, true=사진있음, false=사진없음 */
+  var _autoMapShown = false;
   var fdb = null;
   try{
     firebase.initializeApp({ databaseURL: db });
@@ -654,6 +677,12 @@ function sharePage(){
         var cn=(st.colNames&&st.colNames['p'+(pi+1)+'c'+col])||(col+'열');
         newLoc=pl+'-'+cn+'번 (줄)'+(fb>=1&&fb<=pR[pi]?' '+fb+'번째 칸':'');
         newPart=pi+1;
+        /* ★ 자동 약도용 격자 정보 저장 */
+        var _cnames=[];
+        for(var _cc=1;_cc<=pC[pi];_cc++){
+          _cnames.push((st.colNames&&st.colNames['p'+(pi+1)+'c'+_cc])||(_cc+'열'));
+        }
+        _autoMapData = { partLabel:pl, cols:pC[pi], rows:pR[pi], col:col, row:row, fb:fb, colNames:_cnames };
       }
       /* ★ 실시간 값으로 전역 상태 갱신 */
       car = targetCar;
@@ -667,6 +696,7 @@ function sharePage(){
       }
       renderHeader();
       renderMemo(String((slot&&slot.memo)||'').trim());
+      if(_partHasPhoto === false) drawAutoMap(); /* ★ 사진 없는 파트면 자동 약도 갱신 */
       if(newPart) _maybeReloadPart(newPart);
     }
     fdb.ref('kd_rooms/'+code+'/pb_slots').on('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
@@ -713,6 +743,49 @@ function sharePage(){
     document.getElementById('routePanel').style.display = 'block';
     return true;
   }
+  /* ★ HTML 이스케이프 (열 이름 등 안전 출력) */
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+  /* ★ 자동 약도 숨기기 */
+  function _hideAutoMap(){
+    var box=document.getElementById('autoMapBox');
+    if(box) box.style.display='none';
+    _autoMapShown=false;
+  }
+  /* ★ 자동 약도 그리기 — 현황판 격자(열×줄) 기반, 본인 차 칸만 📍 표시.
+     데이터 준비 전이면 false 반환(호출측이 안내문구 유지). 사진 있으면 그리지 않음. */
+  function drawAutoMap(){
+    var box=document.getElementById('autoMapBox');
+    if(!box) return false;
+    if(_partHasPhoto===true){ box.style.display='none'; return false; }
+    var d=_autoMapData;
+    if(!d || !d.cols || !d.rows || d.col<1 || d.row<0){ return false; }
+    var cols=d.cols, rows=d.rows, html='';
+    html+='<div style="text-align:center;font-weight:900;color:#1e293b;font-size:15px;margin-bottom:2px;">🅿️ '+_esc(d.partLabel||'')+'</div>';
+    html+='<div style="text-align:center;color:#64748b;font-size:11px;font-weight:700;margin-bottom:10px;">📍 빨간 칸이 고객님 차량 위치입니다</div>';
+    html+='<div style="overflow-x:auto;"><table><tbody>';
+    html+='<tr><td></td>';
+    for(var c=1;c<=cols;c++){
+      var cname=(d.colNames&&d.colNames[c-1])||(c+'열');
+      html+='<td style="font-size:10px;font-weight:800;color:#475569;text-align:center;padding:2px 3px;white-space:nowrap;">'+_esc(cname)+'</td>';
+    }
+    html+='</tr>';
+    for(var r=0;r<rows;r++){
+      var kan=rows-r; /* 칸 번호(아래부터) */
+      html+='<tr><td style="font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;">'+kan+'칸</td>';
+      for(var c2=1;c2<=cols;c2++){
+        var isT=(c2===d.col && r===d.row);
+        html+= isT ? '<td class="amCell amTarget">📍</td>' : '<td class="amCell"></td>';
+      }
+      html+='</tr>';
+    }
+    html+='</tbody></table></div>';
+    box.innerHTML=html;
+    box.style.display='block';
+    hideStatus();
+    loadedAny=true;
+    _autoMapShown=true;
+    return true;
+  }
   function loadPart(){
     Promise.all([
       fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part).once('value').then(function(s){ return s.val(); }).catch(function(){ return null; }),
@@ -725,9 +798,11 @@ function sharePage(){
         else if(Array.isArray(stepsRaw)){ steps = stepsRaw; }
       }catch(e){}
       var hasPhoto = (typeof photo === 'string' && photo.indexOf('data:image') === 0);
+      _partHasPhoto = hasPhoto; /* ★ 사진 유무 기록 */
 
       /* 사진 표시 */
       if(hasPhoto){
+        _hideAutoMap(); /* ★ 사진 있으면 자동 약도 숨김 */
         var img = document.getElementById('mapImg');
         img.src = photo;
         document.getElementById('mapBox').style.display = 'block';
@@ -737,8 +812,11 @@ function sharePage(){
       var shown = _renderSteps(steps, hasPhoto);
       if(shown){ loadedAny = true; hideStatus(); }
 
-      if(!loadedAny){
-        showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
+      /* ★ 사진이 없으면 자동 약도(격자) 표시 — 데이터 준비 전이면 안내문구 */
+      if(!hasPhoto){
+        if(!drawAutoMap() && !loadedAny){
+          showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
+        }
       }
     }).catch(function(){
       if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
