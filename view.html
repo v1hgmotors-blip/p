@@ -35,16 +35,16 @@
   /* ★ 담당차주 줄 — 팝업과 동일 (남색 칩 + 연두 글씨 + 전화걸기) */
   .owner-line{
     display:none;
-    align-items:center;gap:10px;flex-wrap:nowrap;
-    font-size:15px;font-weight:900;color:#7CE38B;
+    align-items:center;gap:8px;flex-wrap:nowrap;
+    font-size:14px;font-weight:900;color:#7CE38B;
     background:#16305A;border-radius:12px;
-    padding:11px 14px;margin-bottom:12px;letter-spacing:-.3px;
+    padding:10px 12px;margin-bottom:12px;letter-spacing:-.3px;
   }
-  .owner-line #ownerTxt{ flex:1;min-width:0;line-height:1.35; }
+  .owner-line #ownerTxt{ flex:1;min-width:0;line-height:1.3; }
   .owner-call{
     flex-shrink:0;white-space:nowrap;
     background:#16A34A;color:#fff;text-decoration:none;
-    padding:9px 14px;border-radius:9px;font-size:14px;font-weight:900;
+    padding:7px 11px;border-radius:9px;font-size:13px;font-weight:900;
   }
   .panel{
     background:#1E3A5F;border-radius:14px;padding:14px 16px;margin-bottom:12px;
@@ -567,8 +567,9 @@ function sharePage(){
       var fmtP = oPhone;
       if(oPhone.length===11) fmtP = oPhone.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3');
       else if(oPhone.length===10) fmtP = oPhone.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3');
-      document.getElementById('ownerTxt').textContent =
-        '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + fmtP : '');
+      document.getElementById('ownerTxt').innerHTML =
+        '<span style="font-size:13px;">👤 담당차주: ' + _esc(oName||'-') + '</span>' +
+        (oPhone ? ' <span style="font-size:16px;font-weight:900;white-space:nowrap;">📞 ' + _esc(fmtP) + '</span>' : '');
       var oc = document.getElementById('ownerCall');
       if(oPhone){ oc.href = 'tel:' + oPhone; oc.style.display = 'inline-block'; }
       document.getElementById('ownerLine').style.display = 'flex';
@@ -778,6 +779,13 @@ function sharePage(){
       }
       html+='</tr>';
     }
+    /* ★ 하단에도 열 이름 반복 표시 */
+    html+='<tr><td></td>';
+    for(var cf=1;cf<=cols;cf++){
+      var cnf=(d.colNames&&d.colNames[cf-1])||(cf+'열');
+      html+='<td style="font-size:10px;font-weight:800;color:#475569;text-align:center;padding:2px 3px;white-space:nowrap;">'+_esc(cnf)+'</td>';
+    }
+    html+='</tr>';
     html+='</tbody></table></div>';
     box.innerHTML=html;
     box.style.display='block';
