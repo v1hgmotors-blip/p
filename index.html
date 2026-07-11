@@ -3668,6 +3668,7 @@ function _fbLockProgress(pct) {
 function _fbSyncMarkReady(source) {
   var wasReady = _fbSyncReady;
   _fbSyncReady = true;
+  _hasEverSynced = true; /* ★ 최초 동기화 완료 표시 — 이후 재연결 잠금 시 로컬 저장 허용 */
   window._fbSyncDone = true; /* ★ diff 최적화용 플래그 */
   if (_fbSyncTimer) { clearTimeout(_fbSyncTimer); _fbSyncTimer = null; }
   if (wasReady) return; /* 이미 준비된 상태 — 배너/buildGrid 중복 실행 방지 */
@@ -3719,13 +3720,19 @@ function _fbSyncStartTimeout() {
 
 /* ── saveSlots 래퍼: 동기화 준비 전 쓰기 차단 ── */
 var _origSaveSlots = null;
+var _hasEverSynced = false; /* ★ 최초 1회라도 Firebase 동기화 완료했는지 여부 */
 function _patchSaveSlots() {
   if (_origSaveSlots) return;
   _origSaveSlots = saveSlots;
   saveSlots = function(s) {
     if (!_fbSyncReady) {
-      console.warn('[SYNC] 🔒 saveSlots 차단 — Firebase 수신 대기 중');
-      return; /* Firebase 수신 전 쓰기 금지 */
+      /* ★ FIX(불규칙 저장/삭제 누락): 이미 한 번이라도 동기화된 앱이면,
+         재연결 중 일시적 잠금이라도 로컬 저장을 버리지 말고 반영한다.
+         (로컬 쓰기는 서버를 덮어쓰지 않고, Firebase 푸시는 SDK가 재연결 시 자동 반영)
+         최초 수신 전(fresh device)에는 기존대로 차단 → 빈 데이터 덮어쓰기 방지 */
+      if (_hasEverSynced) { _origSaveSlots(s); return; }
+      console.warn('[SYNC] 🔒 saveSlots 차단 — 최초 Firebase 수신 대기 중');
+      return;
     }
     _origSaveSlots(s);
   };
@@ -3736,7 +3743,30 @@ function _fbSyncReset() {
   _fbSyncReady = false;
   window._fbSyncDone = false; /* ★ BUG FIX: 재연결 시 초기화 — null 수신 보호 재활성화 */
   if (_fbSyncTimer) { clearTimeout(_fbSyncTimer); _fbSyncTimer = null; }
+  /* ★ 안전장치: 재연결/재수신이 지연돼도 일정 시간 뒤 자동으로 잠금 해제(로컬 데이터로 진행).
+     저장(열/행/슬롯)이 영구히 막히는 현상 방지 */
+  _fbSyncTimer = setTimeout(function(){
+    if (!_fbSyncReady) {
+      console.warn('[SYNC] ⏱️ 재연결 지연 — 안전장치로 잠금 해제');
+      _fbSyncMarkReady('reset-timeout');
+    }
+  }, _SYNC_TIMEOUT_MS);
 }
+
+/* ★★ 저장 잠금 워치독 — _fbSyncReady가 어떤 경로로든 오래 false로 멈추면 강제 해제.
+   (열/행/슬롯 저장이 영구히 막히는 현상에 대한 최종 안전망) */
+(function _startSaveLockWatchdog(){
+  var _stuckSince = 0;
+  setInterval(function(){
+    if (_fbSyncReady) { _stuckSince = 0; return; }
+    if (!_stuckSince) { _stuckSince = Date.now(); return; }
+    if (Date.now() - _stuckSince >= 10000) {   /* 10초 이상 잠금 지속 → 강제 해제 */
+      _stuckSince = 0;
+      console.warn('[SYNC] 🛟 저장 잠금 10초 이상 지속 — 워치독이 강제 해제');
+      try { _fbSyncMarkReady('watchdog'); } catch(e){ _fbSyncReady = true; }
+    }
+  }, 2000);
+})();
 
 var fbConnected=false;
 var prevUpdatedAt=0, isFirstLoad=true;
@@ -19893,6 +19923,8 @@ function _updatePinToggleBtn(){
 PIN.init();
 /* 버튼 상태 초기화 */
 setTimeout(_updatePinToggleBtn, 300);
-</script>
+</script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
+     파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-11 11:10</div>
 </body>
 </html>
