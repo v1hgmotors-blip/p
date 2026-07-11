@@ -17943,7 +17943,9 @@ window._drawQRCanvas = function(container, text, size){
   /* 파트 사진 팝업 표시 */
   window._showPartPhotoPopup = function(partNo, reason, slotSuffix, phone, slotIdx){
     var photo = _getPhoto(partNo);
-    if(!photo) return; /* 사진 없으면 표시 안 함 */
+    /* ★ FIX: 사진이 없어도 팝업 표시 — 사진 영역만 숨기고
+       위치문구·QR·경로안내·담당차주·약도전송은 정상 동작
+       (약도 페이지(view.html)는 사진 없으면 자동 약도 격자를 보여줌) */
 
     /* ★ 담당차주 표시 — 슬롯의 차주이름 + 메모/차주필드에서 전화번호 자동 추출 */
     try{
@@ -18096,13 +18098,13 @@ window._drawQRCanvas = function(container, text, size){
       if(rw) rw.style.display='none';
     }
 
-    /* ★ 이미지 로드 보장 */
+    /* ★ 이미지 로드 보장 (사진 없으면 이미지 영역 숨김 유지) */
     var imgEl = document.getElementById('partPhotoPopupImg');
     imgEl.style.display = 'none';
     imgEl.onload = function(){ this.style.display='block'; };
     imgEl.onerror = function(){ this.style.display='none'; };
     imgEl.src = '';
-    setTimeout(function(){ imgEl.src = photo; }, 30);
+    if(photo){ setTimeout(function(){ imgEl.src = photo; }, 30); }
 
     /* ★ QR코드 생성 — 경로 단계 텍스트를 QR에 담음 */
     try{
@@ -19964,6 +19966,6 @@ PIN.init();
 setTimeout(_updatePinToggleBtn, 300);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-11 16:40</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 07:20</div>
 </body>
 </html>

@@ -307,7 +307,7 @@ function zoomAutoMap(){
   var am = document.getElementById('autoMapBox');
   if(!am || am.style.display==='none' || !am.innerHTML) return;
   /* 확대해 보는 동안 자동 접힘 방지 — 타이머 재시작 */
-  try{ if(typeof _parkLocTimer!=='undefined' && _parkLocTimer){ clearTimeout(_parkLocTimer); _parkLocTimer=setTimeout(function(){ collapseParkLoc(); }, 20000); } }catch(e){}
+  try{ if(typeof _parkLocTimer!=='undefined' && _parkLocTimer){ clearTimeout(_parkLocTimer); _parkLocTimer=setTimeout(function(){ collapseParkLoc(); }, 30000); } }catch(e){}
   var z = document.getElementById('mapZoom');
   var zi = document.getElementById('mapZoomImg');
   if(_autoZoomCache && _autoZoomCache.html===am.innerHTML){
@@ -357,8 +357,8 @@ function expandParkLoc(){
     }
   }, 120);
   if(_parkLocTimer){ clearTimeout(_parkLocTimer); }
-  /* 20초 후 자동 접기 */
-  _parkLocTimer = setTimeout(function(){ collapseParkLoc(); }, 20000);
+  /* 30초 후 자동 접기 */
+  _parkLocTimer = setTimeout(function(){ collapseParkLoc(); }, 30000);
 }
 function toggleParkLoc(){
   var w = document.getElementById('parkLocWrap');
