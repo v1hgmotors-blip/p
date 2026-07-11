@@ -276,6 +276,20 @@ function expandParkLoc(){
   var w = document.getElementById('parkLocWrap');
   if(w) w.style.display = 'block';
   _setParkLocBtn(true);
+  /* ★ 펼치면 차량위치(빨간 📍 칸)가 바로 보이도록 자동 스크롤
+     — 자동 약도의 📍 칸이 있으면 거기로(세로+가로), 없으면(사진 약도) 약도 영역으로 */
+  setTimeout(function(){
+    try{
+      var t = document.querySelector('#autoMapBox .amTarget');
+      if(t && t.offsetParent){
+        t.scrollIntoView({behavior:'smooth', block:'center', inline:'center'});
+      } else if(w){
+        w.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    }catch(e){
+      try{ if(w) w.scrollIntoView(); }catch(e2){}
+    }
+  }, 120);
   if(_parkLocTimer){ clearTimeout(_parkLocTimer); }
   /* 20초 후 자동 접기 */
   _parkLocTimer = setTimeout(function(){ collapseParkLoc(); }, 20000);
@@ -764,12 +778,6 @@ function sharePage(){
     html+='<div style="text-align:center;font-weight:900;color:#1e293b;font-size:15px;margin-bottom:2px;">🅿️ '+_esc(d.partLabel||'')+'</div>';
     html+='<div style="text-align:center;color:#64748b;font-size:11px;font-weight:700;margin-bottom:10px;">📍 빨간 칸이 고객님 차량 위치입니다</div>';
     html+='<div style="overflow-x:auto;"><table><tbody>';
-    html+='<tr><td></td>';
-    for(var c=1;c<=cols;c++){
-      var cname=(d.colNames&&d.colNames[c-1])||(c+'열');
-      html+='<td style="font-size:10px;font-weight:800;color:#475569;text-align:center;padding:2px 3px;white-space:nowrap;">'+_esc(cname)+'</td>';
-    }
-    html+='</tr>';
     for(var r=0;r<rows;r++){
       var kan=rows-r; /* 칸 번호(아래부터) */
       html+='<tr><td style="font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;">'+kan+'칸</td>';
@@ -794,41 +802,63 @@ function sharePage(){
     _autoMapShown=true;
     return true;
   }
+  /* ★ 경로안내·약도사진 실시간 구독 — 관리자가 내용을 수정하면 열려있는 화면에도 즉시 반영.
+     파트가 바뀌면 이전 파트 구독을 해제하고 새 파트를 구독(중복 구독 방지) */
+  var _stepsRef=null, _photoRef=null, _liveStepsRaw=null, _livePhoto=null, _partRecv=0;
+  function _renderPartData(){
+    if(_partRecv < 2) return; /* steps·photo 둘 다 최소 1회 수신 후 렌더 */
+    var stepsRaw=_liveStepsRaw, photo=_livePhoto;
+    var steps = [];
+    try{
+      if(typeof stepsRaw === 'string'){ steps = JSON.parse(stepsRaw||'[]'); }
+      else if(Array.isArray(stepsRaw)){ steps = stepsRaw; }
+    }catch(e){}
+    var hasPhoto = (typeof photo === 'string' && photo.indexOf('data:image') === 0);
+    _partHasPhoto = hasPhoto; /* ★ 사진 유무 기록 */
+
+    /* 사진 표시 */
+    if(hasPhoto){
+      _hideAutoMap(); /* ★ 사진 있으면 자동 약도 숨김 */
+      var img = document.getElementById('mapImg');
+      img.src = photo;
+      document.getElementById('mapBox').style.display = 'block';
+      loadedAny = true; hideStatus();
+    } else {
+      document.getElementById('mapBox').style.display = 'none';
+    }
+    /* 경로 패널: 사진 있으면 주소만(중복 제거), 없으면 전체 표시 */
+    var shown = _renderSteps(steps, hasPhoto);
+    if(shown){ loadedAny = true; hideStatus(); }
+
+    /* ★ 사진이 없으면 자동 약도(격자) 표시 — 데이터 준비 전이면 안내문구 */
+    if(!hasPhoto){
+      if(!drawAutoMap() && !loadedAny){
+        showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
+      }
+    }
+  }
   function loadPart(){
-    Promise.all([
-      fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part).once('value').then(function(s){ return s.val(); }).catch(function(){ return null; }),
-      fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part).once('value').then(function(s){ return s.val(); }).catch(function(){ return null; })
-    ]).then(function(res){
-      var stepsRaw = res[0], photo = res[1];
-      var steps = [];
-      try{
-        if(typeof stepsRaw === 'string'){ steps = JSON.parse(stepsRaw||'[]'); }
-        else if(Array.isArray(stepsRaw)){ steps = stepsRaw; }
-      }catch(e){}
-      var hasPhoto = (typeof photo === 'string' && photo.indexOf('data:image') === 0);
-      _partHasPhoto = hasPhoto; /* ★ 사진 유무 기록 */
-
-      /* 사진 표시 */
-      if(hasPhoto){
-        _hideAutoMap(); /* ★ 사진 있으면 자동 약도 숨김 */
-        var img = document.getElementById('mapImg');
-        img.src = photo;
-        document.getElementById('mapBox').style.display = 'block';
-        loadedAny = true; hideStatus();
-      }
-      /* 경로 패널: 사진 있으면 주소만(중복 제거), 없으면 전체 표시 */
-      var shown = _renderSteps(steps, hasPhoto);
-      if(shown){ loadedAny = true; hideStatus(); }
-
-      /* ★ 사진이 없으면 자동 약도(격자) 표시 — 데이터 준비 전이면 안내문구 */
-      if(!hasPhoto){
-        if(!drawAutoMap() && !loadedAny){
-          showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
-        }
-      }
-    }).catch(function(){
-      if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
-    });
+    /* 이전 파트 구독 해제 */
+    try{ if(_stepsRef) _stepsRef.off(); }catch(e){}
+    try{ if(_photoRef) _photoRef.off(); }catch(e){}
+    _liveStepsRaw=null; _livePhoto=null; _partRecv=0;
+    var _recvS=false, _recvP=false;
+    _stepsRef = fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part);
+    _photoRef = fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part);
+    _stepsRef.on('value', function(s){
+      _liveStepsRaw = s.val();
+      if(!_recvS){ _recvS=true; _partRecv++; }
+      _renderPartData();
+    }, function(){ if(!_recvS){ _recvS=true; _partRecv++; } _renderPartData(); });
+    _photoRef.on('value', function(s){
+      _livePhoto = s.val();
+      if(!_recvP){ _recvP=true; _partRecv++; }
+      _renderPartData();
+    }, function(){ if(!_recvP){ _recvP=true; _partRecv++; } _renderPartData(); });
+    /* 네트워크 문제로 아무것도 못 받는 경우 안내 (8초) */
+    setTimeout(function(){
+      if(_partRecv<2 && !loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
+    }, 8000);
   }
 
   if(lkey){

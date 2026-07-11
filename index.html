@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#FEE500">
   <link rel="manifest" id="pwaManifest">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>🚗 주차위치 현황판 (2026-04-27 22:10 KST)</title>
+<title>🚗 주차위치 현황판</title>
 <style>
 /* 백업 모달 표시/숨김 */
 :root {
@@ -2199,7 +2199,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 </div>
 
   <!-- ★ 빌드 정보 뱃지 -->
-  <div id="buildBadge">🕐 빌드: 2026-04-27 22:10 KST &nbsp;|&nbsp; 한결_주차현황선택팝업 &nbsp;|&nbsp; <span id="storageUsageBadge" onclick="_openStorageDetail()">💾 용량 계산중...</span></div>
+  <div id="buildBadge"><span id="storageUsageBadge" onclick="_openStorageDetail()">💾 용량 계산중...</span></div>
 </div><!-- /mainWrap -->
 
 <!-- ★ 저장용량 상세 팝업 -->
@@ -14262,6 +14262,7 @@ function _initPcScrollLimiter2(){
     <!-- 하단 버튼 -->
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
       <button onclick="_closeMapEditor()" style="flex:1;min-width:70px;padding:9px;background:#475569;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">취소</button>
+      <button onclick="_saveStepsOnly()" style="flex:2;min-width:130px;padding:9px;background:#0369A1;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📋 경로안내만 저장</button>
       <button onclick="_saveMapAsPhoto()" style="flex:2;min-width:140px;padding:9px;background:#FF8C00;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">💾 저장 (사진으로 등록)</button>
     </div>
 
@@ -14487,6 +14488,27 @@ function _initPcScrollLimiter2(){
       img.src=_overlayData;
     }
   }
+
+  /* ── ★ 경로안내만 저장 — 사진 합성 없이 경로 단계 텍스트만 저장.
+     고객 약도 페이지(view.html)의 '경로 안내' 패널에 실시간 반영됨 ── */
+  window._saveStepsOnly=function(){
+    var validSteps=[];
+    try{
+      validSteps=(_steps||[]).filter(function(s){
+        return s && typeof s.text==='string' && s.text.trim();
+      });
+    }catch(ex){ validSteps=[]; }
+    try{
+      localStorage.setItem('pb_part_steps_'+_partNo, JSON.stringify(validSteps));
+    }catch(ex){}
+    try{
+      if(typeof window._syncPartSteps==='function') window._syncPartSteps(_partNo, validSteps);
+    }catch(ex){}
+    try{
+      if(typeof _greenToast==='function') _greenToast('📋 경로안내 저장됨 ('+validSteps.length+'단계) — 약도 페이지에 바로 반영됩니다');
+      else alert('경로안내가 저장되었습니다 ('+validSteps.length+'단계)');
+    }catch(ex){}
+  };
 
   /* ── 최종 저장: 경로안내 + 사진 + 약도를 하나의 이미지로 합성 ── */
   window._saveMapAsPhoto=function(){
@@ -19925,6 +19947,6 @@ PIN.init();
 setTimeout(_updatePinToggleBtn, 300);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-11 11:10</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-11 13:40</div>
 </body>
 </html>
