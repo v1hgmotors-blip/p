@@ -115,6 +115,8 @@
   .amNear{
     font-size:9px;font-weight:800;color:#334155;letter-spacing:-.5px;
     background:#DBEAFE;border-color:#93C5FD;
+    line-height:1.15;white-space:normal;word-break:break-all;
+    padding:1px;vertical-align:middle;
   }
   @keyframes amPulse{
     0%,100%{ box-shadow:0 0 0 2px rgba(224,49,49,.30); }
@@ -165,7 +167,7 @@
     </div>
 
     <!-- ★ 자동 약도 (등록 사진 없을 때, 현황판 격자 기반으로 본인 차 칸 표시) -->
-    <div id="autoMapBox" style="display:none;background:#fff;border-radius:14px;padding:12px 10px;margin-bottom:12px;"></div>
+    <div id="autoMapBox" onclick="zoomAutoMap()" style="display:none;background:#fff;border-radius:14px;padding:12px 10px;margin-bottom:12px;cursor:zoom-in;"></div>
 
     <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
@@ -284,6 +286,30 @@ function zoomMap(){
   if(!src) return;
   zi.src = src;
   z.style.display = 'flex';
+}
+/* ★ 자동 약도(격자) 탭 → 전체화면 크게 보기.
+   격자를 이미지로 캡처해 기존 확대 뷰(mapZoom)에 띄움. 펼침 자동접기(20초)도 잠시 연장 */
+var _autoZoomCache = null; /* {html:격자HTML, img:dataURL} — 같은 내용이면 재캡처 생략 */
+function zoomAutoMap(){
+  var am = document.getElementById('autoMapBox');
+  if(!am || am.style.display==='none' || !am.innerHTML) return;
+  /* 확대해 보는 동안 자동 접힘 방지 — 타이머 재시작 */
+  try{ if(typeof _parkLocTimer!=='undefined' && _parkLocTimer){ clearTimeout(_parkLocTimer); _parkLocTimer=setTimeout(function(){ collapseParkLoc(); }, 20000); } }catch(e){}
+  var z = document.getElementById('mapZoom');
+  var zi = document.getElementById('mapZoomImg');
+  if(_autoZoomCache && _autoZoomCache.html===am.innerHTML){
+    zi.src=_autoZoomCache.img; z.style.display='flex'; return;
+  }
+  if(typeof html2canvas==='undefined'){ return; }
+  html2canvas(am, {
+    backgroundColor:'#ffffff', scale:2, useCORS:true, logging:false,
+    width:am.scrollWidth, height:am.scrollHeight,
+    windowWidth:am.scrollWidth, windowHeight:am.scrollHeight
+  }).then(function(canvas){
+    var url=canvas.toDataURL('image/png');
+    _autoZoomCache={ html:am.innerHTML, img:url };
+    zi.src=url; z.style.display='flex';
+  }).catch(function(){});
 }
 function closeZoom(){
   var z = document.getElementById('mapZoom');
@@ -734,7 +760,8 @@ function sharePage(){
         var _cellCars={};
         for(var z=0;z<keys.length;z++){
           var sz=slots[keys[z]]; if(!sz) continue;
-          var carz=String(sz.car||'').replace(/[^0-9]/g,''); if(!carz) continue;
+          var carRaw=String(sz.car||'').trim(); if(!carRaw) continue;
+          var carz=carRaw.replace(/[^0-9]/g,'');
           var pz=-1,cz=0,rz=-1;
           var cmz=String(keys[z]).match(/^C_(\d+)_(\d+)_(\d+)$/);
           if(cmz){ pz=parseInt(cmz[1],10)-1; cz=parseInt(cmz[2],10); rz=parseInt(cmz[3],10)-1; }
@@ -745,7 +772,13 @@ function sharePage(){
               if(pz>=0){ var lz=giz-pO[pz]; cz=(lz%pC[pz])+1; rz=Math.floor(lz/pC[pz]); }
             }
           }
-          if(pz===pi && cz>=1 && rz>=0){ _cellCars[cz+'_'+rz]=carz.slice(-4); }
+          if(pz===pi && cz>=1 && rz>=0){
+            /* ★ 표시 라벨: 숫자 차량번호면 끝 4자리, "청운임대1" 같은 이름이면 원문 그대로(최대 6자) */
+            var _lbl;
+            if(carz && carz.length>=3 && carRaw.length<=carz.length+1){ _lbl=carz.slice(-4); }
+            else { _lbl=carRaw.length>6 ? carRaw.slice(0,6) : carRaw; }
+            _cellCars[cz+'_'+rz]=_lbl;
+          }
         }
         _autoMapData.cellCars=_cellCars;
       }
@@ -850,6 +883,7 @@ function sharePage(){
     }
     html+='</tr>';
     html+='</tbody></table></div>';
+    html+='<div style="text-align:center;font-size:11px;color:#94A3B8;font-weight:700;padding:6px 0 0;">🔍 약도를 누르면 크게 볼 수 있습니다</div>';
     box.innerHTML=html;
     box.style.display='block';
     hideStatus();
