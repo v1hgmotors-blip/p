@@ -219,27 +219,16 @@ function _dlFallbackMapOnly(){
 function dlMapOnly(){
   /* 1) 등록 사진이 있으면 사진 다운로드 */
   if(_dlFallbackMapOnly()) return;
-  /* 2) 자동 약도(격자)가 표시 중이면 격자 캡처 다운로드 */
+  /* 2) 자동 약도(격자)가 표시 중이면 격자 캡처 다운로드 (전체 폭) */
   var am = document.getElementById('autoMapBox');
   var amVisible = am && am.style.display !== 'none' && am.innerHTML;
   if(amVisible && typeof html2canvas !== 'undefined'){
-    html2canvas(am, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      /* ★ 격자가 가로 스크롤로 잘려있어도 전체 폭을 캡처 */
-      width: am.scrollWidth,
-      height: am.scrollHeight,
-      windowWidth: am.scrollWidth,
-      windowHeight: am.scrollHeight
-    }).then(function(canvas){
+    _captureAutoMap(function(url){
+      if(!url){ alert('약도 이미지 생성에 실패했습니다.'); return; }
       var a=document.createElement('a');
-      a.href=canvas.toDataURL('image/png');
+      a.href=url;
       a.download='약도_차량위치안내.png';
       document.body.appendChild(a); a.click(); a.remove();
-    }).catch(function(){
-      alert('약도 이미지 생성에 실패했습니다.');
     });
     return;
   }
@@ -279,6 +268,31 @@ function dlMap(){
   });
 }
 /* ★ 약도 전체화면 확대 (가로로 돌리면 화면 가득) */
+/* ★ 자동 약도(격자) 전체 폭 캡처 — 격자가 박스 안에서 가로 스크롤될 때
+   보이는 부분만 찍히는 문제 해결: 안쪽 스크롤 영역의 실제 폭으로 캡처 */
+function _captureAutoMap(onDone){
+  var am = document.getElementById('autoMapBox');
+  if(!am || am.style.display==='none' || !am.innerHTML || typeof html2canvas==='undefined'){ onDone(null); return; }
+  var inner = am.querySelector('div[style*="overflow"]');
+  var fullW = Math.max(am.scrollWidth, (inner ? inner.scrollWidth + 24 : 0));
+  html2canvas(am, {
+    backgroundColor:'#ffffff', scale:2, useCORS:true, logging:false,
+    width:fullW, height:am.scrollHeight,
+    windowWidth:fullW, windowHeight:am.scrollHeight,
+    onclone:function(doc){
+      /* 복제본에서 박스를 전체 폭으로 펼치고 스크롤 잘림 해제 */
+      try{
+        var c=doc.getElementById('autoMapBox');
+        if(c){
+          c.style.width=fullW+'px'; c.style.maxWidth='none';
+          var ic=c.querySelector('div[style*="overflow"]');
+          if(ic){ ic.style.overflow='visible'; ic.style.width='auto'; }
+        }
+      }catch(e){}
+    }
+  }).then(function(canvas){ onDone(canvas.toDataURL('image/png')); })
+    .catch(function(){ onDone(null); });
+}
 function zoomMap(){
   var z = document.getElementById('mapZoom');
   var zi = document.getElementById('mapZoomImg');
@@ -287,8 +301,7 @@ function zoomMap(){
   zi.src = src;
   z.style.display = 'flex';
 }
-/* ★ 자동 약도(격자) 탭 → 전체화면 크게 보기.
-   격자를 이미지로 캡처해 기존 확대 뷰(mapZoom)에 띄움. 펼침 자동접기(20초)도 잠시 연장 */
+/* ★ 자동 약도(격자) 탭 → 전체화면 크게 보기 (전체 폭 캡처) */
 var _autoZoomCache = null; /* {html:격자HTML, img:dataURL} — 같은 내용이면 재캡처 생략 */
 function zoomAutoMap(){
   var am = document.getElementById('autoMapBox');
@@ -300,16 +313,11 @@ function zoomAutoMap(){
   if(_autoZoomCache && _autoZoomCache.html===am.innerHTML){
     zi.src=_autoZoomCache.img; z.style.display='flex'; return;
   }
-  if(typeof html2canvas==='undefined'){ return; }
-  html2canvas(am, {
-    backgroundColor:'#ffffff', scale:2, useCORS:true, logging:false,
-    width:am.scrollWidth, height:am.scrollHeight,
-    windowWidth:am.scrollWidth, windowHeight:am.scrollHeight
-  }).then(function(canvas){
-    var url=canvas.toDataURL('image/png');
+  _captureAutoMap(function(url){
+    if(!url) return;
     _autoZoomCache={ html:am.innerHTML, img:url };
     zi.src=url; z.style.display='flex';
-  }).catch(function(){});
+  });
 }
 function closeZoom(){
   var z = document.getElementById('mapZoom');
