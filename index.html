@@ -3860,6 +3860,9 @@ function _syncAllSettingsToFirebase(){
   /* 열 이름 */
   var colNames = getColNames();
   if(Object.keys(colNames).length > 0) allSettings.colNames = colNames;
+  /* ★ 특정 열 색상 */
+  var colOneColors = getColOneColors();
+  if(Object.keys(colOneColors).length > 0) allSettings.colColors = colOneColors;
   /* 열 색상 */
   var colColor = localStorage.getItem(LS_COL_HC_COLOR);
   if(colColor) allSettings.colHcColor = colColor;
@@ -4415,10 +4418,12 @@ function getColOneColor(part,col){ return getColOneColors()['p'+part+'c'+col]; }
 function setColOneColor(part,col,color){
   var o=getColOneColors(); o['p'+part+'c'+col]=color; localStorage.setItem(LS_COL_ONE_COLORS,JSON.stringify(o));
   var el=document.querySelector('.col-hc[data-part="'+part+'"][data-col="'+col+'"]'); if(el) el.style.background=color;
+  if(typeof pushSettings==='function'){ var u={}; u['colColors/p'+part+'c'+col]=color; pushSettings(u); } /* ★ 모든 기기·고객 약도 동기화 */
 }
 function removeColOneColor(part,col){
   var o=getColOneColors(); delete o['p'+part+'c'+col]; localStorage.setItem(LS_COL_ONE_COLORS,JSON.stringify(o));
   if(typeof renderColHeaders==='function') renderColHeaders(); /* 기본색 복원 위해 재렌더 */
+  if(typeof pushSettings==='function'){ var u={}; u['colColors/p'+part+'c'+col]=null; pushSettings(u); }
 }
 function _applyAllColOneColors(){
   var o=getColOneColors();
@@ -11424,6 +11429,19 @@ function applyRemoteSettings(data){
         setTimeout(hideAlert, 2000);
       }
     }catch(e){ console.warn('[colNames merge 오류]', e); }
+  }
+  /* ★ 특정 열 색상 (colColors) — 모든 기기 동기화 */
+  if(data.colColors){
+    try{
+      var _lc=getColOneColors();
+      var _rc=data.colColors;
+      Object.keys(_rc).forEach(function(k){
+        if(_rc[k]===null || _rc[k]===undefined || _rc[k]===''){ delete _lc[k]; }
+        else _lc[k]=_rc[k];
+      });
+      localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(_lc));
+      if(typeof renderColHeaders==='function') renderColHeaders();
+    }catch(e){ console.warn('[colColors merge 오류]', e); }
   }
   /* 열 헤더 색상 */
   if(data.colHcColor){
@@ -20190,6 +20208,6 @@ document.addEventListener('visibilitychange', function(){
 _requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 15:40</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 18:20</div>
 </body>
 </html>
