@@ -8118,7 +8118,48 @@ function updatePartCarCountBadges(){
 }
 
 var _buildGridScrollPos = null;
+/* ★★ 슬롯 이벤트 위임 — 칸마다 리스너를 다는 대신 gridWrap 한 곳에서 처리.
+   gridWrap은 재렌더 시에도 유지되므로 1회만 부착. (1000칸 성능 최적화) */
+var _slotDelegationSet = false;
+function _slotIdxOf(el){
+  if(!el) return -1;
+  var n = parseInt(String(el.id||'').replace('slot_',''), 10);
+  return isNaN(n) ? -1 : n;
+}
+function _setupSlotDelegation(){
+  if(_slotDelegationSet) return;
+  var gw = document.getElementById('gridWrap');
+  if(!gw) return;
+  _slotDelegationSet = true;
+  var _lpTimer=null;
+  gw.addEventListener('click', function(e){
+    var s = e.target.closest ? e.target.closest('.slot') : null;
+    if(!s) return;
+    var idx=_slotIdxOf(s); if(idx>=0) openModal(idx);
+  });
+  gw.addEventListener('mouseover', function(e){
+    var s = e.target.closest ? e.target.closest('.slot') : null;
+    if(!s) return;
+    try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo); }catch(err){}
+  });
+  gw.addEventListener('mouseout', function(e){
+    var s = e.target.closest ? e.target.closest('.slot') : null;
+    if(!s) return;
+    hideTooltip();
+  });
+  gw.addEventListener('touchstart', function(e){
+    var s = e.target.closest ? e.target.closest('.slot') : null;
+    if(!s) return;
+    clearTimeout(_lpTimer);
+    _lpTimer=setTimeout(function(){
+      try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo); }catch(err){}
+    }, 500);
+  }, {passive:true});
+  gw.addEventListener('touchend', function(){ clearTimeout(_lpTimer); setTimeout(hideTooltip,2000); }, {passive:true});
+  gw.addEventListener('touchmove', function(){ clearTimeout(_lpTimer); }, {passive:true});
+}
 function buildGrid(){
+  _setupSlotDelegation();
   _buildGridScrollPos = _saveAllScrollPos();
   for(var p=1;p<=NUM_PARTS;p++){
     var g=document.getElementById('parkingGrid'+p);
@@ -8127,29 +8168,8 @@ function buildGrid(){
   for(var i=0;i<TOTAL;i++){
     var el=document.createElement('div');
     el.className='slot'; el.id='slot_'+i;
-    el.onclick=(function(n){return function(){openModal(n)}})(i);
-    /* ★ 메모 툴팁: 마우스 hover + 터치 long-press */
-    (function(n,elem){
-      var lpTimer=null;
-      elem.addEventListener('mouseenter',function(){
-        var d=getSlot(n);
-        if(d.memo) showTooltip(elem,d.memo);
-      });
-      elem.addEventListener('mouseleave',function(){ hideTooltip(); });
-      elem.addEventListener('touchstart',function(e){
-        lpTimer=setTimeout(function(){
-          var d=getSlot(n);
-          if(d.memo){ showTooltip(elem,d.memo); e.preventDefault(); }
-        },500);
-      },{passive:true});
-      elem.addEventListener('touchend',function(){
-        clearTimeout(lpTimer);
-        setTimeout(hideTooltip,2000);
-      });
-      elem.addEventListener('touchmove',function(){
-        clearTimeout(lpTimer);
-      },{passive:true});
-    })(i,el);
+    /* ★ 성능: 칸별 클릭·툴팁 리스너 제거 → gridWrap 위임(_setupSlotDelegation)으로 처리
+       (1000칸에서 리스너 수천 개 생성 부담 제거) */
     renderSlot(el,i);
     addDragListeners(el,i);
     var part=slotToPart(i);
@@ -10374,7 +10394,7 @@ function _renderStorageDetail(){
     +'<div class="storage-detail-row"><span>✏️ 약도 그림데이터</span><b>'+_fmtBytes(db.canvases||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>⚙️ 기타(슬롯·설정 등)</span><b>'+_fmtBytes(db.other||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>🗃️ 서류 보관함 ('+(db.archiveCount||0)+'건, '+DOC_ARCHIVE_RETENTION_DAYS+'일 후 자동삭제)</span><b>'+_fmtBytes(db.archive||0)+'</b></div>'
-    +'<div class="storage-detail-row total"><span>☁️ DB 합계 (백업이력 제외, 보관함 포함)</span><b>'+_fmtBytes(db.total||0)+'</b></div>'
+    +'<div class="storage-detail-row total"><span>☁️ DB 합계 (백업이력 제외, 보관함 포함)</span><b style="color:'+_dbTotalColor(db.total||0)+';">'+_fmtBytes(db.total||0)+_dbTotalMark(db.total||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>🗄️ 일별 백업 이력</span><b>'+(db.backupCount||0)+'건</b></div>'
     +'<div class="storage-detail-row local"><span>📱 이 기기 로컬 저장공간</span><b>'+_fmtBytes(d.local||0)+'</b></div>';
   if(db.connected===false && !db.error){
@@ -10385,18 +10405,23 @@ function _renderStorageDetail(){
     html += '<div style="font-size:11px;font-weight:700;color:#D97706;margin-top:6px;">※ 데이터가 많아 일부 항목 조회가 지연되었습니다. 표시된 값은 실제보다 작을 수 있습니다.</div>';
   }
 
-  /* ★ 다운로드량(대역폭) 추정 섹션 */
+  /* ★ 다운로드량(대역폭) 추정 섹션 — 실제 매 접속 다운로드는 pb_slots+pb_settings(=기타)만.
+     첨부서류(kd_docs)·파트사진(pb_part_photos)은 별도 경로라 매 접속 시 안 받음 → total 대신 other 사용 */
   var vs = d.views;
   if(db.connected && vs && !vs.error){
-    var perView = db.total||0;
+    var perView = db.other||0;        /* 슬롯+설정 = 실제 1회 접속 다운로드 */
     var est7  = perView * (vs.d7||0);
     var est30 = perView * (vs.d30||0);
     html += '<div style="height:8px;"></div>'
       +'<div class="storage-detail-row"><span>👁️ 최근 7일 조회수</span><b>'+(vs.d7||0)+'회</b></div>'
       +'<div class="storage-detail-row"><span>👁️ 최근 30일 조회수</span><b>'+(vs.d30||0)+'회</b></div>'
+      +'<div class="storage-detail-row"><span>📦 1회 접속 다운로드(슬롯+설정)</span><b>'+_fmtBytes(perView)+'</b></div>'
       +'<div class="storage-detail-row highlight"><span>📊 최근 7일 예상 다운로드</span><b>'+_fmtBytes(est7)+'</b></div>'
-      +'<div class="storage-detail-row highlight"><span>📊 최근 30일 예상 다운로드</span><b>'+_fmtBytes(est30)+'</b></div>'
-      +'<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;line-height:1.5;">※ "조회수 × 1회 접속당 DB 용량"으로 계산한 참고용 추정치이며, 실제 Firebase 다운로드 사용량과는 차이가 있을 수 있습니다. 정확한 값은 Firebase 콘솔 → Usage and billing에서 확인하세요.</div>';
+      +'<div class="storage-detail-row highlight"><span>📊 최근 30일 예상 다운로드</span><b style="color:'+_dlColor(est30)+';">'+_fmtBytes(est30)+'</b></div>'
+      +((est30>=_FB_DL_LIMIT*0.60)
+          ? '<div style="font-size:11.5px;font-weight:900;color:'+(est30>=_FB_DL_LIMIT*0.85?'#DC2626':'#D97706')+';margin-top:6px;line-height:1.5;">⚠️ 무료 한도(월 10GB) '+Math.round(est30/_FB_DL_LIMIT*100)+'% 수준 — 조회가 늘면 초과할 수 있습니다. Firebase 콘솔에서 사용량을 확인하세요.</div>'
+          : '')
+      +'<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;line-height:1.5;">※ 매 접속 시 실제로 받는 건 슬롯+설정뿐입니다. 첨부서류·파트사진은 별도 경로라 필요할 때만 받습니다. 참고용 추정치이며 정확한 값은 Firebase 콘솔 → Usage and billing에서 확인하세요.</div>';
   } else if(db.connected){
     html += '<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;">📊 다운로드량 추정 계산 중...</div>';
   }
@@ -10416,6 +10441,24 @@ function _openStorageDetail(){
 function _closeStorageDetail(){
   var ov=document.getElementById('storageDetailOv');
   if(ov) ov.classList.remove('show');
+}
+/* ★ Firebase 무료(Spark) 한도 기준 색상 경고 — 저장 1GB / 월 다운로드 10GB */
+var _FB_STORE_LIMIT = 1024*1024*1024;   /* 1GB */
+var _FB_DL_LIMIT    = 10*1024*1024*1024;/* 10GB/월 */
+function _dbTotalColor(bytes){
+  if(bytes >= _FB_STORE_LIMIT*0.85) return '#DC2626'; /* 85%+ 빨강 */
+  if(bytes >= _FB_STORE_LIMIT*0.60) return '#D97706'; /* 60%+ 주황 */
+  return '#1E293B';
+}
+function _dbTotalMark(bytes){
+  if(bytes >= _FB_STORE_LIMIT*0.85) return ' ⚠️한도임박';
+  if(bytes >= _FB_STORE_LIMIT*0.60) return ' ⚠️';
+  return '';
+}
+function _dlColor(bytes){
+  if(bytes >= _FB_DL_LIMIT*0.85) return '#DC2626';
+  if(bytes >= _FB_DL_LIMIT*0.60) return '#D97706';
+  return '#1E293B';
 }
 
 /* ══ 📊 다운로드량(대역폭) 추정 — 최근 조회 횟수 기반 ══
@@ -13579,11 +13622,18 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
 
   var doConnect = function(){
     localStorage.setItem('pb_restore_pending', String(Date.now()));
+    /* ★ FIX: 백업엔 URL이 없으므로, 비어있으면 저장값·기본값으로 폴백해 자동 재연결
+       (복원 후 저장버튼을 눌러야만 연결되던 문제 해결) */
+    var _cu = useUrl  || localStorage.getItem(LS_URL)  || (_PB_DEFAULTS&&_PB_DEFAULTS.url)  || '';
+    var _cc = useCode || localStorage.getItem(LS_CODE) || (_PB_DEFAULTS&&_PB_DEFAULTS.code) || '';
+    if(_cu) localStorage.setItem(LS_URL, _cu);
+    if(_cc) localStorage.setItem(LS_CODE, _cc);
     var uInp = document.getElementById('fbUrlInput');
     var cInp = document.getElementById('syncCodeInput');
-    if(uInp) uInp.value = useUrl;
-    if(cInp) cInp.value = useCode;
-    connectFb(useUrl, useCode);
+    if(uInp) uInp.value = _cu;
+    if(cInp) cInp.value = _cc;
+    if(_cu && _cc){ connectFb(_cu, _cc); }
+    else { showAlert('⚠️ 복원 완료 — Firebase URL이 없어 자동연결 실패. URL/공유코드를 입력 후 저장하세요.'); }
   };
 
   /* ★ BUG FIX: URL 변경 시 새 Firebase에 복원 데이터 업로드
@@ -20224,6 +20274,6 @@ document.addEventListener('visibilitychange', function(){
 _requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 20:10</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 09:40</div>
 </body>
 </html>
