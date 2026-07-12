@@ -763,7 +763,11 @@ function sharePage(){
         for(var _cc=1;_cc<=pC[pi];_cc++){
           _cnames.push((st.colNames&&st.colNames['p'+(pi+1)+'c'+_cc])||(_cc+'열'));
         }
-        _autoMapData = { partLabel:pl, cols:pC[pi], rows:pR[pi], col:col, row:row, fb:fb, colNames:_cnames };
+        var _ccolors=[];
+        for(var _cd=1;_cd<=pC[pi];_cd++){
+          _ccolors.push((st.colColors&&st.colColors['p'+(pi+1)+'c'+_cd])||null);
+        }
+        _autoMapData = { partLabel:pl, cols:pC[pi], rows:pR[pi], col:col, row:row, fb:fb, colNames:_cnames, colColors:_ccolors };
         /* ★ 같은 파트의 다른 칸 차량번호 지도 (자동 약도 주변 표시용) */
         var _cellCars={};
         for(var z=0;z<keys.length;z++){
@@ -784,7 +788,7 @@ function sharePage(){
             /* ★ 표시 라벨: 숫자 차량번호면 끝 4자리, "청운임대1" 같은 이름이면 원문 그대로(최대 6자) */
             var _lbl;
             if(carz && carz.length>=3 && carRaw.length<=carz.length+1){ _lbl=carz.slice(-4); }
-            else { _lbl=carRaw.length>6 ? carRaw.slice(0,6) : carRaw; }
+            else { _lbl=carRaw.length>8 ? carRaw.slice(0,8) : carRaw; }
             _cellCars[cz+'_'+rz]=_lbl;
           }
         }
@@ -851,6 +855,16 @@ function sharePage(){
   }
   /* ★ HTML 이스케이프 (열 이름 등 안전 출력) */
   function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+  /* ★ 배경색 밝기에 따라 글자색(검정/흰색) 자동 선택 */
+  function _pickTextColor(hex){
+    try{
+      var h=String(hex).replace('#','');
+      if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      var r=parseInt(h.substr(0,2),16), g=parseInt(h.substr(2,2),16), b=parseInt(h.substr(4,2),16);
+      var yiq=(r*299+g*587+b*114)/1000;
+      return yiq>=140 ? '#1e293b' : '#ffffff';
+    }catch(e){ return '#1e293b'; }
+  }
   /* ★ 자동 약도 숨기기 */
   function _hideAutoMap(){
     var box=document.getElementById('autoMapBox');
@@ -875,19 +889,21 @@ function sharePage(){
       for(var c2=1;c2<=cols;c2++){
         var isT=(c2===d.col && r===d.row);
         if(isT){ html+='<td class="amCell amTarget">📍</td>'; continue; }
-        /* ★ 주변 차량번호 표시 — 📍 같은 열의 앞·뒤 칸, 그리고 1칸(첫째 줄) 전체 */
-        var _showN = (c2===d.col && (r===d.row-1 || r===d.row+1)) || (r===rows-1);
+        /* ★ 모든 주차 칸의 차량번호 표시 (특수문자 포함). 차주정보는 표시 안 함 */
         var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
-        if(_showN && _cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
+        if(_cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
         else{ html+='<td class="amCell"></td>'; }
       }
       html+='</tr>';
     }
-    /* ★ 하단에도 열 이름 반복 표시 */
+    /* ★ 하단에도 열 이름 반복 표시 (지정된 열 색상 반영) */
     html+='<tr><td></td>';
     for(var cf=1;cf<=cols;cf++){
       var cnf=(d.colNames&&d.colNames[cf-1])||(cf+'열');
-      html+='<td style="font-size:10px;font-weight:800;color:#475569;text-align:center;padding:2px 3px;white-space:nowrap;">'+_esc(cnf)+'</td>';
+      var ccl=(d.colColors&&d.colColors[cf-1])||null;
+      var _cstyle='font-size:10px;font-weight:800;color:#475569;text-align:center;padding:2px 3px;white-space:nowrap;';
+      if(ccl){ _cstyle='font-size:10px;font-weight:800;color:'+_pickTextColor(ccl)+';text-align:center;padding:3px 4px;white-space:nowrap;background:'+_esc(ccl)+';border-radius:5px;'; }
+      html+='<td style="'+_cstyle+'">'+_esc(cnf)+'</td>';
     }
     html+='</tr>';
     html+='</tbody></table></div>';
