@@ -1768,7 +1768,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <span>🔑 키불출중</span>
       <span id="keyIssueInfo" style="font-size:11px;font-weight:900;letter-spacing:-0.3px;opacity:.9;"></span>
     </div>
-    <div class="sync-pill">
+    <div class="sync-pill" onclick="_forceServerSync()" title="탭하면 서버 데이터 강제로 받기(동기화 복구)" style="cursor:pointer;">
       <div class="sync-dot" id="syncDot"></div>
       <span id="syncStatus">미연결</span>
       <span id="realClock">--:--:--</span>
@@ -2834,6 +2834,22 @@ var LS_OFFLINE_DIRTY = 'pb_offline_dirty'; /* ★ 오프라인 중 변경된 슬
 var _wasDisconn = false; /* ★ 전역: Firebase 재연결 감지 플래그 */
 
 function _tsNow(){ return Date.now(); }
+
+/* ★★ 동기화 복구 — dirty 슬롯이 안 지워져 원격(다른 기기) 변경을 계속 거부하는
+   상태를 사용자가 직접 풀어주는 안전장치. (상단 연결표시 탭)
+   dirty·로컬TS를 비워 "서버가 최신"이 되게 한 뒤 새로고침 → 서버 데이터 수신 */
+function _forceServerSync(){
+  var msg='📥 서버(다른 기기)의 최신 데이터를 이 기기로 받아옵니다.\n\n'
+    +'· 다른 기기 변경이 이 기기에 안 들어올 때 사용하세요.\n'
+    +'· 이 기기에서 아직 서버에 반영 안 된 변경이 있으면 덮어써질 수 있습니다.\n\n계속할까요?';
+  if(!confirm(msg)) return;
+  try{ _clearDirtySlots(); }catch(e){}
+  try{ localStorage.setItem(LS_LOCAL_TS,'0'); }catch(e){}
+  try{ localStorage.removeItem('pb_restore_pending'); }catch(e){}
+  try{ localStorage.removeItem('pb_offline_snapshot'); }catch(e){}
+  try{ if(typeof showAlert==='function') showAlert('📥 서버 데이터 받는 중...'); }catch(e){}
+  setTimeout(function(){ try{ location.reload(); }catch(e){ location.href=location.href; } }, 500);
+}
 
 function _tsMarkLocalWrite(){
   try{ localStorage.setItem(LS_LOCAL_TS, String(_tsNow())); }catch(e){}
@@ -20208,6 +20224,6 @@ document.addEventListener('visibilitychange', function(){
 _requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 18:20</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 20:10</div>
 </body>
 </html>
