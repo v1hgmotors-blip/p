@@ -2213,7 +2213,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <div style="font-size:12px;font-weight:700;color:#94A3B8;padding:10px 2px;">불러오는 중...</div>
     </div>
     <div class="storage-detail-foot">
-      <button type="button" class="sdf-refresh" onclick="refreshStorageBadge()">🔄 새로고침</button>
+      <button type="button" class="sdf-refresh" onclick="this.textContent='⏳ 계산 중...';this.style.opacity='.6';refreshStorageBadge();">🔄 새로고침</button>
       <button type="button" class="sdf-close" onclick="_closeStorageDetail()">닫기</button>
     </div>
   </div>
@@ -4080,7 +4080,7 @@ function renderColHeaders(){
 
 function onColHcClick(e){
   var div = e.currentTarget;
-  if(!isColEditOn()) return;           /* ★ 편집 OFF 이면 차단 */
+  if(!isColEditOn()){ _showColShiftMenu(parseInt(div.dataset.part), parseInt(div.dataset.col), div); return; } /* ★ 편집 OFF: 열 밀기/당기기 메뉴 */
   if(div.classList.contains('editing')) return;
   var part = parseInt(div.dataset.part);
   var col  = parseInt(div.dataset.col);
@@ -4110,6 +4110,169 @@ function onColHcClick(e){
   });
   /* 재클릭 방지: 이벤트 리스너 일시 제거 */
   div.removeEventListener('click', onColHcClick);
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   ★ 열 밀기 / 당기기 — 열 라벨 탭 시 메뉴, 데이터 이동은 swapSlotsData와
+     동일한 저장·Firebase 반영 패턴(_getData/_saveData/_fbSafeUpdate) 사용
+   ══════════════════════════════════════════════════════════ */
+function _emptySlotObj(){
+  return {car:'',status:'none',memo:'',owner:'',disabled:false,num:'0',
+          encar:{date:'',time:'',done:false,doneDate:''},inspect:{date:'',done:false}};
+}
+function _colHasData(part, col, rows){
+  var data=_getData();
+  for(var r=1;r<=rows;r++){
+    var d=data[_coordId(part,col,r)];
+    if(d && (String(d.car||'').trim() || d.disabled || String(d.memo||'').trim() || String(d.owner||'').trim())) return true;
+  }
+  return false;
+}
+function _closeColShiftMenu(){
+  var m=document.getElementById('colShiftMenu'); if(m) m.remove();
+  document.removeEventListener('click', _colShiftOutside, true);
+}
+function _colShiftOutside(ev){
+  var m=document.getElementById('colShiftMenu');
+  if(m && !m.contains(ev.target)) _closeColShiftMenu();
+}
+function _showColShiftMenu(part, col, anchorEl){
+  _closeColShiftMenu();
+  if(!part || !col) return;
+  var name = getColName(part, col);
+  var m=document.createElement('div');
+  m.id='colShiftMenu';
+  m.style.cssText='position:fixed;z-index:99000;background:#1E293B;border:2px solid #FACC15;border-radius:12px;'
+    +'padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);font-family:inherit;min-width:220px;';
+  m.innerHTML =
+     '<div style="text-align:center;color:#FACC15;font-weight:900;font-size:14px;margin-bottom:8px;">📍 '+_escHtml(name)+' 열</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button type="button" id="_colPushBtn" style="flex:1;padding:11px 8px;background:#0369A1;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">▶ 열 밀기</button>'
+    +'<button type="button" id="_colPullBtn" style="flex:1;padding:11px 8px;background:#166534;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">◀ 열 당기기</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;">'
+    +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;background:#7C3AED;color:#fff;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;position:relative;">🎨 이 열 색상<input type="color" id="_colOneColorInp" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;"></label>'
+    +'<button type="button" id="_colColorResetBtn" style="flex:0 0 auto;padding:10px 12px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">색 초기화</button>'
+    +'</div>'
+    +'<button type="button" id="_colCancelBtn" style="width:100%;margin-top:8px;padding:8px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">취소</button>';
+  document.body.appendChild(m);
+  /* 위치 — 라벨 근처, 화면 벗어나지 않게 */
+  try{
+    var r=anchorEl.getBoundingClientRect();
+    var mw=m.offsetWidth, mh=m.offsetHeight;
+    var left=Math.min(Math.max(6, r.left), window.innerWidth-mw-6);
+    var top=r.top-mh-8; if(top<6) top=r.bottom+8;
+    m.style.left=left+'px'; m.style.top=top+'px';
+  }catch(e){ m.style.left='50%'; m.style.top='40%'; m.style.transform='translate(-50%,-50%)'; }
+  document.getElementById('_colPushBtn').onclick=function(){ _closeColShiftMenu(); _colPush(part,col); };
+  document.getElementById('_colPullBtn').onclick=function(){ _closeColShiftMenu(); _colPull(part,col); };
+  var _cInp=document.getElementById('_colOneColorInp');
+  if(_cInp){
+    _cInp.value = getColOneColor(part,col) || '#F2D900';
+    _cInp.oninput=function(){ setColOneColor(part,col,this.value); };
+    _cInp.onchange=function(){ _closeColShiftMenu(); };
+  }
+  var _rBtn=document.getElementById('_colColorResetBtn');
+  if(_rBtn) _rBtn.onclick=function(){ removeColOneColor(part,col); _closeColShiftMenu(); };
+  document.getElementById('_colCancelBtn').onclick=_closeColShiftMenu;
+  setTimeout(function(){ document.addEventListener('click', _colShiftOutside, true); }, 50);
+}
+function _escHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+/* 열 밀기: tapCol부터 오른쪽으로 한 칸 이동, tapCol 자리에 빈 열 삽입 (열 수 +1) */
+function _colPush(part, col){
+  var cols=PART_COL_COUNTS[part-1]||COLS_PER_PART;
+  var rows=PART_ROW_COUNTS[part-1]||ROWS_PER_PART;
+  if(cols>=MAX_COLS){ alert('⚠️ 최대 열('+MAX_COLS+') 도달 — 더 밀 수 없습니다.'); return; }
+  if(!confirm('▶ 「'+getColName(part,col)+'」열부터 오른쪽으로 한 칸씩 밀고,\n그 자리에 빈 열을 삽입할까요? (열 '+cols+'→'+(cols+1)+')')) return;
+  var data=_getData(); var upd={}; var newCol={};
+  var newCols=cols+1;
+  for(var c=1;c<=newCols;c++){
+    for(var r=1;r<=rows;r++){
+      var val;
+      if(c<col){ val=data[_coordId(part,c,r)]; }        /* 앞쪽 그대로 */
+      else if(c===col){ val=_emptySlotObj(); }          /* 삽입된 빈 열 */
+      else { val=data[_coordId(part,c-1,r)]; }           /* 오른쪽: 이전 열에서 */
+      if(!val) val=_emptySlotObj();
+      newCol[_coordId(part,c,r)]=val;
+    }
+  }
+  for(var k in newCol){ data[k]=newCol[k]; upd[k]=newCol[k]; }
+  _saveData(data);
+  /* ★ 열 이름도 데이터와 같은 규칙으로 오른쪽 이동 (삽입된 열은 기본이름) */
+  var _nm=getColNames(), _nmSnap=Object.assign({},_nm), _nmUpd={};
+  var _setNm=function(c,v){
+    var key='p'+part+'c'+c;
+    if(v===undefined||v===null){ if(_nm[key]!==undefined){ delete _nm[key]; _nmUpd['colNames/'+key]=null; } }
+    else if(_nm[key]!==v){ _nm[key]=v; _nmUpd['colNames/'+key]=v; }
+  };
+  for(var _c=col;_c<=newCols;_c++){
+    if(_c===col) _setNm(_c, undefined);
+    else _setNm(_c, _nmSnap['p'+part+'c'+(_c-1)]);
+  }
+  saveColNames(_nm);
+  if(Object.keys(_nmUpd).length && typeof pushSettings==='function') pushSettings(_nmUpd);
+  PART_COL_COUNTS[part-1]=newCols;
+  localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
+  _recalcPartArrays();
+  if(fbSlotsRef){ upd._localTs=_tsNow(); _fbSafeUpdate(upd,'col-push'); }
+  _rebuildAndRefresh();
+  try{ showToast('▶ 열 밀기 완료 — '+getColName(part,col)+' 위치에 빈 열 삽입','success'); }catch(e){}
+}
+
+/* 열 당기기: 앞 열(col-1)이 비어있으면 그 빈 열을 없애고 col부터 왼쪽으로 당김 (열 수 -1).
+   앞 열에 데이터가 있으면 경고 */
+function _colPull(part, col){
+  var cols=PART_COL_COUNTS[part-1]||COLS_PER_PART;
+  var rows=PART_ROW_COUNTS[part-1]||ROWS_PER_PART;
+  if(col<=1){ alert('⚠️ 맨 앞 열은 당길 수 없습니다.'); return; }
+  var prev=col-1;
+  if(_colHasData(part, prev, rows)){
+    alert('⚠️ 앞 열「'+getColName(part,prev)+'」에 데이터가 있어 당길 수 없습니다.\n먼저 앞 열을 비워 주세요.');
+    return;
+  }
+  if(cols<=MIN_COLS){ alert('⚠️ 최소 열('+MIN_COLS+') — 더 줄일 수 없습니다.'); return; }
+  if(!confirm('◀ 빈 열「'+getColName(part,prev)+'」을 없애고\n「'+getColName(part,col)+'」부터 왼쪽으로 당길까요? (열 '+cols+'→'+(cols-1)+')')) return;
+  var data=_getData(); var upd={}; var newCol={};
+  var newCols=cols-1;
+  for(var c=1;c<=newCols;c++){
+    for(var r=1;r<=rows;r++){
+      var val;
+      if(c<prev){ val=data[_coordId(part,c,r)]; }       /* 앞쪽 그대로 */
+      else { val=data[_coordId(part,c+1,r)]; }           /* prev부터: 다음 열에서 당김 */
+      if(!val) val=_emptySlotObj();
+      newCol[_coordId(part,c,r)]=val;
+    }
+  }
+  for(var k2 in newCol){ data[k2]=newCol[k2]; upd[k2]=newCol[k2]; }
+  /* 사라지는 마지막 열 좌표 비우기(로컬 삭제 + FB 빈값) */
+  for(var r2=1;r2<=rows;r2++){
+    var oid=_coordId(part,cols,r2);
+    delete data[oid];
+    upd[oid]=_emptySlotObj();
+  }
+  _saveData(data);
+  /* ★ 열 이름도 데이터와 같은 규칙으로 왼쪽 당김, 사라지는 마지막 열 이름 삭제 */
+  var _nm2=getColNames(), _nmSnap2=Object.assign({},_nm2), _nmUpd2={};
+  var _setNm2=function(c,v){
+    var key='p'+part+'c'+c;
+    if(v===undefined||v===null){ if(_nm2[key]!==undefined){ delete _nm2[key]; _nmUpd2['colNames/'+key]=null; } }
+    else if(_nm2[key]!==v){ _nm2[key]=v; _nmUpd2['colNames/'+key]=v; }
+  };
+  for(var _c2=prev;_c2<=newCols;_c2++){
+    _setNm2(_c2, _nmSnap2['p'+part+'c'+(_c2+1)]);
+  }
+  var _lastKey='p'+part+'c'+cols;
+  if(_nm2[_lastKey]!==undefined){ delete _nm2[_lastKey]; _nmUpd2['colNames/'+_lastKey]=null; }
+  saveColNames(_nm2);
+  if(Object.keys(_nmUpd2).length && typeof pushSettings==='function') pushSettings(_nmUpd2);
+  PART_COL_COUNTS[part-1]=newCols;
+  localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
+  _recalcPartArrays();
+  if(fbSlotsRef){ upd._localTs=_tsNow(); _fbSafeUpdate(upd,'col-pull'); }
+  _rebuildAndRefresh();
+  try{ showToast('◀ 열 당기기 완료 (열 '+cols+'→'+newCols+')','success'); }catch(e){}
 }
 
 
@@ -4241,6 +4404,27 @@ function _applyAllPartColors(){
     var part = key.replace('p','');
     var headers = document.querySelectorAll('.col-hc[data-part="'+part+'"]');
     headers.forEach(function(h){ h.style.background = colors[key]; });
+  });
+  _applyAllColOneColors(); /* ★ 특정 열 색상은 파트색 위에 덮어씀 */
+}
+
+/* ★ 특정 열 하나만 헤더 색 지정 (이 기기 로컬 — 파트색과 동일 방식) */
+var LS_COL_ONE_COLORS='pb_col_one_colors';
+function getColOneColors(){ try{return JSON.parse(localStorage.getItem(LS_COL_ONE_COLORS)||'{}');}catch(e){return {};} }
+function getColOneColor(part,col){ return getColOneColors()['p'+part+'c'+col]; }
+function setColOneColor(part,col,color){
+  var o=getColOneColors(); o['p'+part+'c'+col]=color; localStorage.setItem(LS_COL_ONE_COLORS,JSON.stringify(o));
+  var el=document.querySelector('.col-hc[data-part="'+part+'"][data-col="'+col+'"]'); if(el) el.style.background=color;
+}
+function removeColOneColor(part,col){
+  var o=getColOneColors(); delete o['p'+part+'c'+col]; localStorage.setItem(LS_COL_ONE_COLORS,JSON.stringify(o));
+  if(typeof renderColHeaders==='function') renderColHeaders(); /* 기본색 복원 위해 재렌더 */
+}
+function _applyAllColOneColors(){
+  var o=getColOneColors();
+  Object.keys(o).forEach(function(key){
+    var m=key.match(/^p(\d+)c(\d+)$/); if(!m) return;
+    var el=document.querySelector('.col-hc[data-part="'+m[1]+'"][data-col="'+m[2]+'"]'); if(el) el.style.background=o[key];
   });
 }
 
@@ -10100,20 +10284,27 @@ function _sdfRefreshBtnState(busy){
     else    { b.disabled=false; b.style.opacity='1'; b.textContent='🔄 새로고침'; }
   }catch(e){}
 }
+function _sdfPopupOpen(){
+  try{ var ov=document.getElementById('storageDetailOv'); return !!(ov && ov.classList.contains('show')); }catch(e){ return false; }
+}
 function refreshStorageBadge(){
   var badge=document.getElementById('storageUsageBadge');
   if(!badge) return;
   if(_storageUsageBusy){
     /* ★ 이미 계산 중 — 조용히 무시하지 말고 상태를 보여줌 */
     _sdfRefreshBtnState(true);
+    try{ if(_sdfPopupOpen() && typeof _greenToast==='function') _greenToast('⏳ 이미 용량 계산 중입니다 — 잠시만요'); }catch(e){}
     return;
   }
   _storageUsageBusy = true;
   _sdfRefreshBtnState(true);
+  try{ if(_sdfPopupOpen() && typeof _greenToast==='function') _greenToast('🔄 용량 다시 계산 중... (10초 내외)'); }catch(e){}
   badge.textContent='💾 용량 계산중...';
   var localBytes = _calcLocalStorageUsage();
+  var _t0 = Date.now(); /* ★ 캐시 즉시완료 시 반응이 안 보이는 문제 — 최소 표시시간 확보용 */
   try{
     _calcDbStorageUsage(function(db){
+      var _apply = function(){
       _storageUsageBusy = false;
       _sdfRefreshBtnState(false);
       _storageUsageCache = { local: localBytes, db: db };
@@ -10126,6 +10317,8 @@ function refreshStorageBadge(){
       }
       if(document.getElementById('storageDetailOv') && document.getElementById('storageDetailOv').classList.contains('show')){
         _renderStorageDetail();
+        /* ★ 완료 알림 — 값이 그대로여도 새로고침이 실행됐음을 알 수 있게 */
+        try{ if(typeof _greenToast==='function') _greenToast('✅ 용량 계산 완료'); }catch(e){}
       }
       /* ★ 다운로드량 추정 — 용량 계산과 별도로 비동기 진행, 끝나면 캐시에 합쳐서 재렌더 */
       if(db.connected){
@@ -10136,6 +10329,10 @@ function refreshStorageBadge(){
           }
         });
       }
+      };
+      /* 캐시로 즉시 끝나도 ⏳ 표시가 최소 0.8초는 보이도록 */
+      var _el = Date.now() - _t0;
+      setTimeout(_apply, Math.max(0, 800 - _el));
     });
   }catch(e){
     _storageUsageBusy = false;
@@ -19733,7 +19930,7 @@ window._drawQRCanvas = function(container, text, size){
 var PIN = (function(){
   var STORAGE_KEY = 'pb_pin_v1';
   var DISABLED_KEY = 'pb_pin_disabled'; /* ★ PIN 사용안함 플래그 */
-  var DEFAULT_PIN = '0000';
+  var DEFAULT_PIN = '9000';
   /* 모드: 'unlock'=잠금해제, 'change_cur'=현재확인, 'change_new'=새입력, 'change_cfm'=재확인 */
   var mode = 'unlock';
   var buf = '';
@@ -19922,9 +20119,15 @@ var PIN = (function(){
     /* Firebase 연결 후 호출 — 실시간 동기화 시작 */
     startListener: _startPinDisabledListener,
     init: function(){
-      /* ★ 기본값: 사용안함 — 최초 실행 시 pb_pin_disabled 미설정이면 '1'로 초기화 */
-      if(localStorage.getItem('pb_pin_disabled') === null){
-        _setDisabled(true); /* 기본값 사용안함 */
+      /* ★ 기본값: 사용함 — 앱 실행 시 PIN 입력 필요 (기본 비밀번호 9000)
+         기존 기기도 이 버전 최초 실행 시 1회 '사용함'으로 전환(마이그레이션).
+         이후 토글로 끄면 그 설정(모든 기기 동기화)이 유지됨 */
+      if(localStorage.getItem('pb_pin_default_on_v1') === null){
+        localStorage.setItem('pb_pin_default_on_v1','1');
+        /* 로컬 기본값만 '사용함'으로 — Firebase 공유 설정은 건드리지 않음
+           (사장님이 다른 기기에서 일부러 꺼둔 경우, 연결 후 그 설정이 자동 반영됨) */
+        localStorage.removeItem(DISABLED_KEY);
+        _updatePinToggleBtn();
       }
       if(isDisabled()){
         unlock();
@@ -19964,8 +20167,29 @@ function _updatePinToggleBtn(){
 PIN.init();
 /* 버튼 상태 초기화 */
 setTimeout(_updatePinToggleBtn, 300);
+
+/* ★ 화면 꺼짐 방지 (Wake Lock) — 앱이 켜져 있는 동안 화면이 자동으로 꺼지지 않음.
+   다른 앱에 갔다 돌아오면 자동으로 다시 켜짐유지 요청.
+   (HTTPS 필요 — github.io에서 정상 동작. 미지원 브라우저에선 조용히 무시) */
+var _wakeLock = null;
+function _requestWakeLock(){
+  try{
+    if(!('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function(wl){
+      _wakeLock = wl;
+      try{ wl.addEventListener('release', function(){ _wakeLock = null; }); }catch(e){}
+      console.log('[WakeLock] 화면 켜짐유지 활성화');
+    }).catch(function(err){
+      console.warn('[WakeLock] 요청 실패:', err && err.message);
+    });
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && !_wakeLock){ _requestWakeLock(); }
+});
+_requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 07:20</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-12 15:40</div>
 </body>
 </html>
