@@ -269,7 +269,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 
 /* ══ 그리드 ══ */
-.grid-wrap{display:flex;flex-direction:column;padding:6px 8px 20vh;width:100%;box-sizing:border-box;
+.grid-wrap{display:flex;flex-direction:column;padding:6px 8px 8px;width:100%;box-sizing:border-box;
   /* ★ BUG FIX: 자식 요소 overflow가 페이지 가로스크롤로 전파되지 않도록 차단 */
   overflow-x:hidden;}
 /* ★ BUG FIX: 모바일 우측 여백 — grid-wrap 좌우 padding 제거
@@ -285,7 +285,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   display:block;
   column-count:2;
   column-gap:4px;
-  padding:6px 4px 20vh;
+  padding:6px 4px 8px;
 }
 .grid-wrap.part-grid-mode .part-cell{
   break-inside:avoid;
@@ -3882,7 +3882,8 @@ function _syncAllSettingsToFirebase(){
   /* 열 이름 */
   var colNames = getColNames();
   if(Object.keys(colNames).length > 0) allSettings.colNames = colNames;
-  /* ★ 특정 열 색상 */
+  /* ★ 주차현황판 하단 메모 */
+  var _bmv = localStorage.getItem('pb_board_memo'); if(_bmv) allSettings.boardMemo = _bmv;
   var colOneColors = getColOneColors();
   if(Object.keys(colOneColors).length > 0) allSettings.colColors = colOneColors;
   /* 열 색상 */
@@ -6794,12 +6795,15 @@ function _partDragMove(cx, cy) {
     var pw = document.getElementById('partWrap' + pNum);
     var pb = document.getElementById('partBody' + pNum);
     if (!pw) return;
-    var top    = pw.getBoundingClientRect().top;
-    var bottom = pb ? pb.getBoundingClientRect().bottom : pw.getBoundingClientRect().bottom;
+    var r = pw.getBoundingClientRect();
+    var top    = r.top;
+    var bottom = pb ? pb.getBoundingClientRect().bottom : r.bottom;
+    var left   = r.left, right = r.right;
     var mid    = (top + bottom) / 2;
-    /* 파트 범위 내 → 거리 0, 범위 밖 → 경계까지 거리 */
-    var dist = (cy >= top && cy <= bottom) ? 0
-             : Math.min(Math.abs(cy - top), Math.abs(cy - bottom));
+    /* ★ 2D 거리: 커서가 그 파트 위(같은 컬럼)에 있으면 우선 선택 (세로벽돌쌓기 2컬럼 대응) */
+    var dx = (cx < left) ? (left - cx) : (cx > right ? cx - right : 0);
+    var dy = (cy < top)  ? (top - cy)  : (cy > bottom ? cy - bottom : 0);
+    var dist = Math.sqrt(dx*dx + dy*dy);
     if (dist < bestDist) {
       bestDist = dist;
       overPart = pNum;
@@ -6816,6 +6820,25 @@ function _partDragMove(cx, cy) {
   });
   _partDrag.overPart = overPart;
   _partDrag._overPos = overPos;
+
+  /* ★ 드래그 중 실시간 안내 멘트 */
+  var hint = document.getElementById('partDropHint');
+  if(!hint){
+    hint = document.createElement('div');
+    hint.id = 'partDropHint';
+    hint.style.cssText = 'position:fixed;z-index:100000;background:#1E293B;color:#FEE500;font-weight:900;'
+      + 'font-size:14px;padding:7px 14px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);'
+      + 'pointer-events:none;font-family:inherit;white-space:nowrap;border:2px solid #FEE500;';
+    document.body.appendChild(hint);
+  }
+  if(overPart){
+    hint.textContent = overPart + '파트 ' + (overPos==='top' ? '위로' : '아래로') + ' 이동';
+    hint.style.display = 'block';
+    hint.style.left = Math.min(cx + 16, window.innerWidth - hint.offsetWidth - 8) + 'px';
+    hint.style.top  = (cy + 20) + 'px';
+  } else {
+    hint.style.display = 'none';
+  }
 }
 
 function _partDragEnd() {
@@ -6827,6 +6850,8 @@ function _partDragEnd() {
   document.body.style.userSelect = '';
   var ghost = document.getElementById('partDragGhost');
   if (ghost) ghost.style.display = 'none';
+  var _hint = document.getElementById('partDropHint');  /* ★ 안내 멘트 숨김 */
+  if (_hint) _hint.style.display = 'none';
   var srcPw = document.getElementById('partWrap' + _partDrag.srcPart);
   if (srcPw) srcPw.classList.remove('part-dragging-src');
   for (var p = 1; p <= NUM_PARTS; p++) {
@@ -11485,6 +11510,10 @@ function applyRemoteSettings(data){
   /* ★ 업체정보 수신 반영 */
   if(data.hasOwnProperty('bizInfo')){
     try{ localStorage.setItem(LS_BIZ_INFO, String(data.bizInfo||'')); }catch(e){}
+  }
+  /* ★ 주차현황판 하단 메모 (boardMemo) 수신 — 실시간 반영 */
+  if(data.hasOwnProperty('boardMemo')){
+    try{ if(typeof window._applyBoardMemoRemote==='function') window._applyBoardMemoRemote(data.boardMemo); }catch(e){}
   }
   /* ★ 발송방식(sendMode) 수신 반영 (전 기기 공통) */
   if(data.hasOwnProperty('sendMode')){
@@ -20338,6 +20367,50 @@ document.addEventListener('visibilitychange', function(){
 _requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드19</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드21</div>
+<style>
+#boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+#boardMemoPanel .bm-head{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:#B45309;margin-bottom:6px;}
+#boardMemoStatus{font-size:11px;font-weight:800;}
+#boardMemoInput{width:100%;min-height:130px;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:8px;padding:10px;font-size:15px;font-family:inherit;line-height:1.55;resize:vertical;background:#fff;color:#1E293B;}
+#boardMemoInput:focus{outline:none;border-color:#E9C46A;box-shadow:0 0 0 3px rgba(233,196,106,.25);}
+</style>
+<script>
+/* ★ 주차현황판 하단 메모란 — 모든 기기 실시간 공유·저장 (settings 동기화 재사용) */
+(function(){
+  var LS_BOARD_MEMO='pb_board_memo';
+  var _bmPushTimer=null;
+  function _setStatus(t,c){ var s=document.getElementById('boardMemoStatus'); if(s){ s.textContent=t; s.style.color=c||'#16A34A'; } }
+  function _injectMemo(){
+    var gw=document.getElementById('gridWrap'); if(!gw || document.getElementById('boardMemoPanel')) return;
+    var panel=document.createElement('div'); panel.id='boardMemoPanel';
+    panel.innerHTML='<div class="bm-head">📝 주차현황판 메모 <span id="boardMemoStatus"></span></div>'
+      +'<textarea id="boardMemoInput" placeholder="메모를 입력하세요 — 모든 기기에 실시간 공유·저장됩니다"></textarea>';
+    gw.parentNode.insertBefore(panel, gw.nextSibling);
+    var ta=document.getElementById('boardMemoInput');
+    try{ ta.value=localStorage.getItem(LS_BOARD_MEMO)||''; }catch(e){}
+    ta.addEventListener('input', function(){
+      try{ localStorage.setItem(LS_BOARD_MEMO, ta.value); }catch(e){}
+      _setStatus('저장 중…','#B45309');
+      clearTimeout(_bmPushTimer);
+      _bmPushTimer=setTimeout(function(){
+        try{ if(typeof pushSettings==='function') pushSettings({ boardMemo: ta.value }); }catch(e){}
+        _setStatus('✔ 저장됨','#16A34A');
+        setTimeout(function(){ _setStatus('',''); }, 1500);
+      }, 900);
+    });
+  }
+  window._applyBoardMemoRemote=function(v){
+    var val = (v==null) ? '' : String(v);
+    try{ localStorage.setItem(LS_BOARD_MEMO, val); }catch(e){}
+    var ta=document.getElementById('boardMemoInput');
+    if(ta && document.activeElement!==ta && ta.value!==val){
+      ta.value=val; _setStatus('🔄 동기화됨','#2563EB'); setTimeout(function(){ _setStatus('',''); },1200);
+    }
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _injectMemo);
+  else _injectMemo();
+})();
+</script>
 </body>
 </html>

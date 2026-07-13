@@ -118,6 +118,7 @@
     line-height:1.15;white-space:normal;word-break:break-all;
     padding:1px;vertical-align:middle;
   }
+  .amEmpty{ font-size:12px; opacity:.45; }  /* ★ 차량번호 없는 칸의 🅿️ */
   @keyframes amPulse{
     0%,100%{ box-shadow:0 0 0 2px rgba(224,49,49,.30); }
     50%    { box-shadow:0 0 0 6px rgba(224,49,49,.55); }
@@ -619,7 +620,7 @@ function sharePage(){
   /* 차량번호/차량위치 헤더 — 링크 파라미터에서 즉시 표시 (통신 전에 먼저 보임) */
   if(car || loc){
     var h = document.getElementById('carHeader');
-    h.textContent = '차량번호:' + (car||'-') + '  차량위치:' + (loc||'-');
+    h.innerHTML = '차량번호:' + (car ? '<span style="color:#16A34A;font-weight:900;">'+String(car).replace(/[&<>"]/g,'')+'</span>' : '-') + '  차량위치:' + String(loc||'-').replace(/[<>]/g,'');
     h.style.display = 'block';
   }
 
@@ -629,17 +630,17 @@ function sharePage(){
 
   /* 헤더/담당차주 렌더 함수 (단축링크에서도 재사용) */
   var keyNo = qs('kn'); /* ★ 차량 키번호 */
+  function _hEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
   function renderHeader(){
     var h = document.getElementById('carHeader');
     h.classList.remove('gone');
     if(car || loc){
-      h.textContent = '차량번호:' + (car||'-') + '  차량위치:' + (loc||'-');
+      /* ★ 차량번호를 녹색 볼드로 강조 */
+      var _carHtml = car ? '<span style="color:#16A34A;font-weight:900;">'+_hEsc(car)+'</span>' : '-';
+      h.innerHTML = '차량번호:' + _carHtml + '  차량위치:' + _hEsc(loc||'-');
       /* ★ 키번호 — 녹색 글씨로 헤더 끝에 표시 */
       if(keyNo){
-        var kSpan = document.createElement('span');
-        kSpan.style.cssText = 'color:#15803D;font-weight:900;';
-        kSpan.textContent = ' (키번호는 ' + keyNo + '번입니다)';
-        h.appendChild(kSpan);
+        h.innerHTML += ' <span style="color:#15803D;font-weight:900;">(키번호는 ' + _hEsc(keyNo) + '번입니다)</span>';
       }
       h.style.display = 'block';
     }
@@ -892,7 +893,7 @@ function sharePage(){
         /* ★ 모든 주차 칸의 차량번호 표시 (특수문자 포함). 차주정보는 표시 안 함 */
         var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
         if(_cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
-        else{ html+='<td class="amCell"></td>'; }
+        else{ html+='<td class="amCell amEmpty">🅿️</td>'; }  /* ★ 차량번호 없는 칸 → 🅿️ */
       }
       html+='</tr>';
     }
@@ -1019,6 +1020,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-12 18:20</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · view빌드2</div>
 </body>
 </html>
