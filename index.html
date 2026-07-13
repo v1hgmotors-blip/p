@@ -281,11 +281,18 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
    align-items:stretch → 같은 행의 두 파트 셀 높이 동일
    각 cell 안에서 part-body는 flex:0 auto → 콘텐츠 크기만큼만 차지 */
 .grid-wrap.part-grid-mode{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:4px;
+  /* ★ 방법1: 세로 벽돌쌓기(masonry) — 2개 세로 컬럼에 위→아래로 빽빽이 채움 (빈 여백 제거) */
+  display:block;
+  column-count:2;
+  column-gap:4px;
   padding:6px 4px 20vh;
-  align-items:stretch;   /* ★ 핵심: 행 내 두 셀이 동일 높이 */
+}
+.grid-wrap.part-grid-mode .part-cell{
+  break-inside:avoid;
+  -webkit-column-break-inside:avoid;
+  page-break-inside:avoid;
+  width:100%;
+  margin:0 0 4px;
 }
 @media(min-width:601px){
   .grid-wrap{padding-bottom:0; margin-bottom:0;}
@@ -454,6 +461,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .col-edit-switch input:focus + .col-edit-slider{box-shadow:0 0 0 3px rgba(16,185,129,.35);}
 /* ★ FIX: width:100% 추가 — 열 접기/펼치기 후 parking-grid가 part-body 너비를 넘쳐흐르지 않도록 */
 .parking-grid{display:grid;column-gap:2px;row-gap:2px;flex-shrink:0;width:100%;
+  align-content:start; /* ★ 행이 남는 높이만큼 늘어나지 않게 상단 정렬 (칸 적은 파트 슬롯 뚱뚱해짐 방지) */
   /* ★ 슬롯 하단과 열 헤더 사이 여백 */
   padding-bottom:3px;}
 /* ★ 검색바 2줄 레이아웃 */
@@ -4921,7 +4929,7 @@ function fitLayout(){
     if(pgA){
       pgA.style.gridTemplateColumns = 'repeat('+colsA+',minmax(0,1fr))';
       var slotHA = (rowsA < maxRowsPair)
-        ? Math.floor((totalGridH - 5*(rowsA-1)) / rowsA)
+        ? Math.min(Math.floor((totalGridH - 5*(rowsA-1)) / rowsA), baseSlotH) /* ★ 상한 baseSlotH — 칸 적은 파트 슬롯 거대화 방지 */
         : baseSlotH;
       pgA.style.gridTemplateRows = 'repeat('+rowsA+','+slotHA+'px)';
       pgA.style.setProperty('--slot-h', slotHA+'px');
@@ -4942,7 +4950,7 @@ function fitLayout(){
         /* ★ FIX: 동일하게 dispColsB 사용 */
         pgB.style.gridTemplateColumns = 'repeat('+colsB+',minmax(0,1fr))';
         var slotHB = (rowsB < maxRowsPair)
-          ? Math.floor((totalGridH - 5*(rowsB-1)) / rowsB)
+          ? Math.min(Math.floor((totalGridH - 5*(rowsB-1)) / rowsB), baseSlotH) /* ★ 상한 baseSlotH — 칸 적은 파트 슬롯 거대화 방지 */
           : baseSlotH;
         pgB.style.gridTemplateRows = 'repeat('+rowsB+','+slotHB+'px)';
         pgB.style.setProperty('--slot-h', slotHB+'px');
@@ -20330,6 +20338,6 @@ document.addEventListener('visibilitychange', function(){
 _requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드16</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드19</div>
 </body>
 </html>
