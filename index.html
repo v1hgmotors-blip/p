@@ -2040,17 +2040,15 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <span class="storage-mode-badge both" id="feeBlockBadge" style="background:#334155;">발송 허용중</span>
       <span style="font-size:10px;color:#FCA5A5;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">켜면 문자·알림톡·약도전송 전면 차단 (팝업·QR·캡처는 정상)</span>
     </div>
-    <!-- ★ 키불출 자동 문자전송 (약도 MMS) 토글 -->
-    <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;">
-      <span class="storage-mode-label">📲 자동문자</span>
-      <label class="storage-mode-switch" title="키불출 이벤트 수신 시 딜러 전화번호로 약도 자동 문자전송">
-        <input type="checkbox" id="autoSmsSwitch" onchange="onAutoSmsSwitchChange(this.checked)">
-        <span class="storage-mode-slider"></span>
-      </label>
-      <span class="storage-mode-badge both" id="autoSmsBadge">⏸️ 자동문자 꺼짐</span>
-      <!-- ★ 발송 방식 전환: 🖼️ 이미지 MMS(121원) ↔ 🔗 링크 LMS(49.5원) -->
-      <button type="button" id="smsModeBtn" onclick="toggleSmsMode()" style="padding:5px 12px;border:none;border-radius:8px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;background:#1D4ED8;color:#fff;letter-spacing:-.3px;">🔗 링크 49.5원</button>
-      <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">키불출 이벤트 → 딜러번호로 약도 MMS 자동발송 (문자서버 연동 필요)</span>
+    <!-- ★ 키불출 발송 방식 3단계: 알림톡 / 문자 / QR만 -->
+    <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
+      <span class="storage-mode-label">📤 발송방식</span>
+      <button type="button" id="sendMode_alimtalk" onclick="onSendModeChange('alimtalk')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">🗺️ 알림톡</button>
+      <button type="button" id="sendMode_sms" onclick="onSendModeChange('sms')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">📲 문자</button>
+      <button type="button" id="sendMode_qr" onclick="onSendModeChange('qr')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">🔳 QR만</button>
+      <!-- ★ 문자 발송 시 방식: 🖼️ 이미지 MMS ↔ 🔗 링크 LMS -->
+      <button type="button" id="smsModeBtn" onclick="toggleSmsMode()" style="padding:5px 10px;border:none;border-radius:8px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;background:#1D4ED8;color:#fff;letter-spacing:-.3px;">🔗 링크 49.5원</button>
+      <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;width:100%;">🗺️알림톡=키불출 시 딜러에 알림톡(문자대체) · 📲문자=약도 문자 · 🔳QR만=자동발송 안 함, 팝업/수동전송만 (문자서버 연동 필요)</span>
     </div>
   </div>
 </div>
@@ -4200,6 +4198,18 @@ function _showColShiftMenu(part, col, anchorEl){
 function _escHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
 /* 열 밀기: tapCol부터 오른쪽으로 한 칸 이동, tapCol 자리에 빈 열 삽입 (열 수 +1) */
+/* ★ FIX: 열 밀기/당기기 후 _ids 배열을 새 열 수에 맞춰 재생성
+   (addPartCol과 동일 방식 — gridConfig와 _ids 불일치로 인한 구조동기화 폭주 방지) */
+function _rebuildColIds(part, cols, rows){
+  try{
+    var ids=_getIds();
+    if(!ids[part]) ids[part]=[];
+    var newIds=[];
+    for(var r=0;r<rows;r++){ for(var c=1;c<=cols;c++){ newIds.push(_coordId(part,c,r+1)); } }
+    ids[part]=newIds;
+    _saveIds(ids);
+  }catch(e){ console.warn('[colIds 재생성 오류]',e); }
+}
 function _colPush(part, col){
   var cols=PART_COL_COUNTS[part-1]||COLS_PER_PART;
   var rows=PART_ROW_COUNTS[part-1]||ROWS_PER_PART;
@@ -4234,9 +4244,11 @@ function _colPush(part, col){
   if(Object.keys(_nmUpd).length && typeof pushSettings==='function') pushSettings(_nmUpd);
   PART_COL_COUNTS[part-1]=newCols;
   localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
+  _rebuildColIds(part, newCols, rows);   /* ★ FIX: _ids 재생성 (gridConfig-ids 불일치 방지) */
   _recalcPartArrays();
   if(fbSlotsRef){ upd._localTs=_tsNow(); _fbSafeUpdate(upd,'col-push'); }
   _rebuildAndRefresh();
+  if(typeof _pushGridStructure==='function') _pushGridStructure(); /* ★ 일관된 gridConfig+ids Firebase 반영 */
   try{ showToast('▶ 열 밀기 완료 — '+getColName(part,col)+' 위치에 빈 열 삽입','success'); }catch(e){}
 }
 
@@ -4288,9 +4300,11 @@ function _colPull(part, col){
   if(Object.keys(_nmUpd2).length && typeof pushSettings==='function') pushSettings(_nmUpd2);
   PART_COL_COUNTS[part-1]=newCols;
   localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
+  _rebuildColIds(part, newCols, rows);   /* ★ FIX: _ids 재생성 (gridConfig-ids 불일치 방지) */
   _recalcPartArrays();
   if(fbSlotsRef){ upd._localTs=_tsNow(); _fbSafeUpdate(upd,'col-pull'); }
   _rebuildAndRefresh();
+  if(typeof _pushGridStructure==='function') _pushGridStructure(); /* ★ 일관된 gridConfig+ids Firebase 반영 */
   try{ showToast('◀ 열 당기기 완료 (열 '+cols+'→'+newCols+')','success'); }catch(e){}
 }
 
@@ -11464,8 +11478,10 @@ function applyRemoteSettings(data){
   if(data.hasOwnProperty('bizInfo')){
     try{ localStorage.setItem(LS_BIZ_INFO, String(data.bizInfo||'')); }catch(e){}
   }
-  /* ★ 자동문자 토글 수신 반영 (전 기기 공통) */
-  if(data.hasOwnProperty('autoSms')){
+  /* ★ 발송방식(sendMode) 수신 반영 (전 기기 공통) */
+  if(data.hasOwnProperty('sendMode')){
+    try{ if(typeof window._applySendModeRemote==='function') window._applySendModeRemote(String(data.sendMode)); }catch(e){}
+  } else if(data.hasOwnProperty('autoSms')){
     try{ if(typeof window._applyAutoSmsRemote==='function') window._applyAutoSmsRemote(String(data.autoSms)); }catch(e){}
   }
   /* 열 이름 — ★ 전체 덮어쓰기 대신 merge로 기존 열 이름 보존 */
@@ -18527,9 +18543,9 @@ window._drawQRCanvas = function(container, text, size){
      · SMS URI 표준상 이미지 자동첨부는 불가 → 경로 안내 텍스트가 자동 입력됨
      · 약도 이미지까지 보내려면 「🖼️ 약도공유」 버튼 사용 (카톡/MMS 선택 가능) */
   window._smsPartPhoto = function(){
-    /* ★ 자동문자 꺼짐 = 모든 문자전송 차단 */
-    if(localStorage.getItem(LS_AUTO_SMS)!=='1'){
-      alert('📲 자동문자가 꺼져 있어 문자전송이 비활성화되어 있습니다.\nFirebase 설정에서 「자동문자」를 켜주세요.');
+    /* ★ 수동 발송은 모든 모드에서 허용 (QR 모드 포함). 요금발생차단만 적용 */
+    if(window._isFeeBlocked && window._isFeeBlocked()){
+      alert('🚫 요금발생차단이 켜져 있어 발송이 차단되어 있습니다.');
       return;
     }
     if(!_popupPhone){ alert('키불출앱에서 수신된 전화번호가 없습니다.'); return; }
@@ -18574,7 +18590,45 @@ window._drawQRCanvas = function(container, text, size){
              → status(sent/failed) 회신을 실시간 수신해 알림 표시
      ━ 중복 방지: 이벤트 id별 1회만 발송 (localStorage 기록)
      ══════════════════════════════════════════════════════ */
-  var LS_AUTO_SMS = 'pb_auto_sms';           /* '1' = 켜짐 */
+  var LS_AUTO_SMS = 'pb_auto_sms';           /* '1' = 켜짐 (하위호환 유지) */
+  var LS_SEND_MODE = 'pb_send_mode';         /* ★ 'alimtalk' | 'sms' | 'qr' */
+  function _getSendMode(){
+    var m = localStorage.getItem(LS_SEND_MODE);
+    if(m==='alimtalk'||m==='sms'||m==='qr') return m;
+    /* 마이그레이션: 기존 자동문자 '1'→문자(sms), 그 외→QR만 */
+    var legacy = localStorage.getItem(LS_AUTO_SMS);
+    var mode = (legacy==='1') ? 'sms' : 'qr';
+    try{ localStorage.setItem(LS_SEND_MODE, mode); }catch(e){}
+    return mode;
+  }
+  function _updateSendModeUI(mode){
+    var cfg={ alimtalk:'#166534', sms:'#1D4ED8', qr:'#B45309' };
+    ['alimtalk','sms','qr'].forEach(function(m){
+      var b=document.getElementById('sendMode_'+m);
+      if(b){ var on=(m===mode); b.style.background=on?cfg[m]:'#E5E7EB'; b.style.color=on?'#fff':'#6B7280'; b.style.fontWeight=on?'900':'700'; b.style.boxShadow=on?'0 2px 6px rgba(0,0,0,.2)':'none'; }
+    });
+  }
+  function _setSendMode(mode, sync){
+    if(mode!=='alimtalk'&&mode!=='sms'&&mode!=='qr') mode='qr';
+    try{ localStorage.setItem(LS_SEND_MODE, mode); }catch(e){}
+    try{ localStorage.setItem(LS_AUTO_SMS, (mode==='qr')?'0':'1'); }catch(e){} /* 하위호환 */
+    _updateSendModeUI(mode);
+    if(sync && typeof pushSettings==='function'){ try{ pushSettings({ sendMode: mode, autoSms:(mode==='qr')?'0':'1' }); }catch(e){} }
+  }
+  window.onSendModeChange = function(mode){
+    _setSendMode(mode, true);
+    if(typeof showAlert==='function'){
+      var msg = mode==='alimtalk' ? '🗺️ 알림톡 자동전송 — 키불출 시 딜러에게 알림톡 우선(미수신자 문자 대체)'
+              : mode==='sms'      ? '📲 문자 자동전송 — 키불출 시 딜러 번호로 약도 문자'
+              :                     '🔳 QR만 — 자동발송 안 함, 약도팝업/수동 약도전송만';
+      showAlert(msg); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); }, 3800);
+    }
+  };
+  window._applySendModeRemote = function(v){
+    var mode=(v==='alimtalk'||v==='sms'||v==='qr')?v:'qr';
+    try{ localStorage.setItem(LS_SEND_MODE,mode); localStorage.setItem(LS_AUTO_SMS,(mode==='qr')?'0':'1'); }catch(e){}
+    _updateSendModeUI(mode);
+  };
   /* ★★ 요금발생차단 마스터 스위치 — '1'이면 모든 발송 차단 (전 기기 공통) */
   var LS_FEE_BLOCK = 'pb_fee_block';
   window._isFeeBlocked = function(){
@@ -18919,7 +18973,8 @@ window._drawQRCanvas = function(container, text, size){
   window._autoSendRouteSms = function(partNo, entry, slotLabel, slotIdx){
     try{
       if(window._isFeeBlocked && window._isFeeBlocked()) return;      /* ★ 요금발생차단 ON → 전면 차단 */
-      if(localStorage.getItem(LS_AUTO_SMS)!=='1') return;             /* 토글 꺼짐 */
+      var _mode = _getSendMode();
+      if(_mode==='qr') return;                                        /* ★ QR만 = 자동발송 안 함 */
       if(typeof fbDb==='undefined' || !fbDb) return;                  /* Firebase 미연결 */
       var phone = String((entry&&entry.phone)||'').replace(/[^0-9]/g,'');
       if(phone.length<10 || phone.length>11) return;                  /* 유효 번호 아님 */
@@ -18928,6 +18983,17 @@ window._drawQRCanvas = function(container, text, size){
       if(_smsSentMap()[eid]) return;                                  /* ★ 중복 발송 방지 */
       var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
       if(!code) return;
+
+      /* ★ 알림톡 모드: dispatch_req 경로로 알림톡 우선 발송(미수신자 문자 대체). 서버가 위치 계산 */
+      if(_mode==='alimtalk'){
+        _markSmsSent(eid);
+        var _carA = String((entry&&entry.car)||'');
+        var _nmA = '';
+        try{ if(typeof slotIdx==='number' && slotIdx>=0 && typeof getSlot==='function'){ _nmA = String((getSlot(slotIdx)||{}).owner||'').trim(); } }catch(e){}
+        if(typeof _queueRouteDispatch==='function'){ _queueRouteDispatch(code, phone, _carA, _nmA, eid, function(){}); }
+        return;
+      }
+      /* 아래는 문자(sms) 모드 — 기존 로직 */
 
       /* 본문 구성 (최소화): 차량번호/차량위치 한 줄 + 담당차주 한 줄
          — 상세 내용(경로안내 등)은 합성 이미지가 담당, 텍스트는 이미지가 안 열리는 구형폰 대비용 */
@@ -19113,11 +19179,7 @@ window._drawQRCanvas = function(container, text, size){
       alert('🚫 요금발생차단이 켜져 있어 발송이 차단되어 있습니다.\n현장에서는 팝업 화면·QR 스캔을 이용해 주세요.\n(Firebase 설정에서 「요금발생차단」을 끄면 발송됩니다)');
       return;
     }
-    /* ★ 자동문자 꺼짐 = 모든 문자전송 차단 */
-    if(localStorage.getItem(LS_AUTO_SMS)!=='1'){
-      alert('📲 자동문자가 꺼져 있어 문자전송이 비활성화되어 있습니다.\nFirebase 설정에서 「자동문자」를 켜주세요.');
-      return;
-    }
+    /* ★ 수동 약도전송은 모든 모드(알림톡/문자/QR)에서 허용 */
     var inp = document.getElementById('partPhotoPhoneInput');
     var phone = String((inp&&inp.value)||'').replace(/[^0-9]/g,'');
     if(phone.length<10 || phone.length>11){
@@ -19225,15 +19287,9 @@ window._drawQRCanvas = function(container, text, size){
     b.style.background = on ? '#065F46' : '';
     b.style.color = on ? '#fff' : '';
   }
-  /* 시작 시 토글 상태 복원 */
+  /* 시작 시 발송방식 UI 복원 (3단계) */
   (function(){
-    var on = false;
-    try{ on = localStorage.getItem(LS_AUTO_SMS)==='1'; }catch(e){}
-    function apply(){
-      var sw=document.getElementById('autoSmsSwitch');
-      if(sw) sw.checked = on;
-      _updateAutoSmsBadge(on);
-    }
+    function apply(){ try{ _updateSendModeUI(_getSendMode()); }catch(e){} }
     if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', apply);
     else apply();
   })();
@@ -20274,6 +20330,6 @@ document.addEventListener('visibilitychange', function(){
 _requestWakeLock();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 09:40</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드16</div>
 </body>
 </html>
