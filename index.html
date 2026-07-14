@@ -281,16 +281,23 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
    align-items:stretch → 같은 행의 두 파트 셀 높이 동일
    각 cell 안에서 part-body는 flex:0 auto → 콘텐츠 크기만큼만 차지 */
 .grid-wrap.part-grid-mode{
-  /* ★ 방법1: 세로 벽돌쌓기(masonry) — 2개 세로 컬럼에 위→아래로 빽빽이 채움 (빈 여백 제거) */
-  display:block;
-  column-count:2;
-  column-gap:4px;
+  /* ★ FIX: 기존 CSS column-count는 브라우저가 "예상" 높이로만 나눠서
+     파트 크기 차이가 크면 한쪽 컬럼 아래에 큰 빈 여백이 생김(특히 PC 넓은 화면).
+     → JS가 실제 렌더 높이를 측정해 두 컬럼에 균형있게 배분(_appendGridCellsBalanced)
+       하는 방식으로 변경, CSS는 단순 2컬럼 flex 컨테이너 역할만 함. */
+  display:flex;
+  flex-direction:row;
+  align-items:flex-start;
+  gap:4px;
   padding:6px 4px 8px;
 }
+.grid-wrap.part-grid-mode .grid-col{
+  display:flex;
+  flex-direction:column;
+  flex:1 1 0;
+  min-width:0;
+}
 .grid-wrap.part-grid-mode .part-cell{
-  break-inside:avoid;
-  -webkit-column-break-inside:avoid;
-  page-break-inside:avoid;
   width:100%;
   margin:0 0 4px;
 }
@@ -4666,6 +4673,12 @@ function fitLayout(){
         });
         var _safeT = parseInt(getComputedStyle(document.body).paddingTop) || 0;
         _fH += _safeT;
+        /* ★ FIX: 파트 그리드 아래에 붙는 "주차현황판 메모" 박스 높이도
+           가용높이 계산에서 미리 빼줘야 함. 안 그러면 메모가 없던 시절 기준으로
+           슬롯 높이를 계산해서, 메모 박스를 더한 실제 화면에서는 파트 그리드와
+           메모 사이(또는 메모 아래)에 계산이 안 맞는 빈 공간이 생김. */
+        var _memoEl = document.getElementById('boardMemoPanel');
+        if(_memoEl) _fH += _memoEl.offsetHeight;
         _pcAvailH = Math.max(window.innerHeight - _fH - 4, 100);
       })();
     }
@@ -5646,6 +5659,28 @@ function _appendPartDOM(p){
 }
 
 /* gridWrap 전체 재구성 */
+/* ★ 격자모드(2열) 파트 배치 — 실제 렌더링 높이를 측정해 두 컬럼에 균형있게 배분.
+   (기존 CSS column-count 방식은 파트 크기 차이가 크면 한쪽 컬럼 아래에
+    큰 빈 공간이 생기는 문제가 있었음 — 특히 화면이 넓은 PC에서 두드러짐) */
+function _appendGridCellsBalanced(wrap, cells){
+  if(!cells || !cells.length) return;
+  var col1 = document.createElement('div'); col1.className = 'grid-col';
+  var col2 = document.createElement('div'); col2.className = 'grid-col';
+  wrap.appendChild(col1);
+  wrap.appendChild(col2);
+  /* 1) 일단 전부 col1에 넣어 실제 렌더 높이를 잴 수 있게 함 */
+  cells.forEach(function(cell){ col1.appendChild(cell); });
+  /* 2) 높이 읽기를 한 번에 모아서(batch) 강제 리플로우 최소화 */
+  var heights = cells.map(function(cell){ return cell.getBoundingClientRect().height; });
+  /* 3) 누적 높이가 더 작은 컬럼 쪽으로 순서대로 배분(그리디 균형) */
+  var h1 = 0, h2 = 0;
+  cells.forEach(function(cell, i){
+    var h = heights[i] || 0;
+    if(h1 <= h2){ h1 += h; /* col1에 유지 */ }
+    else       { h2 += h; col2.appendChild(cell); }
+  });
+}
+
 function _rebuildGridDOM(){
   /* ★ DOM 재생성 전 호버 버튼 정리 → 재생성 후 _applyAllColFolds에서 재등록 */
   if(typeof _cleanColArrows === 'function') _cleanColArrows();
@@ -5655,6 +5690,7 @@ function _rebuildGridDOM(){
   while(wrap.firstChild) wrap.removeChild(wrap.firstChild);
   var order = _getPartOrder();
   var gridMode = isPartGridMode();
+  var gridCells = []; /* ★ 격자모드일 때 균형배치 대상 셀 수집 */
 
   for(var di=0; di<order.length; di++){
     var p = order[di];
@@ -5828,16 +5864,17 @@ function _rebuildGridDOM(){
 
     /* ── DOM 조립 ── */
     if(gridMode){
-      /* 격자: cell > (part-wrap + part-body) */
+      /* 격자: cell > (part-wrap + part-body) — 실제 배치는 루프 종료 후 높이 균형배분 */
       cell.appendChild(pw);
       cell.appendChild(bd);
-      wrap.appendChild(cell);
+      gridCells.push(cell);
     } else {
       /* 1열: wrap > part-wrap, 그 뒤에 part-body */
       wrap.appendChild(pw);
       wrap.appendChild(bd);
     }
   }
+  if(gridMode) _appendGridCellsBalanced(wrap, gridCells);
 }
 
 /* ★ 파트 추가 */
@@ -6680,23 +6717,25 @@ function _applyPartOrder(order) {
   while(wrap.firstChild) wrap.removeChild(wrap.firstChild);
 
   /* ★ 저장된 요소로 재조립 */
+  var gridCells = [];
   order.forEach(function(partNum) {
     var pw = saved[partNum].pw;
     var bd = saved[partNum].bd;
     if (!pw) return;
     if (gridMode) {
-      /* 격자: part-cell > (part-wrap + part-body) */
+      /* 격자: part-cell > (part-wrap + part-body) — 배치는 아래서 균형배분 */
       var cell = document.createElement('div');
       cell.className = 'part-cell';
       cell.appendChild(pw);
       if (bd) cell.appendChild(bd);
-      wrap.appendChild(cell);
+      gridCells.push(cell);
     } else {
       /* 1열: part-wrap, part-body 순서로 */
       wrap.appendChild(pw);
       if (bd) wrap.appendChild(bd);
     }
   });
+  if (gridMode) _appendGridCellsBalanced(wrap, gridCells);
 
   /* ★ 파트 번호 라벨 유지 */
   order.forEach(function(partNum) {
@@ -14288,11 +14327,13 @@ function _b2msg(txt,c,bg,bd){
 /* ★ PC 스크롤 리미터: 실시간 계산으로 마지막 파트 설정바에서 멈춤 */
 var _pcLimiting = false;
 function _setPcScrollPadding(){
-  if(window.innerWidth < 601) return;
-  var gw = document.getElementById('gridWrap');
-  if(!gw) return;
-  /* PC: 충분한 스크롤 공간 확보 */
-  gw.style.paddingBottom = '70vh';
+  /* ★ FIX: 기존 70vh 여백은 "마지막 파트를 화면 맨 위까지 스크롤" 기능을 위한
+     여유공간이었는데, 이를 보정해서 화면에 안 보이게 하는 스크롤 제한 코드
+     (_initPcScrollLimiter2)가 실제로는 어디서도 호출되지 않아 미적용 상태였음.
+     → 보정 없이 큰 여백만 그대로 남아 파트 그리드와 하단 메모란 사이에
+       불필요한 빈 공간이 생기고 있었음. 이제 여백을 없애 grid-wrap이
+       콘텐츠 높이만큼만 차지하고 메모란이 바로 이어지도록 함. */
+  return;
 }
 
 /* ★ BUG FIX: part-label sticky top 보정
@@ -20399,6 +20440,18 @@ _requestWakeLock();
         setTimeout(function(){ _setStatus('',''); }, 1500);
       }, 900);
     });
+    /* ★ FIX: 메모 박스가 처음 삽입될 때는 fitLayout()이 이미 한 번 끝난 뒤라
+       (메모 높이를 반영 못 한 채) 파트 슬롯 크기가 계산돼 있음 → 지금 다시 계산 */
+    try{ if(typeof fitLayout === 'function') fitLayout(); }catch(e){}
+    /* ★ 메모란을 사용자가 드래그로 늘리거나(resize:vertical) 줄이면
+       파트 그리드 가용높이도 다시 계산해서 빈 공간이 안 생기게 함 */
+    if('ResizeObserver' in window){
+      var _ro = new ResizeObserver(function(){
+        clearTimeout(_ro._t);
+        _ro._t = setTimeout(function(){ try{ if(typeof fitLayout==='function') fitLayout(); }catch(e){} }, 150);
+      });
+      _ro.observe(ta);
+    }
   }
   window._applyBoardMemoRemote=function(v){
     var val = (v==null) ? '' : String(v);

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>한결모터스 차량 위치 안내</title>
+<title>차량 위치 안내</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{
@@ -127,14 +127,14 @@
 </head>
 <body>
 <div class="wrap" id="wrap">
-  <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
+  <div class="top-title" id="topTitle">🚗 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:14px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-5px 0 14px;padding:0 8px;white-space:pre-line;"></div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
     <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
-    <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
+    <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:0;padding:13px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
       <button onclick="docAction('share')" style="flex:1;min-width:0;padding:13px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
@@ -189,7 +189,7 @@
   <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:12px 14px;margin:16px 0 0;">
     <div id="promoLines"></div>
   </div>
-  <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
+  <div class="foot" id="footTxt">주차현황판 · 위치 안내</div>
 </div>
 
 <!-- html2canvas (화면 전체 다운로드용) -->
@@ -409,7 +409,7 @@ function sharePage(){
   var part = qs('part');
   var car  = qs('car');
   var loc  = qs('loc');
-  var db   = qs('db') || 'https://hg-motors-default-rtdb.firebaseio.com';
+  var db   = qs('db') || '';  /* ★ Firebase 주소는 QR 링크에서 받음 (업체별 분리) */
   var lkey = qs('k');   /* ★ 단축링크 키 — Firebase에서 상세정보를 읽어옴 */
   var bz   = qs('bz');  /* ★ 업체명 — 현황판 타이틀에서 자동 전달됨 */
   function applyBiz(name){
@@ -419,9 +419,25 @@ function sharePage(){
       document.title = name + ' 차량 위치 안내';
       var f = document.getElementById('footTxt');
       if(f) f.textContent = name + ' 주차현황판 · 위치 안내';
+      var dn = document.getElementById('docNoneMsg');
+      if(dn) dn.textContent = '● 출고서류는 ' + name + ' 사무실로 문의 주세요!';
     }catch(e){}
   }
   applyBiz(bz);
+  /* ★ 설정(headerMemo)에서 업체명 추출해 반영 — 링크에 bz가 없어도 상호 표시 (모든 QR 공통) */
+  function _extractBizFromHeader(hm){
+    if(!hm) return '';
+    var m = String(hm).replace(/[🚗🚙🏢📍🔑\s]/g,'').trim();
+    if(m==='주차위치현황판' || m==='주차현황판') return '';
+    return m;
+  }
+  window._applyBizFromSettings = function(st){
+    try{
+      if(bz) return; /* 링크 bz가 우선 */
+      var nm = _extractBizFromHeader(st && (st.headerMemo||st.bizName));
+      if(nm) applyBiz(nm);
+    }catch(e){}
+  };
   /* ★ 업체정보 텍스트 (여러 줄 지원) */
   function applyBizInfo(info){
     if(!info) return;
@@ -690,6 +706,10 @@ function sharePage(){
   var _partHasPhoto = null;  /* null=미확인, true=사진있음, false=사진없음 */
   var _autoMapShown = false;
   var fdb = null;
+  if(!db){
+    showStatus('⚠️ QR 링크에 접속 정보가 없습니다.<br>최신 앱에서 다시 QR을 생성해 주세요.');
+    return;
+  }
   try{
     firebase.initializeApp({ databaseURL: db });
     fdb = firebase.database();
@@ -811,7 +831,7 @@ function sharePage(){
       if(newPart) _maybeReloadPart(newPart);
     }
     fdb.ref('kd_rooms/'+code+'/pb_slots').on('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
-    fdb.ref('kd_rooms/'+code+'/pb_settings').on('value', function(snap){ _liveSettings = snap.val()||{}; recompute(); });
+    fdb.ref('kd_rooms/'+code+'/pb_settings').on('value', function(snap){ _liveSettings = snap.val()||{}; try{ if(window._applyBizFromSettings) window._applyBizFromSettings(_liveSettings); }catch(e){} recompute(); });
   }
 
   /* 파트의 경로 안내 + 약도 사진 로드
@@ -1020,6 +1040,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · view빌드2</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · view빌드3</div>
 </body>
 </html>
