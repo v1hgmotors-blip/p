@@ -3891,6 +3891,8 @@ function _syncAllSettingsToFirebase(){
   if(Object.keys(colNames).length > 0) allSettings.colNames = colNames;
   /* ★ 주차현황판 하단 메모 */
   var _bmv = localStorage.getItem('pb_board_memo'); if(_bmv) allSettings.boardMemo = _bmv;
+  var _bmn = localStorage.getItem('pb_board_memo_notice'); if(_bmn==='1') allSettings.boardMemoNotice = true;
+  var _bmf = localStorage.getItem('pb_board_memo_fs'); if(_bmf) allSettings.boardMemoFs = parseInt(_bmf);
   var colOneColors = getColOneColors();
   if(Object.keys(colOneColors).length > 0) allSettings.colColors = colOneColors;
   /* 열 색상 */
@@ -11553,6 +11555,12 @@ function applyRemoteSettings(data){
   /* ★ 주차현황판 하단 메모 (boardMemo) 수신 — 실시간 반영 */
   if(data.hasOwnProperty('boardMemo')){
     try{ if(typeof window._applyBoardMemoRemote==='function') window._applyBoardMemoRemote(data.boardMemo); }catch(e){}
+  }
+  if(data.hasOwnProperty('boardMemoNotice')){
+    try{ if(typeof window._applyBoardMemoNoticeRemote==='function') window._applyBoardMemoNoticeRemote(data.boardMemoNotice); }catch(e){}
+  }
+  if(data.hasOwnProperty('boardMemoFs')){
+    try{ if(typeof window._applyBoardMemoFsRemote==='function') window._applyBoardMemoFsRemote(data.boardMemoFs); }catch(e){}
   }
   /* ★ 발송방식(sendMode) 수신 반영 (전 기기 공통) */
   if(data.hasOwnProperty('sendMode')){
@@ -20410,36 +20418,187 @@ _requestWakeLock();
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
 <div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드21</div>
 <style>
-#boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
-#boardMemoPanel .bm-head{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:#B45309;margin-bottom:6px;}
+#boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
+#boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
+#boardMemoPanel .bm-head{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:#B45309;margin-bottom:8px;flex-wrap:wrap;}
+#boardMemoPanel.notice-on .bm-head{color:#B91C1C;}
 #boardMemoStatus{font-size:11px;font-weight:800;}
-#boardMemoInput{width:100%;min-height:130px;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:8px;padding:10px;font-size:15px;font-family:inherit;line-height:1.55;resize:vertical;background:#fff;color:#1E293B;}
+#boardMemoNoticeIcon{display:none;font-size:16px;}
+@keyframes bmNoticeBlink{0%,100%{opacity:1;}50%{opacity:.25;}}
+#boardMemoNoticeIcon.show{display:inline-flex;animation:bmNoticeBlink 1s ease-in-out infinite;}
+.bm-notice-btn{margin-left:auto;border:1.5px solid #E9C46A;background:#FFF;color:#B45309;font-size:11px;font-weight:800;padding:4px 10px;border-radius:16px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.bm-notice-btn.on{background:#DC2626;border-color:#DC2626;color:#fff;}
+.bm-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1.5px dashed #E9C46A;}
+.bm-toolbar .promo-color-row{gap:6px;}
+.bm-toolbar .promo-color-btn{width:22px;height:22px;}
+.bm-toolbar .promo-color-custom{width:28px;height:24px;}
+.bm-size-ctrl{display:flex;align-items:center;gap:4px;}
+.bm-size-btn{width:26px;height:26px;border-radius:6px;border:1.5px solid #E5E7EB;background:#FFF;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;color:#B45309;display:flex;align-items:center;justify-content:center;}
+.bm-size-val{font-size:11px;font-weight:800;color:#94724B;min-width:32px;text-align:center;}
+.bm-photo-btn{display:inline-flex;align-items:center;gap:4px;border:1.5px solid #E5E7EB;background:#FFF;color:#B45309;font-size:12px;font-weight:800;padding:5px 10px;border-radius:16px;cursor:pointer;font-family:inherit;}
+#boardMemoInput{width:100%;min-height:130px;max-height:60vh;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:8px;padding:10px;font-size:15px;font-family:inherit;line-height:1.55;background:#fff;color:#1E293B;overflow-y:auto;resize:vertical;}
 #boardMemoInput:focus{outline:none;border-color:#E9C46A;box-shadow:0 0 0 3px rgba(233,196,106,.25);}
+#boardMemoInput:empty:before{content:attr(data-placeholder);color:#9CA3AF;}
+#boardMemoInput img{max-width:100%;border-radius:8px;margin:4px 0;display:block;}
+/* ★ 화면 어디서든 보이는 공지 배너 (스크롤 안 해도 바로 보임) */
+#pbNoticeBanner{position:fixed;top:8px;right:8px;z-index:99992;display:none;align-items:center;gap:6px;background:#DC2626;color:#fff;font-size:12px;font-weight:900;padding:7px 14px;border-radius:20px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);font-family:inherit;border:none;}
+#pbNoticeBanner.show{display:flex;animation:bmNoticeBlink 1s ease-in-out infinite;}
 </style>
 <script>
-/* ★ 주차현황판 하단 메모란 — 모든 기기 실시간 공유·저장 (settings 동기화 재사용) */
+/* ★ 주차현황판 하단 메모란 — 서식(색상/크기/사진) + 공지 기능, 모든 기기 실시간 공유·저장 */
 (function(){
   var LS_BOARD_MEMO='pb_board_memo';
+  var LS_BOARD_MEMO_NOTICE='pb_board_memo_notice';
+  var LS_BOARD_MEMO_FS='pb_board_memo_fs';
+  var DEFAULT_FS=15;
   var _bmPushTimer=null;
+
   function _setStatus(t,c){ var s=document.getElementById('boardMemoStatus'); if(s){ s.textContent=t; s.style.color=c||'#16A34A'; } }
+
+  function _bmSaveDebounced(){
+    var ed=document.getElementById('boardMemoInput'); if(!ed) return;
+    try{ localStorage.setItem(LS_BOARD_MEMO, ed.innerHTML); }catch(e){}
+    _setStatus('저장 중…','#B45309');
+    clearTimeout(_bmPushTimer);
+    _bmPushTimer=setTimeout(function(){
+      try{ if(typeof pushSettings==='function') pushSettings({ boardMemo: ed.innerHTML }); }catch(e){}
+      _setStatus('✔ 저장됨','#16A34A');
+      setTimeout(function(){ _setStatus('',''); }, 1500);
+    }, 900);
+  }
+
+  /* 선택한 글자에 색 적용 (선택 없으면 메모 전체 기본색 변경) */
+  window._bmApplyColor=function(btnEl, customColor){
+    var color = customColor || (btnEl && btnEl.getAttribute('data-color'));
+    if(!color) return;
+    var ed=document.getElementById('boardMemoInput'); if(!ed) return;
+    ed.focus();
+    var sel = window.getSelection();
+    if(sel && sel.toString().length>0){
+      try{ document.execCommand('styleWithCSS', false, true); }catch(e){}
+      try{ document.execCommand('foreColor', false, color); }catch(e){}
+    } else {
+      ed.style.color = color;
+    }
+    document.querySelectorAll('#bmColorRow .promo-color-btn').forEach(function(b){b.classList.remove('selected');});
+    if(btnEl) btnEl.classList.add('selected');
+    _bmSaveDebounced();
+  };
+
+  /* 글자 크기 +/- (메모 전체 기준) */
+  window._bmChangeSize=function(delta){
+    var ed=document.getElementById('boardMemoInput'); if(!ed) return;
+    var cur = parseInt(getComputedStyle(ed).fontSize) || DEFAULT_FS;
+    var next = Math.min(Math.max(cur + delta, 11), 32);
+    ed.style.fontSize = next+'px';
+    var lbl=document.getElementById('bmSizeVal'); if(lbl) lbl.textContent = next+'px';
+    try{ localStorage.setItem(LS_BOARD_MEMO_FS, String(next)); }catch(e){}
+    clearTimeout(_bmPushTimer);
+    _bmPushTimer=setTimeout(function(){
+      try{ if(typeof pushSettings==='function') pushSettings({ boardMemoFs: next }); }catch(e){}
+    }, 400);
+  };
+
+  /* 사진 첨부 — 용량 절약을 위해 최대 480px·품질 60%로 압축 후 삽입 */
+  window._bmInsertPhoto=function(inputEl){
+    var file = inputEl.files && inputEl.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      img.onload = function(){
+        var MAXW = 480;
+        var scale = Math.min(1, MAXW / img.width);
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        var dataUrl = cv.toDataURL('image/jpeg', 0.6);
+        var ed=document.getElementById('boardMemoInput');
+        if(ed){
+          ed.innerHTML += '<img src="'+dataUrl+'">';
+          _bmSaveDebounced();
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    inputEl.value = '';
+  };
+
+  /* 공지 등록/해제 토글 */
+  window._bmToggleNotice=function(){
+    var cur = localStorage.getItem(LS_BOARD_MEMO_NOTICE)==='1';
+    var next = !cur;
+    try{ localStorage.setItem(LS_BOARD_MEMO_NOTICE, next?'1':'0'); }catch(e){}
+    _bmApplyNoticeUI(next);
+    try{ if(typeof pushSettings==='function') pushSettings({ boardMemoNotice: next }); }catch(e){}
+  };
+
+  function _bmApplyNoticeUI(on){
+    var panel=document.getElementById('boardMemoPanel');
+    var icon=document.getElementById('boardMemoNoticeIcon');
+    var btn=document.getElementById('boardMemoNoticeBtn');
+    var banner=document.getElementById('pbNoticeBanner');
+    if(panel) panel.classList.toggle('notice-on', !!on);
+    if(icon)  icon.classList.toggle('show', !!on);
+    if(btn){ btn.textContent = on ? '📢 공지 해제' : '📢 공지 등록'; btn.classList.toggle('on', !!on); }
+    if(banner) banner.classList.toggle('show', !!on);
+  }
+
+  function _scrollToBoardMemo(){
+    var panel=document.getElementById('boardMemoPanel');
+    if(panel && panel.scrollIntoView) panel.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
   function _injectMemo(){
     var gw=document.getElementById('gridWrap'); if(!gw || document.getElementById('boardMemoPanel')) return;
     var panel=document.createElement('div'); panel.id='boardMemoPanel';
-    panel.innerHTML='<div class="bm-head">📝 주차현황판 메모 <span id="boardMemoStatus"></span></div>'
-      +'<textarea id="boardMemoInput" placeholder="메모를 입력하세요 — 모든 기기에 실시간 공유·저장됩니다"></textarea>';
+    panel.innerHTML =
+      '<div class="bm-head">📝 주차현황판 메모'
+        +'<span id="boardMemoNoticeIcon" title="공지 등록됨">🔔</span>'
+        +'<span id="boardMemoStatus"></span>'
+        +'<button type="button" id="boardMemoNoticeBtn" class="bm-notice-btn" onclick="_bmToggleNotice()">📢 공지 등록</button>'
+      +'</div>'
+      +'<div class="bm-toolbar">'
+        +'<div class="promo-color-row" id="bmColorRow">'
+          +'<div class="promo-color-btn" style="background:#1E293B" data-color="#1E293B" onclick="_bmApplyColor(this)" title="검정"></div>'
+          +'<div class="promo-color-btn" style="background:#DC2626" data-color="#DC2626" onclick="_bmApplyColor(this)" title="빨강"></div>'
+          +'<div class="promo-color-btn" style="background:#EA580C" data-color="#EA580C" onclick="_bmApplyColor(this)" title="주황"></div>'
+          +'<div class="promo-color-btn" style="background:#2563EB" data-color="#2563EB" onclick="_bmApplyColor(this)" title="파랑"></div>'
+          +'<div class="promo-color-btn" style="background:#16A34A" data-color="#16A34A" onclick="_bmApplyColor(this)" title="초록"></div>'
+          +'<div class="promo-color-btn" style="background:#9333EA" data-color="#9333EA" onclick="_bmApplyColor(this)" title="보라"></div>'
+          +'<input type="color" class="promo-color-custom" id="bmColorCustom" value="#1E293B" title="직접선택" oninput="_bmApplyColor(null,this.value)">'
+        +'</div>'
+        +'<div class="bm-size-ctrl">'
+          +'<button type="button" class="bm-size-btn" onclick="_bmChangeSize(-1)">A-</button>'
+          +'<span class="bm-size-val" id="bmSizeVal">15px</span>'
+          +'<button type="button" class="bm-size-btn" onclick="_bmChangeSize(1)">A+</button>'
+        +'</div>'
+        +'<label class="bm-photo-btn">📷 사진첨부<input type="file" accept="image/*" style="display:none" onchange="_bmInsertPhoto(this)"></label>'
+      +'</div>'
+      +'<div id="boardMemoInput" contenteditable="true" data-placeholder="메모를 입력하세요 — 모든 기기에 실시간 공유·저장됩니다"></div>';
     gw.parentNode.insertBefore(panel, gw.nextSibling);
-    var ta=document.getElementById('boardMemoInput');
-    try{ ta.value=localStorage.getItem(LS_BOARD_MEMO)||''; }catch(e){}
-    ta.addEventListener('input', function(){
-      try{ localStorage.setItem(LS_BOARD_MEMO, ta.value); }catch(e){}
-      _setStatus('저장 중…','#B45309');
-      clearTimeout(_bmPushTimer);
-      _bmPushTimer=setTimeout(function(){
-        try{ if(typeof pushSettings==='function') pushSettings({ boardMemo: ta.value }); }catch(e){}
-        _setStatus('✔ 저장됨','#16A34A');
-        setTimeout(function(){ _setStatus('',''); }, 1500);
-      }, 900);
-    });
+
+    /* 화면 어디서든 보이는 공지 배너 (한 번만 생성) */
+    if(!document.getElementById('pbNoticeBanner')){
+      var banner=document.createElement('button');
+      banner.type='button';
+      banner.id='pbNoticeBanner';
+      banner.innerHTML='📢 공지 확인하기';
+      banner.onclick=_scrollToBoardMemo;
+      document.body.appendChild(banner);
+    }
+
+    var ed=document.getElementById('boardMemoInput');
+    try{ ed.innerHTML = localStorage.getItem(LS_BOARD_MEMO) || ''; }catch(e){}
+    var savedFs = parseInt(localStorage.getItem(LS_BOARD_MEMO_FS)) || DEFAULT_FS;
+    ed.style.fontSize = savedFs+'px';
+    var fsLbl=document.getElementById('bmSizeVal'); if(fsLbl) fsLbl.textContent = savedFs+'px';
+    ed.addEventListener('input', _bmSaveDebounced);
+
+    _bmApplyNoticeUI(localStorage.getItem(LS_BOARD_MEMO_NOTICE)==='1');
+
     /* ★ FIX: 메모 박스가 처음 삽입될 때는 fitLayout()이 이미 한 번 끝난 뒤라
        (메모 높이를 반영 못 한 채) 파트 슬롯 크기가 계산돼 있음 → 지금 다시 계산 */
     try{ if(typeof fitLayout === 'function') fitLayout(); }catch(e){}
@@ -20450,17 +20609,31 @@ _requestWakeLock();
         clearTimeout(_ro._t);
         _ro._t = setTimeout(function(){ try{ if(typeof fitLayout==='function') fitLayout(); }catch(e){} }, 150);
       });
-      _ro.observe(ta);
+      _ro.observe(ed);
     }
   }
+
   window._applyBoardMemoRemote=function(v){
     var val = (v==null) ? '' : String(v);
     try{ localStorage.setItem(LS_BOARD_MEMO, val); }catch(e){}
-    var ta=document.getElementById('boardMemoInput');
-    if(ta && document.activeElement!==ta && ta.value!==val){
-      ta.value=val; _setStatus('🔄 동기화됨','#2563EB'); setTimeout(function(){ _setStatus('',''); },1200);
+    var ed=document.getElementById('boardMemoInput');
+    if(ed && document.activeElement!==ed && ed.innerHTML!==val){
+      ed.innerHTML=val; _setStatus('🔄 동기화됨','#2563EB'); setTimeout(function(){ _setStatus('',''); },1200);
     }
   };
+  window._applyBoardMemoNoticeRemote=function(v){
+    var on = !!v;
+    try{ localStorage.setItem(LS_BOARD_MEMO_NOTICE, on?'1':'0'); }catch(e){}
+    _bmApplyNoticeUI(on);
+  };
+  window._applyBoardMemoFsRemote=function(v){
+    var fs = parseInt(v)||DEFAULT_FS;
+    try{ localStorage.setItem(LS_BOARD_MEMO_FS, String(fs)); }catch(e){}
+    var ed=document.getElementById('boardMemoInput');
+    if(ed) ed.style.fontSize = fs+'px';
+    var lbl=document.getElementById('bmSizeVal'); if(lbl) lbl.textContent=fs+'px';
+  };
+
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _injectMemo);
   else _injectMemo();
 })();
