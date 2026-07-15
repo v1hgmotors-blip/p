@@ -3364,9 +3364,28 @@ function applyOwnerSelection(name, phone){
     if(typeof onOwnerPhoneInput === 'function') onOwnerPhoneInput(phone);
   }
 }
+function _ownerBackupKey(){
+  var c = (localStorage.getItem('pb_code')||localStorage.getItem(LS_CODE)||'').replace(/[^a-zA-Z0-9가-힣_-]/g,'') || 'default';
+  return 'pb_owner_backup__' + c;
+}
 function saveOwnerList(list) {
   localStorage.setItem(LS_OWNER_LIST, JSON.stringify(list));
+  try{ localStorage.setItem(_ownerBackupKey(), JSON.stringify(list)); }catch(e){} /* ★ 공유코드별 로컬 백업 */
   if (typeof pushSettings === 'function') pushSettings({ ownerList: list });
+}
+function _restoreOwnerBackupIfEmpty(){
+  try{
+    var cur = getOwnerList();
+    if(cur && cur.length) return;
+    var bk = localStorage.getItem(_ownerBackupKey());
+    if(!bk) return;
+    var arr = JSON.parse(bk);
+    if(arr && arr.length){
+      localStorage.setItem(LS_OWNER_LIST, JSON.stringify(arr));
+      if(typeof renderOwnerList==='function'){ try{ renderOwnerList(); }catch(e){} }
+      console.log('[차주] 공유코드 로컬 백업에서 '+arr.length+'명 자동복원');
+    }
+  }catch(e){}
 }
 
 function toggleOwnerPanel() {
@@ -4567,7 +4586,7 @@ function openPromoEdit(){
   /* ★ 상세 정보 프리필 */
   try{
     var _pd=document.getElementById('promoDetailText');
-    if(_pd) _pd.value=localStorage.getItem('pb_promo_detail')||'';
+    if(_pd) _pd.value=localStorage.getItem('pb_promo_detail')||'* 제휴점 타다할부 *\n🔴 본부장: 010-2441-6441 박 선\n🔴 팀 장 :010-9076-8935 박나연\n🔴 팀 장 :010-4456-7603 정효성';
   }catch(e){}
   var fs=parseInt(localStorage.getItem(LS_PROMO_FS))||20;
   var col=localStorage.getItem(LS_PROMO_COLOR)||'#CC0000';
@@ -11694,6 +11713,7 @@ function applyRemoteSettings(data){
   if(data.ownerList !== undefined){
     var ol = Array.isArray(data.ownerList) ? data.ownerList : [];
     localStorage.setItem(LS_OWNER_LIST, JSON.stringify(ol));
+    try{ if(ol.length) localStorage.setItem(_ownerBackupKey(), JSON.stringify(ol)); }catch(e){}
     var panel = document.getElementById('ownerPanel');
     if(panel && panel.classList.contains('open')) renderOwnerList();
   }
@@ -18517,7 +18537,7 @@ window._drawQRCanvas = function(container, text, size){
          링크 생성 실패 시에는 기존처럼 텍스트를 QR에 담음 (기능 유지) */
       var _qrUrl = '';
       try{
-        var _vBase = 'https://v1hgmotors-blip.github.io/p/view.html';
+        var _vBase = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html'; /* ★ QR/약도 URL 자동감지 */
         if(location.protocol==='http:' || location.protocol==='https:'){
           _vBase = new URL('view.html', location.href).href; /* 같은 폴더의 view.html */
         }
@@ -18987,7 +19007,7 @@ window._drawQRCanvas = function(container, text, size){
       var chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
       var key='';
       for(var i=0;i<6;i++) key += chars[Math.floor(Math.random()*chars.length)];
-      var base = 'https://v1hgmotors-blip.github.io/p/view.html';
+      var base = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html'; /* ★ QR/약도 URL 자동감지 */
       if(location.protocol==='http:' || location.protocol==='https:'){
         base = new URL('view.html', location.href).href;
       }
@@ -19002,14 +19022,15 @@ window._drawQRCanvas = function(container, text, size){
       }catch(e){}
       /* ★ 제휴점 정보 동봉 — 약도 페이지에 표시 (상세 우선, 없으면 헤더 한 줄) */
       try{
-        var _pt = localStorage.getItem('pb_promo_detail')||'';
+        var _pt = localStorage.getItem('pb_promo_detail')||'* 제휴점 타다할부 *\n🔴 본부장: 010-2441-6441 박 선\n🔴 팀 장 :010-9076-8935 박나연\n🔴 팀 장 :010-4456-7603 정효성';
         if(!_pt.trim()){
           _pt = (localStorage.getItem('pb_promo_text')||'').replace(/[^0-9A-Za-z가-힣:\-\s]/g,'').trim();
         }
         if(_pt.trim() && !payload.pt) payload.pt = _pt.trim();
       }catch(e){}
       fbDb.ref('kd_rooms/'+code+'/links/'+key).set(payload).then(function(){
-        cb(base + '?c=' + encodeURIComponent(code) + '&k=' + key);
+        var _dbSL = localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||'';
+        cb(base + '?c=' + encodeURIComponent(code) + '&k=' + key + (_dbSL ? '&db=' + encodeURIComponent(_dbSL) : ''));
       }).catch(function(){ cb(''); });
     }catch(e){ cb(''); }
   }
@@ -19019,7 +19040,7 @@ window._drawQRCanvas = function(container, text, size){
   /* ★ QR용 보기 페이지 링크 생성 (팝업 QR과 동일 규칙) */
   function _buildViewerUrl(partNo, carTxt, locTxt, ownerName, ownerPhone, keyNo){
     try{
-      var vBase = 'https://v1hgmotors-blip.github.io/p/view.html';
+      var vBase = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html'; /* ★ QR/약도 URL 자동감지 */
       if(location.protocol==='http:' || location.protocol==='https:'){
         vBase = new URL('view.html', location.href).href;
       }
@@ -20414,9 +20435,10 @@ document.addEventListener('visibilitychange', function(){
   if(document.visibilityState === 'visible' && !_wakeLock){ _requestWakeLock(); }
 });
 _requestWakeLock();
+setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 빌드21</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결v2</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
@@ -20440,6 +20462,16 @@ _requestWakeLock();
 #boardMemoInput:focus{outline:none;border-color:#E9C46A;box-shadow:0 0 0 3px rgba(233,196,106,.25);}
 #boardMemoInput:empty:before{content:attr(data-placeholder);color:#9CA3AF;}
 #boardMemoInput img{max-width:100%;border-radius:8px;margin:4px 0;display:block;}
+/* ★ 첨부사진 크기조절·회전·이동 */
+.bm-img-box{position:relative;display:inline-block;vertical-align:middle;margin:4px;max-width:100%;touch-action:none;}
+.bm-img-box img{max-width:100%;border-radius:8px;display:block;margin:0;-webkit-user-drag:element;user-select:none;}
+.bm-img-box.selected{outline:2px dashed #E9C46A;outline-offset:3px;border-radius:8px;}
+.bm-img-box.dragging{opacity:.6;z-index:50;cursor:grabbing;}
+.bm-img-box .bm-img-handle{display:none;position:absolute;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1E293B;color:#fff;font-size:13px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:5;user-select:none;touch-action:none;}
+.bm-img-box.selected .bm-img-handle{display:flex;}
+.bm-img-box .bm-img-rotate{top:-30px;left:50%;transform:translateX(-50%);cursor:grab;}
+.bm-img-box .bm-img-resize{right:-11px;bottom:-11px;cursor:nwse-resize;}
+.bm-img-box .bm-img-del{top:-11px;right:-11px;background:#DC2626;}
 /* ★ 화면 어디서든 보이는 공지 배너 (스크롤 안 해도 바로 보임) */
 #pbNoticeBanner{position:fixed;top:8px;right:8px;z-index:99992;display:none;align-items:center;gap:6px;background:#DC2626;color:#fff;font-size:12px;font-weight:900;padding:7px 14px;border-radius:20px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);font-family:inherit;border:none;}
 #pbNoticeBanner.show{display:flex;animation:bmNoticeBlink 1s ease-in-out infinite;}
@@ -20499,7 +20531,8 @@ _requestWakeLock();
     }, 400);
   };
 
-  /* 사진 첨부 — 용량 절약을 위해 최대 480px·품질 60%로 압축 후 삽입 */
+  /* 사진 첨부 — 용량 절약을 위해 최대 480px·품질 60%로 압축 후 삽입
+     ★ 첨부된 사진은 크기조절·회전·삭제 핸들이 달린 박스로 감싸서 삽입 */
   window._bmInsertPhoto=function(inputEl){
     var file = inputEl.files && inputEl.files[0];
     if(!file) return;
@@ -20516,7 +20549,7 @@ _requestWakeLock();
         var dataUrl = cv.toDataURL('image/jpeg', 0.6);
         var ed=document.getElementById('boardMemoInput');
         if(ed){
-          ed.innerHTML += '<img src="'+dataUrl+'">';
+          ed.insertAdjacentHTML('beforeend', _bmImgBoxHtml(dataUrl, w));
           _bmSaveDebounced();
         }
       };
@@ -20525,6 +20558,210 @@ _requestWakeLock();
     reader.readAsDataURL(file);
     inputEl.value = '';
   };
+
+  /* 첨부사진 박스 HTML (이미지 + 회전/크기조절/삭제 핸들) */
+  function _bmImgBoxHtml(src, width){
+    var wAttr = width ? (' style="width:'+Math.min(width,320)+'px"') : '';
+    return '<span class="bm-img-box" contenteditable="false" draggable="true">'
+      +'<img src="'+src+'"'+wAttr+'>'
+      +'<span class="bm-img-handle bm-img-rotate" title="드래그해서 회전">⟳</span>'
+      +'<span class="bm-img-handle bm-img-resize" title="드래그해서 크기조절">⤡</span>'
+      +'<span class="bm-img-handle bm-img-del" title="삭제">×</span>'
+    +'</span>';
+  }
+
+  /* 예전 메모에 저장된 맨 img 태그(핸들 없음)를 박스로 감싸서 업그레이드 */
+  function _bmWrapBareImages(ed){
+    if(!ed) return;
+    var imgs = ed.querySelectorAll('img');
+    imgs.forEach(function(img){
+      if(img.closest('.bm-img-box')) return;
+      var box = document.createElement('span');
+      box.className = 'bm-img-box';
+      box.setAttribute('contenteditable','false');
+      box.setAttribute('draggable','true');
+      img.parentNode.insertBefore(box, img);
+      box.appendChild(img);
+      box.insertAdjacentHTML('beforeend',
+        '<span class="bm-img-handle bm-img-rotate" title="드래그해서 회전">⟳</span>'
+        +'<span class="bm-img-handle bm-img-resize" title="드래그해서 크기조절">⤡</span>'
+        +'<span class="bm-img-handle bm-img-del" title="삭제">×</span>');
+    });
+  }
+
+  /* 사진 박스 선택/크기조절/회전/삭제 — 이동은 contenteditable 기본 드래그 동작 사용 */
+  var _bmDrag = null;
+  function _bmDeselectAllImgs(){
+    var ed = document.getElementById('boardMemoInput');
+    if(ed) ed.querySelectorAll('.bm-img-box.selected').forEach(function(b){ b.classList.remove('selected'); });
+  }
+  function _bmSetupImgInteractions(ed){
+    if(!ed || ed._bmImgBound) return;
+    ed._bmImgBound = true;
+
+    /* box.dataset.tx/ty(이동 오프셋)·rot(회전각)을 합쳐서 transform 적용 */
+    function _bmApplyTransform(box){
+      var tx = parseFloat(box.dataset.tx)||0;
+      var ty = parseFloat(box.dataset.ty)||0;
+      var rot = parseFloat(box.dataset.rot)||0;
+      box.style.transform = 'translate('+tx+'px,'+ty+'px) rotate('+rot+'deg)';
+    }
+
+    ed.addEventListener('click', function(e){
+      var delBtn = e.target.closest('.bm-img-del');
+      if(delBtn){
+        var box = delBtn.closest('.bm-img-box');
+        if(box){ box.remove(); _bmSaveDebounced(); }
+        return;
+      }
+      var box2 = e.target.closest('.bm-img-box');
+      if(box2){
+        if(!e.target.closest('.bm-img-handle')){
+          _bmDeselectAllImgs();
+          box2.classList.add('selected');
+        }
+      } else {
+        _bmDeselectAllImgs();
+      }
+    });
+
+    ed.addEventListener('pointerdown', function(e){
+      var handle = e.target.closest('.bm-img-handle');
+      if(!handle || handle.classList.contains('bm-img-del')) return;
+      var box = handle.closest('.bm-img-box');
+      var img = box && box.querySelector('img');
+      if(!box || !img) return;
+      e.preventDefault();
+      if(handle.classList.contains('bm-img-resize')){
+        _bmDrag = { type:'resize', img:img, startX:e.clientX, startW:img.offsetWidth, startH:img.offsetHeight };
+      } else if(handle.classList.contains('bm-img-rotate')){
+        var r = box.getBoundingClientRect();
+        _bmDrag = { type:'rotate', box:box, cx:r.left+r.width/2, cy:r.top+r.height/2 };
+      }
+      try{ handle.setPointerCapture(e.pointerId); }catch(ex){}
+    });
+
+    ed.addEventListener('pointermove', function(e){
+      if(!_bmDrag) return;
+      if(_bmDrag.type==='resize'){
+        var dx = e.clientX - _bmDrag.startX;
+        var maxW = Math.max(60, ed.clientWidth - 24);
+        var newW = Math.max(50, Math.min(_bmDrag.startW + dx, maxW));
+        var ratio = _bmDrag.startH / _bmDrag.startW;
+        _bmDrag.img.style.width  = Math.round(newW)+'px';
+        _bmDrag.img.style.height = Math.round(newW*ratio)+'px';
+      } else if(_bmDrag.type==='rotate'){
+        var ang = Math.atan2(e.clientY-_bmDrag.cy, e.clientX-_bmDrag.cx) * 180/Math.PI + 90;
+        _bmDrag.box.dataset.rot = String(Math.round(ang));
+        _bmApplyTransform(_bmDrag.box);
+      }
+    });
+
+    ['pointerup','pointercancel'].forEach(function(evt){
+      ed.addEventListener(evt, function(){
+        if(_bmDrag){ _bmDrag=null; _bmSaveDebounced(); }
+      });
+    });
+
+    /* ★ 손가락 두 개로 오무렸다 펴서(핀치) 사진 크기조절 */
+    var _pinch = null;
+    function _touchDist(t1, t2){
+      var dx=t1.clientX-t2.clientX, dy=t1.clientY-t2.clientY;
+      return Math.sqrt(dx*dx + dy*dy);
+    }
+    ed.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 2) return;
+      /* ★ 이동 드래그 도중 두번째 손가락이 닿으면(핀치 시작) 이동은 그 시점 위치로 확정하고 핀치로 전환 */
+      if(_moveDrag){
+        _bmApplyTransform(_moveDrag.box);
+        _moveDrag.box.classList.remove('dragging');
+        _moveDrag = null;
+      }
+      var box = e.target.closest('.bm-img-box');
+      if(!box) return;
+      var img = box.querySelector('img');
+      if(!img) return;
+      _pinch = { img:img, startDist:_touchDist(e.touches[0], e.touches[1]), startW:img.offsetWidth, startH:img.offsetHeight };
+      _bmDeselectAllImgs(); box.classList.add('selected');
+      e.preventDefault();
+    }, {passive:false});
+
+    ed.addEventListener('touchmove', function(e){
+      if(!_pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      var d = _touchDist(e.touches[0], e.touches[1]);
+      var scale = d / _pinch.startDist;
+      var maxW = Math.max(60, ed.clientWidth - 24);
+      var newW = Math.max(50, Math.min(_pinch.startW * scale, maxW));
+      var ratio = _pinch.startH / _pinch.startW;
+      _pinch.img.style.width  = Math.round(newW)+'px';
+      _pinch.img.style.height = Math.round(newW*ratio)+'px';
+    }, {passive:false});
+
+    ed.addEventListener('touchend', function(e){
+      if(_pinch && e.touches.length < 2){
+        _pinch = null;
+        _bmSaveDebounced();
+      }
+    });
+    ed.addEventListener('touchcancel', function(){ _pinch = null; });
+
+    /* ★ 손가락 한 개로 사진을 눌러 끌면(드래그) 자유롭게 이동
+       ★ FIX: DOM 재배치(caretRangeFromPoint) 방식은 기기별로 위치를 못 찾아
+         "제자리로 돌아가는" 문제가 있었음 → 사진은 원래 글 위치에 그대로 두고
+         화면상 위치만 transform(translate)으로 옮기는 방식으로 변경. 이 방식은
+         브라우저 API에 의존하지 않아 항상 100% 그 자리에 남아있음. */
+    var _moveDrag = null; // {box, startX, startY, baseTx, baseTy, moved}
+
+    ed.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return; /* 두 손가락이면 핀치 담당 */
+      if(e.target.closest('.bm-img-handle')) return; /* 핸들은 각자 담당 */
+      var box = e.target.closest('.bm-img-box');
+      if(!box) return;
+      var t = e.touches[0];
+      _moveDrag = {
+        box:box, startX:t.clientX, startY:t.clientY,
+        baseTx: parseFloat(box.dataset.tx)||0,
+        baseTy: parseFloat(box.dataset.ty)||0,
+        moved:false
+      };
+    }, {passive:true});
+
+    ed.addEventListener('touchmove', function(e){
+      if(!_moveDrag || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      var dx = t.clientX - _moveDrag.startX;
+      var dy = t.clientY - _moveDrag.startY;
+      if(!_moveDrag.moved && Math.hypot(dx, dy) < 8) return; /* 살짝 움직인건 탭(선택)으로 취급 */
+      _moveDrag.moved = true;
+      e.preventDefault();
+      var box = _moveDrag.box;
+      box.classList.add('dragging');
+      box.dataset.tx = String(_moveDrag.baseTx + dx);
+      box.dataset.ty = String(_moveDrag.baseTy + dy);
+      _bmApplyTransform(box);
+    }, {passive:false});
+
+    ed.addEventListener('touchend', function(e){
+      if(!_moveDrag) return;
+      var box = _moveDrag.box;
+      box.classList.remove('dragging');
+      /* transform은 이미 touchmove에서 적용된 상태 그대로 유지 → 재배치 시도 없이 그 자리 확정 */
+      if(_moveDrag.moved) _bmSaveDebounced();
+      _moveDrag = null;
+    });
+    ed.addEventListener('touchcancel', function(){
+      if(_moveDrag){
+        /* 취소 시엔 이동 시작 전 위치로 되돌림 */
+        var box = _moveDrag.box;
+        box.dataset.tx = String(_moveDrag.baseTx);
+        box.dataset.ty = String(_moveDrag.baseTy);
+        _bmApplyTransform(box);
+        box.classList.remove('dragging');
+      }
+      _moveDrag = null;
+    });
+  }
 
   /* 공지 등록/해제 토글 */
   window._bmToggleNotice=function(){
@@ -20592,6 +20829,8 @@ _requestWakeLock();
 
     var ed=document.getElementById('boardMemoInput');
     try{ ed.innerHTML = localStorage.getItem(LS_BOARD_MEMO) || ''; }catch(e){}
+    _bmWrapBareImages(ed);
+    _bmSetupImgInteractions(ed);
     var savedFs = parseInt(localStorage.getItem(LS_BOARD_MEMO_FS)) || DEFAULT_FS;
     ed.style.fontSize = savedFs+'px';
     var fsLbl=document.getElementById('bmSizeVal'); if(fsLbl) fsLbl.textContent = savedFs+'px';
@@ -20618,7 +20857,9 @@ _requestWakeLock();
     try{ localStorage.setItem(LS_BOARD_MEMO, val); }catch(e){}
     var ed=document.getElementById('boardMemoInput');
     if(ed && document.activeElement!==ed && ed.innerHTML!==val){
-      ed.innerHTML=val; _setStatus('🔄 동기화됨','#2563EB'); setTimeout(function(){ _setStatus('',''); },1200);
+      ed.innerHTML=val;
+      _bmWrapBareImages(ed);
+      _setStatus('🔄 동기화됨','#2563EB'); setTimeout(function(){ _setStatus('',''); },1200);
     }
   };
   window._applyBoardMemoNoticeRemote=function(v){
