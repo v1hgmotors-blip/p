@@ -4268,6 +4268,7 @@ function _colPush(part, col){
   var rows=PART_ROW_COUNTS[part-1]||ROWS_PER_PART;
   if(cols>=MAX_COLS){ alert('⚠️ 최대 열('+MAX_COLS+') 도달 — 더 밀 수 없습니다.'); return; }
   if(!confirm('▶ 「'+getColName(part,col)+'」열부터 오른쪽으로 한 칸씩 밀고,\n그 자리에 빈 열을 삽입할까요? (열 '+cols+'→'+(cols+1)+')')) return;
+  _saveUndoSnapshot('colPush p'+part); /* ★ FIX: 열추가/삭제와 동일하게 실행취소 스냅샷 저장 */
   var data=_getData(); var upd={}; var newCol={};
   var newCols=cols+1;
   for(var c=1;c<=newCols;c++){
@@ -4295,6 +4296,20 @@ function _colPush(part, col){
   }
   saveColNames(_nm);
   if(Object.keys(_nmUpd).length && typeof pushSettings==='function') pushSettings(_nmUpd);
+  /* ★ FIX: 열 색상(이 열 색상 지정)도 데이터·이름과 같은 규칙으로 오른쪽 이동
+     (기존엔 색상이 이동 안 하고 원래 자리에 남아있어 데이터와 색이 어긋났음) */
+  var _cc=getColOneColors(), _ccSnap=Object.assign({},_cc), _ccUpd={};
+  var _setCc=function(c,v){
+    var key='p'+part+'c'+c;
+    if(v===undefined||v===null){ if(_cc[key]!==undefined){ delete _cc[key]; _ccUpd['colColors/'+key]=null; } }
+    else if(_cc[key]!==v){ _cc[key]=v; _ccUpd['colColors/'+key]=v; }
+  };
+  for(var _cci=col;_cci<=newCols;_cci++){
+    if(_cci===col) _setCc(_cci, undefined);
+    else _setCc(_cci, _ccSnap['p'+part+'c'+(_cci-1)]);
+  }
+  localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(_cc));
+  if(Object.keys(_ccUpd).length && typeof pushSettings==='function') pushSettings(_ccUpd);
   PART_COL_COUNTS[part-1]=newCols;
   localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
   _rebuildColIds(part, newCols, rows);   /* ★ FIX: _ids 재생성 (gridConfig-ids 불일치 방지) */
@@ -4318,6 +4333,7 @@ function _colPull(part, col){
   }
   if(cols<=MIN_COLS){ alert('⚠️ 최소 열('+MIN_COLS+') — 더 줄일 수 없습니다.'); return; }
   if(!confirm('◀ 빈 열「'+getColName(part,prev)+'」을 없애고\n「'+getColName(part,col)+'」부터 왼쪽으로 당길까요? (열 '+cols+'→'+(cols-1)+')')) return;
+  _saveUndoSnapshot('colPull p'+part); /* ★ FIX: 열추가/삭제와 동일하게 실행취소 스냅샷 저장 */
   var data=_getData(); var upd={}; var newCol={};
   var newCols=cols-1;
   for(var c=1;c<=newCols;c++){
@@ -4351,6 +4367,20 @@ function _colPull(part, col){
   if(_nm2[_lastKey]!==undefined){ delete _nm2[_lastKey]; _nmUpd2['colNames/'+_lastKey]=null; }
   saveColNames(_nm2);
   if(Object.keys(_nmUpd2).length && typeof pushSettings==='function') pushSettings(_nmUpd2);
+  /* ★ FIX: 열 색상도 데이터·이름과 같은 규칙으로 왼쪽 당김, 사라지는 마지막 열 색상 삭제 */
+  var _cc2=getColOneColors(), _ccSnap2=Object.assign({},_cc2), _ccUpd2={};
+  var _setCc2=function(c,v){
+    var key='p'+part+'c'+c;
+    if(v===undefined||v===null){ if(_cc2[key]!==undefined){ delete _cc2[key]; _ccUpd2['colColors/'+key]=null; } }
+    else if(_cc2[key]!==v){ _cc2[key]=v; _ccUpd2['colColors/'+key]=v; }
+  };
+  for(var _cc2i=prev;_cc2i<=newCols;_cc2i++){
+    _setCc2(_cc2i, _ccSnap2['p'+part+'c'+(_cc2i+1)]);
+  }
+  var _lastCcKey='p'+part+'c'+cols;
+  if(_cc2[_lastCcKey]!==undefined){ delete _cc2[_lastCcKey]; _ccUpd2['colColors/'+_lastCcKey]=null; }
+  localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(_cc2));
+  if(Object.keys(_ccUpd2).length && typeof pushSettings==='function') pushSettings(_ccUpd2);
   PART_COL_COUNTS[part-1]=newCols;
   localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
   _rebuildColIds(part, newCols, rows);   /* ★ FIX: _ids 재생성 (gridConfig-ids 불일치 방지) */
@@ -20517,7 +20547,7 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
 #boardMemoInput:empty:before{content:attr(data-placeholder);color:#9CA3AF;}
 #boardMemoInput img{max-width:100%;border-radius:8px;margin:4px 0;display:block;}
 /* ★ 첨부사진 크기조절·회전·이동 */
-.bm-img-box{position:relative;display:inline-block;vertical-align:middle;margin:4px;max-width:100%;touch-action:none;}
+.bm-img-box{position:relative;display:inline-block;vertical-align:middle;margin:4px;max-width:100%;touch-action:none;cursor:move;}
 .bm-img-box img{max-width:100%;border-radius:8px;display:block;margin:0;-webkit-user-drag:element;user-select:none;}
 .bm-img-box.selected{outline:2px dashed #E9C46A;outline-offset:3px;border-radius:8px;}
 .bm-img-box.dragging{opacity:.6;z-index:50;cursor:grabbing;}
@@ -20616,7 +20646,10 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
   /* 첨부사진 박스 HTML (이미지 + 회전/크기조절/삭제 핸들) */
   function _bmImgBoxHtml(src, width){
     var wAttr = width ? (' style="width:'+Math.min(width,320)+'px"') : '';
-    return '<span class="bm-img-box" contenteditable="false" draggable="true">'
+    /* ★ FIX: draggable="true"를 빼고 자체 포인터 이벤트로 이동 처리.
+       (브라우저 네이티브 드래그는 contenteditable 안에서 "이동"이 아니라
+        "복사"로 동작해서 원본 밑에 사본이 생기는 버그가 있었음) */
+    return '<span class="bm-img-box" contenteditable="false">'
       +'<img src="'+src+'"'+wAttr+'>'
       +'<span class="bm-img-handle bm-img-rotate" title="드래그해서 회전">⟳</span>'
       +'<span class="bm-img-handle bm-img-resize" title="드래그해서 크기조절">⤡</span>'
@@ -20633,7 +20666,6 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
       var box = document.createElement('span');
       box.className = 'bm-img-box';
       box.setAttribute('contenteditable','false');
-      box.setAttribute('draggable','true');
       img.parentNode.insertBefore(box, img);
       box.appendChild(img);
       box.insertAdjacentHTML('beforeend',
@@ -20641,6 +20673,8 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
         +'<span class="bm-img-handle bm-img-resize" title="드래그해서 크기조절">⤡</span>'
         +'<span class="bm-img-handle bm-img-del" title="삭제">×</span>');
     });
+    /* ★ 예전에 draggable="true"로 저장된 박스도 정리 (남아있으면 복사 버그 재발) */
+    ed.querySelectorAll('.bm-img-box[draggable]').forEach(function(b){ b.removeAttribute('draggable'); });
   }
 
   /* 사진 박스 선택/크기조절/회전/삭제 — 이동은 contenteditable 기본 드래그 동작 사용 */
@@ -20681,18 +20715,34 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
 
     ed.addEventListener('pointerdown', function(e){
       var handle = e.target.closest('.bm-img-handle');
-      if(!handle || handle.classList.contains('bm-img-del')) return;
-      var box = handle.closest('.bm-img-box');
-      var img = box && box.querySelector('img');
-      if(!box || !img) return;
-      e.preventDefault();
-      if(handle.classList.contains('bm-img-resize')){
-        _bmDrag = { type:'resize', img:img, startX:e.clientX, startW:img.offsetWidth, startH:img.offsetHeight };
-      } else if(handle.classList.contains('bm-img-rotate')){
-        var r = box.getBoundingClientRect();
-        _bmDrag = { type:'rotate', box:box, cx:r.left+r.width/2, cy:r.top+r.height/2 };
+      if(handle && !handle.classList.contains('bm-img-del')){
+        var box = handle.closest('.bm-img-box');
+        var img = box && box.querySelector('img');
+        if(!box || !img) return;
+        e.preventDefault();
+        if(handle.classList.contains('bm-img-resize')){
+          _bmDrag = { type:'resize', img:img, startX:e.clientX, startW:img.offsetWidth, startH:img.offsetHeight };
+        } else if(handle.classList.contains('bm-img-rotate')){
+          var r = box.getBoundingClientRect();
+          _bmDrag = { type:'rotate', box:box, cx:r.left+r.width/2, cy:r.top+r.height/2 };
+        }
+        try{ handle.setPointerCapture(e.pointerId); }catch(ex){}
+        return;
       }
-      try{ handle.setPointerCapture(e.pointerId); }catch(ex){}
+      /* ★ FIX: 마우스로 사진 몸통을 눌러 끌면 자체 로직으로 이동 처리
+         (네이티브 draggable 드래그는 contenteditable 안에서 "복사"로 동작하는
+          버그가 있어 제거하고, 터치와 동일한 transform 방식으로 통일함) */
+      if(e.pointerType === 'touch') return; /* 터치는 아래 touchstart에서 별도 처리 */
+      var boxM = e.target.closest('.bm-img-box');
+      if(!boxM) return;
+      e.preventDefault();
+      _bmDrag = {
+        type:'move', box:boxM, startX:e.clientX, startY:e.clientY,
+        baseTx: parseFloat(boxM.dataset.tx)||0,
+        baseTy: parseFloat(boxM.dataset.ty)||0,
+        moved:false
+      };
+      try{ boxM.setPointerCapture(e.pointerId); }catch(ex){}
     });
 
     ed.addEventListener('pointermove', function(e){
@@ -20708,12 +20758,25 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
         var ang = Math.atan2(e.clientY-_bmDrag.cy, e.clientX-_bmDrag.cx) * 180/Math.PI + 90;
         _bmDrag.box.dataset.rot = String(Math.round(ang));
         _bmApplyTransform(_bmDrag.box);
+      } else if(_bmDrag.type==='move'){
+        var mdx = e.clientX - _bmDrag.startX;
+        var mdy = e.clientY - _bmDrag.startY;
+        if(!_bmDrag.moved && Math.hypot(mdx, mdy) < 4) return; /* 살짝 움직인건 클릭(선택)으로 취급 */
+        _bmDrag.moved = true;
+        _bmDrag.box.classList.add('dragging');
+        _bmDrag.box.dataset.tx = String(_bmDrag.baseTx + mdx);
+        _bmDrag.box.dataset.ty = String(_bmDrag.baseTy + mdy);
+        _bmApplyTransform(_bmDrag.box);
       }
     });
 
     ['pointerup','pointercancel'].forEach(function(evt){
       ed.addEventListener(evt, function(){
-        if(_bmDrag){ _bmDrag=null; _bmSaveDebounced(); }
+        if(_bmDrag){
+          if(_bmDrag.type==='move') _bmDrag.box.classList.remove('dragging');
+          _bmDrag=null;
+          _bmSaveDebounced();
+        }
       });
     });
 
