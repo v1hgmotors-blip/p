@@ -2696,6 +2696,22 @@ var LS_ENCAR_LOG='pb_encar_log';
 var LS_DOC_FLAGS='pb_doc_flags'; /* ★ 서류첨부(📄) 표시용 경량 캐시 */
 var LS_SLOTS='pb_slots_v7', LS_URL='pb_fb_url', LS_CODE='pb_code';
 
+/* ★ PC 스크롤 리미터: 실시간 계산으로 마지막 파트 설정바에서 멈춤
+   ★ FIX(콘솔에러): 원래 파일 뒤쪽(14357번 줄 부근)에 있던 정의를 스크립트
+   최상단으로 옮김 — fitLayout()이 초기 로드 중 setTimeout(80ms/200ms)으로
+   이 함수를 호출하는데, 정의가 뒤쪽에 있으면 대용량 스크립트 로드가 지연될
+   경우 "_setPcScrollPadding is not defined" ReferenceError가 발생했음. */
+var _pcLimiting = false;
+function _setPcScrollPadding(){
+  /* ★ FIX: 기존 70vh 여백은 "마지막 파트를 화면 맨 위까지 스크롤" 기능을 위한
+     여유공간이었는데, 이를 보정해서 화면에 안 보이게 하는 스크롤 제한 코드
+     (_initPcScrollLimiter2)가 실제로는 어디서도 호출되지 않아 미적용 상태였음.
+     → 보정 없이 큰 여백만 그대로 남아 파트 그리드와 하단 메모란 사이에
+       불필요한 빈 공간이 생기고 있었음. 이제 여백을 없애 grid-wrap이
+       콘텐츠 높이만큼만 차지하고 메모란이 바로 이어지도록 함. */
+  return;
+}
+
 /* ════════════════════════════════════════════════════════════════
    ★ FB 신뢰성 시스템
    ① Firebase 저장 실패 알림 + 재시도 큐
@@ -5496,6 +5512,10 @@ function _loadRowsPerPart(){var v=parseInt(localStorage.getItem(LS_ROWS_PART));r
 
 /* 파트 수 → PART_SIZES / PART_OFFSETS / PART_COL_COUNTS / NUM_PARTS / TOTAL 갱신 */
 function _applyPartCount(n){
+  /* ★ FIX(진단로그): 이전 PART_COL_COUNTS를 기억해뒀다가, 새로 계산한 값과
+     다르면 무엇이 몇→몇으로 바뀌었는지 + 호출 스택을 콘솔에 남김.
+     다음에 슬롯 썩임 현상이 재현되면 이 로그로 정확한 원인 지점 확정 가능 */
+  var _prevCols = (typeof PART_COL_COUNTS!=='undefined' && PART_COL_COUNTS) ? PART_COL_COUNTS.slice() : [];
   NUM_PARTS=n; PART_SIZES=[]; PART_OFFSETS=[]; PART_COL_COUNTS=[]; PART_ROW_COUNTS=[];
   var off=0;
   for(var p=0;p<n;p++){
@@ -5509,6 +5529,14 @@ function _applyPartCount(n){
   TOTAL=off; SLOTS_PER_PART=COLS_PER_PART*ROWS_PER_PART;
   while(LS_PARTS.length<n)     LS_PARTS.push('pb_part'+(LS_PARTS.length+1)+'_extra');
   while(LS_COLLAPSED.length<n) LS_COLLAPSED.push('pb_part'+(LS_COLLAPSED.length+1)+'_collapsed');
+  var _diffFound=false;
+  for(var _di=0; _di<Math.max(_prevCols.length,PART_COL_COUNTS.length); _di++){
+    if(_prevCols[_di]!==PART_COL_COUNTS[_di]){ _diffFound=true; break; }
+  }
+  if(_diffFound){
+    console.warn('[열개수변경][_applyPartCount] '+JSON.stringify(_prevCols)+' → '+JSON.stringify(PART_COL_COUNTS));
+    console.trace('[열개수변경] 호출 스택');
+  }
 }
 function _recalcPartArrays(){
   PART_SIZES=[]; PART_OFFSETS=[]; var off=0;
@@ -11367,8 +11395,15 @@ function _applyGridConfigFromSlots(data) {
     localStorage.setItem('pb_grid_cfg_ts', String(_fbCfgTs));
   } catch(e) {}
 
-  /* ★ FIX: IDs 수와 gridConfig 불일치 감지 → IDs 기준으로 열 수 보정
-     (열 삭제 후 Firebase가 OLD gridConfig로 렌더링하면 데이터 섞임 방지) */
+  /* ★ FIX(중요 - 데이터 썩임 방지): 기존에는 IDs 배열 길이와 gridConfig
+     열 개수가 다르면 "IDs 길이가 맞다"고 믿고 열 개수를 자동으로 바꿔
+     버렸음. 하지만 Firebase에서 _ids가 아직 전부 수신되지 않은 순간
+     (네트워크 전송 중, 부분 스냅샷 등)에 이 코드가 실행되면 실제로는
+     멀쩡한 열 개수를 "짧아 보인다"는 이유만으로 잘못 줄여버릴 수 있고,
+     그 결과가 localStorage에 저장되어 그리드가 잘못된 열 개수로 다시
+     그려지면서 슬롯 데이터가 뒤섞이는 원인이 될 수 있음.
+     → 값을 자동으로 바꾸지 않고, 불일치를 발견하면 경고만 남겨서
+     실제로 구조가 깨졌는지는 사람이 확인 후 직접 고치도록 변경. */
   try {
     var _fbIds = data._ids || {};
     if(cfg.partColCounts && cfg.partRowCounts){
@@ -11379,11 +11414,9 @@ function _applyGridConfigFromSlots(data) {
         var _actualIds = (_fbIds[_pi] || []).length;
         if(_cfgCols && _cfgRows && _actualIds > 0){
           var _cfgTotal = _cfgCols * _cfgRows;
-          if(_cfgTotal !== _actualIds && _actualIds % _cfgRows === 0){
-            /* IDs 수가 gridConfig와 다르면 IDs 기준으로 열 수 보정 */
-            var _correctedCols = Math.round(_actualIds / _cfgRows);
-            console.warn('[구조보정] 파트'+_pi+': gridConfig='+_cfgCols+'열 but IDs='+_actualIds+'개 → '+_correctedCols+'열로 보정');
-            cfg.partColCounts[String(_pi)] = _correctedCols;
+          if(_cfgTotal !== _actualIds){
+            /* ★ FIX: 더 이상 자동으로 열 개수를 바꾸지 않음 — 경고만 기록 */
+            console.warn('[구조불일치][경고전용-자동수정안함] 파트'+_pi+': gridConfig='+_cfgCols+'x'+_cfgRows+'='+_cfgTotal+' but IDs='+_actualIds+'개 (열 개수는 그대로 유지됨)');
           }
         }
       }
@@ -11513,6 +11546,10 @@ function applyRemoteSettings(data){
     for(var pc=1;pc<=NUM_PARTS;pc++){
       var pcv=data.partColCounts[String(pc)];
       if(pcv!==undefined && pcv!==PART_COL_COUNTS[pc-1]){
+        /* ★ FIX(진단로그): 열 개수가 바뀌는 순간을 전부 콘솔에 남김 —
+           다음에 슬롯 데이터가 섞이는 현상이 재현되면, 이 로그로 어떤
+           값에서 어떤 값으로 언제 바뀌었는지 정확히 추적 가능 */
+        console.warn('[열개수변경][applyRemoteSettings] part'+pc+': '+PART_COL_COUNTS[pc-1]+' → '+pcv+' (room='+(typeof code!=='undefined'?code:'?')+')');
         PART_COL_COUNTS[pc-1]=pcv;
         localStorage.setItem(LS_PART_COLS+'_'+pc, pcv);
         gridChanged=true;
@@ -12121,14 +12158,19 @@ function connectFb(url,code){
     if(fbSettingsRef){try{fbSettingsRef.off('value');}catch(e){}}
     fbSettingsRef=fbDb.ref('kd_rooms/'+code+'/pb_settings');
     /* 설정을 once로 먼저 읽은 뒤, 슬롯 리스너를 등록 */
-    /* ★ 새기기 여부 감지: localStorage에 차량 데이터가 전혀 없으면 새 기기
-       _getData()로 실제 슬롯 데이터 확인 (좌표 ID 시스템 기준) */
-    var _isNewDevice = (function(){
-      try {
-        var d = _getData();
-        return !Object.keys(d).some(function(k){ return d[k] && d[k].car; });
-      } catch(e) { return true; }
-    })();
+    /* ★ FIX(데이터 썩임 방지): 기존 로직은 "현재 로컬에 차량 데이터가 하나도
+       없으면 새 기기"로 판정했음 — 하지만 한산한 시간대라 실제로 주차된
+       차량이 0대인 순간에 앱을 재실행하면, 여러 번 써온 기존 기기인데도
+       "새 기기"로 오판되어 Firebase 데이터를 통째로 덮어쓰는 초기화 경로를
+       타게 됨. 이 경로 안에는 "현재 열 개수 기준으로 좌표 재계산"하는
+       레거시 변환 코드가 있어, 열 개수가 조금이라도 어긋난 순간과 겹치면
+       슬롯 데이터가 잘못된 좌표로 재배치될 위험이 있었음.
+       → "이 방(code)에 이 기기가 예전에 정상 연결한 적이 있는가"를
+       영구 저장된 플래그로 판별하도록 변경. 차량이 0대여도 이미 방문한
+       방이면 절대 "새 기기" 초기화 경로를 타지 않음. */
+    var _roomVisitedKey = 'pb_room_visited_' + code;
+    var _isNewDevice = !localStorage.getItem(_roomVisitedKey);
+    console.log('[새기기판별] room='+code+' isNewDevice='+_isNewDevice+' (영구플래그 기반)');
 
     fbSettingsRef.once('value', function(settingSnap){
       var settingData = settingSnap.val();
@@ -12222,6 +12264,10 @@ function connectFb(url,code){
           if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
           _fbSyncMarkReady('new-device-init-complete');
           _isNewDevice = false;
+          /* ★ FIX: 새 기기 초기화가 완전히 끝난 뒤에만 방문 플래그 저장
+             (실패 시엔 저장 안 해서 다음 실행 때 다시 새 기기 경로로 안전하게 재시도) */
+          try{ localStorage.setItem(_roomVisitedKey, String(Date.now())); }catch(e){}
+          console.log('[새기기판별] 초기화 완료 → 방문 플래그 저장: '+_roomVisitedKey);
 
           /* ★★ FIX: once() 완전 완료 후에만 실시간 리스너 등록 → 타이밍 경쟁 완전 제거 */
           _registerSlotsOnListener();
@@ -12830,7 +12876,12 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
 <script>
 /* ── PWA Manifest 동적 생성 ── */
 (function(){
-  var manifest={name:"주차현황판",short_name:"주차현황판",start_url:"./",display:"fullscreen",background_color:"#FEE500",theme_color:"#FEE500",orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
+  /* ★ FIX(콘솔경고): start_url을 상대경로("./") 대신 절대 URL로 지정.
+     매니페스트 자체가 blob: URL로 서빙되기 때문에 상대경로를 해석할 기준
+     주소가 없어 브라우저가 "start_url property ignored, URL is invalid"
+     경고를 띄우고 있었음 → location 기반 절대경로로 교체해 해결. */
+  var _startUrl = location.href.split('?')[0].split('#')[0];
+  var manifest={name:"주차현황판",short_name:"주차현황판",start_url:_startUrl,display:"fullscreen",background_color:"#FEE500",theme_color:"#FEE500",orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
   var blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
   var el=document.getElementById("pwaManifest");
   if(el) el.href=URL.createObjectURL(blob);
@@ -12846,6 +12897,18 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
 (function(){
   if(!('serviceWorker' in navigator)) return;
   if(location.protocol === 'file:') return;
+
+  /* ★ FIX(콘솔에러): navigator.serviceWorker.register()는 스펙상 blob: URL을
+     허용하지 않아서(같은 출처의 http/https 스크립트 파일만 가능), 아래
+     "Blob 인라인 등록" 방식은 어떤 브라우저·환경에서도 항상 실패하고
+     "[SW 등록 실패] TypeError: ... URL protocol ... is not supported" 에러만
+     남기고 있었음. 실제로 오프라인 캐싱 기능은 전혀 동작하지 않는 상태였으므로,
+     불필요한 실패 시도(및 blob 생성)를 막기 위해 여기서 종료함.
+     → 정말로 PWA 오프라인 캐싱을 쓰고 싶다면, index.html과 별개로 실제
+       sw.js 파일을 같은 오리진(GitHub Pages 저장소)에 올리고
+       navigator.serviceWorker.register('/sw.js')로 등록해야 함(단일 HTML
+       파일 구조로는 불가능한 제약). */
+  return;
 
   var CACHE_VER = 'parking-sw-v3';
   var APP_URL   = location.href.split('?')[0].split('#')[0];
@@ -14349,20 +14412,11 @@ function _b2msg(txt,c,bg,bd){
 
 
 /* ★ PC 스크롤 리미터: 마지막 파트 설정바가 헤더 바로 아래에서 멈춤 */
-
-
-/* ★ PC: 최대 스크롤 시 마지막 파트 설정바가 헤더 바로 아래에 위치하도록 padding 설정 */
-/* ★ PC 스크롤 리미터: 실시간 계산으로 마지막 파트 설정바에서 멈춤 */
-var _pcLimiting = false;
-function _setPcScrollPadding(){
-  /* ★ FIX: 기존 70vh 여백은 "마지막 파트를 화면 맨 위까지 스크롤" 기능을 위한
-     여유공간이었는데, 이를 보정해서 화면에 안 보이게 하는 스크롤 제한 코드
-     (_initPcScrollLimiter2)가 실제로는 어디서도 호출되지 않아 미적용 상태였음.
-     → 보정 없이 큰 여백만 그대로 남아 파트 그리드와 하단 메모란 사이에
-       불필요한 빈 공간이 생기고 있었음. 이제 여백을 없애 grid-wrap이
-       콘텐츠 높이만큼만 차지하고 메모란이 바로 이어지도록 함. */
-  return;
-}
+/* ★ FIX(콘솔에러): _setPcScrollPadding 함수 정의는 스크립트 최상단(2694번 줄 부근)으로
+   이동함 — fitLayout()이 초기 로드 중 80ms/200ms 뒤 이 함수를 호출하는데,
+   함수가 파일 뒤쪽(여기)에 있으면 대용량 스크립트 로드가 지연될 경우
+   "정의되지 않음" ReferenceError가 발생했음. 정의를 앞으로 옮겨 항상
+   호출 이전에 존재하도록 함. (실제 함수 본문은 이제 여기 없음) */
 
 /* ★ BUG FIX: part-label sticky top 보정
    #mainWrap 기준 top:0 = 화면 최상단이 아닌 mainWrap 시작점
