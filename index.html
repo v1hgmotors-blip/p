@@ -18218,17 +18218,22 @@ window._drawQRCanvas = function(container, text, size){
       lsSaved=false;
       console.warn('[파트사진] localStorage 저장 실패 (용량 부족)');
     }
-    if(!lsSaved) return; /* localStorage 실패 시 Firebase도 저장 안 함 */
-    /* ★ Firebase 동기화 — 용량 제한 없음, 원본 그대로 저장 */
+    if(!lsSaved) return false; /* localStorage 실패 시 Firebase도 저장 안 함 */
+    /* ★ Firebase 동기화 */
     try{
       var ref=_fbPhotoRef(partNo);
       if(ref){
         _photoSuppressUntil[partNo]=Date.now()+5000; /* ★ 5초로 연장 — 대용량 이미지 업로드 시간 여유 */
         ref.set(base64).catch(function(err){
-          console.warn('[파트사진] Firebase 저장 실패:', err.message);
+          console.warn('[파트사진] Firebase 저장 실패:', err && err.message);
+          try{ alert('⚠️ 다른 기기와의 동기화(Firebase) 저장에 실패했습니다.\n이 기기에는 저장되었지만 다른 기기에는 반영되지 않을 수 있습니다.\n(오류: '+(err&&err.message?err.message:'알 수 없음')+')'); }catch(ex){}
         });
+      } else {
+        console.warn('[파트사진] Firebase 미연결 상태 — 이 기기에만 저장됨');
+        try{ alert('⚠️ 현재 다른 기기와 연동되지 않은 상태입니다.\n이 사진은 이 기기에만 저장되며, 새로고침하면 사라질 수 있습니다.\n네트워크/코드 연결 상태를 확인한 뒤 다시 등록해 주세요.'); }catch(ex){}
       }
     }catch(e){ console.warn('[파트사진] Firebase 오류',e); }
+    return true;
   }
   function _clearPhoto(partNo){
     try{ localStorage.removeItem(LS_PREFIX+partNo); }catch(e){}
@@ -18392,22 +18397,52 @@ window._drawQRCanvas = function(container, text, size){
           inp.onchange = function(e){
             var file = e.target.files[0];
             if(!file) return;
-            /* ★ 용량 제한 없음 — 자유롭게 사용 */
+            /* ★ 리사이즈+압축 후 저장 — 원본 그대로 저장 시 localStorage/Firebase
+               용량 초과로 조용히 실패하는 문제 방지 (최대 1600px, JPEG 85%) */
             var reader = new FileReader();
             reader.onload = function(ev){
-              var base64 = ev.target.result;
-              _setPhoto(partNo, base64);
-              var prev = document.getElementById('ppsPreview'+partNo);
-              if(prev){ prev.src=base64; prev.classList.add('show'); }
-              /* 삭제 버튼 추가 */
-              var actions = row.querySelector('.pps-part-actions');
-              if(actions && !actions.querySelector('.pps-clear-btn')){
-                var cb = document.createElement('button');
-                cb.className = 'pps-clear-btn';
-                cb.textContent = '삭제';
-                cb.onclick = function(){ _clearPartPhoto(partNo); };
-                actions.appendChild(cb);
-              }
+              var img = new Image();
+              img.onload = function(){
+                try{
+                  var MAX_DIM = 1600;
+                  var w = img.width, h = img.height;
+                  if(w>MAX_DIM || h>MAX_DIM){
+                    var scale = Math.min(MAX_DIM/w, MAX_DIM/h);
+                    w = Math.round(w*scale); h = Math.round(h*scale);
+                  }
+                  var cnv = document.createElement('canvas');
+                  cnv.width = w; cnv.height = h;
+                  var cx = cnv.getContext('2d');
+                  cx.fillStyle = '#fff'; cx.fillRect(0,0,w,h);
+                  cx.drawImage(img,0,0,w,h);
+                  var base64 = cnv.toDataURL('image/jpeg', 0.85);
+                  var ok = _setPhoto(partNo, base64);
+                  if(!ok){
+                    alert('⚠️ 저장 공간이 부족하여 사진을 저장하지 못했습니다.\n다른 사진으로 시도하거나 기존 파트사진을 정리해 주세요.');
+                    return;
+                  }
+                  var prev = document.getElementById('ppsPreview'+partNo);
+                  if(prev){ prev.src=base64; prev.classList.add('show'); }
+                  /* 삭제 버튼 추가 */
+                  var actions = row.querySelector('.pps-part-actions');
+                  if(actions && !actions.querySelector('.pps-clear-btn')){
+                    var cb = document.createElement('button');
+                    cb.className = 'pps-clear-btn';
+                    cb.textContent = '삭제';
+                    cb.onclick = function(){ _clearPartPhoto(partNo); };
+                    actions.appendChild(cb);
+                  }
+                }catch(err){
+                  alert('이미지 처리 중 오류가 발생했습니다. 다른 사진으로 시도해 주세요.');
+                }
+              };
+              img.onerror = function(){
+                alert('이미지를 불러올 수 없습니다. 다른 사진으로 시도해 주세요.');
+              };
+              img.src = ev.target.result;
+            };
+            reader.onerror = function(){
+              alert('파일을 읽는 중 오류가 발생했습니다.');
             };
             reader.readAsDataURL(file);
           };
