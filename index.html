@@ -9841,6 +9841,7 @@ function addEncarLog(idx, car, num, date, time, doneDate){
    - 이미지는 자동 압축(최대 가로 1280px, JPEG 72%), PDF는 4MB 이하만 허용
    - 차량번호가 곧 키이므로, 슬롯이 나중에 다른 차량으로 바뀌어도 이전 서류가 섞이지 않음 */
 var _curDocs = {};
+var _lastDocCarKey = ''; /* ★ 서류 목록을 마지막으로 불러온 차량번호 키 — 값이 안 바뀌었으면 blur시 재로딩 생략 */
 
 /* ★ 서류첨부 표시(📄) 전용 경량 플래그 맵 — 차량번호키 → true
    실제 서류(이미지/PDF 데이터)는 무겁기 때문에 전체 슬롯을 그릴 때마다 불러오지 않고,
@@ -9874,6 +9875,27 @@ function _docsRoomRef(){
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb) return null;
   return fbDb.ref('kd_rooms/'+code+'/kd_docs');
+}
+function _docsDataRoomRef(){
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb) return null;
+  return fbDb.ref('kd_rooms/'+code+'/kd_docs_data');
+}
+/* ★ 다운로드 버튼을 누를 때만 원본 데이터를 불러온다 (목록 조회 시엔 이름/용량 등 메타만) */
+function _fetchDocData(d, docId, cb){
+  if(d && d.data){ cb(d); return; } /* 방금 올렸거나 예전 방식(메타+데이터 통합)으로 저장된 문서 — 이미 메모리에 있음 */
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  var key=_docKeyFromCar(car);
+  var dref=_docsDataRoomRef();
+  if(!key || !dref){ showAlert('⚠️ 서류 데이터를 불러올 수 없습니다.'); cb(null); return; }
+  dref.child(key).child(docId).once('value').then(function(snap){
+    var data=snap.val();
+    if(!data){ showAlert('⚠️ 서류 원본 데이터를 찾을 수 없습니다.'); cb(null); return; }
+    var merged=Object.assign({}, d, {data:data});
+    _curDocs[docId]=merged; /* 캐싱 — 같은 세션에서 다시 다운로드할 때 재요청 방지 */
+    cb(merged);
+  }).catch(function(){ showAlert('⚠️ 서류 원본을 불러오지 못했습니다.'); cb(null); });
 }
 
 /* ★ 서류 플래그 보정(백필) — 앱 접속 시 1회
@@ -9919,6 +9941,7 @@ function loadSlotDocs(){
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
   var key = _docKeyFromCar(car);
+  _lastDocCarKey = key; /* ★ 이 차량 기준으로 로딩했음을 기록 */
   if(!key){ box.innerHTML='<div style="font-size:12px;font-weight:700;color:#94A3B8;">차량번호 입력 후 서류를 첨부할 수 있습니다.</div>'; return; }
   var ref=_docsRoomRef();
   if(!ref){ box.innerHTML='<div style="font-size:12px;font-weight:700;color:#94A3B8;">Firebase 연결 후 서류 첨부가 가능합니다.</div>'; return; }
@@ -9948,24 +9971,67 @@ function _renderDocList(){
     var nameSpan=document.createElement('div');
     nameSpan.style.cssText='flex:1;min-width:0;font-size:12px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     nameSpan.textContent=icon+' '+(d.name||'서류')+(d.size?' ('+Math.round(d.size/1024)+'KB)':'');
+    var dlBtn=document.createElement('button');
+    dlBtn.type='button';
+    dlBtn.textContent='⬇️';
+    dlBtn.title='다운로드';
+    dlBtn.style.cssText='flex-shrink:0;border:none;background:#DBEAFE;color:#2563EB;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
+    dlBtn.onclick=function(){
+      _miniConfirmType='download_doc';
+      _miniConfirmPayload={doc:d, docId:id};
+      document.getElementById('miniConfirmIcon').textContent='📥';
+      document.getElementById('miniConfirmMsg').textContent='이 서류를 다운로드하시겠습니까?\n'+(d.name||'서류');
+      var _dlOkBtn=document.getElementById('miniConfirmOkBtn');
+      _dlOkBtn.className='mini-confirm-ok sale'; _dlOkBtn.style.cssText=''; _dlOkBtn.textContent='다운로드';
+      document.getElementById('miniConfirmOv').classList.add('show');
+    };
     var delBtn=document.createElement('button');
     delBtn.type='button';
     delBtn.textContent='🗑️';
     delBtn.style.cssText='flex-shrink:0;border:none;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
     delBtn.onclick=function(){ deleteDoc(id); };
-    row.appendChild(nameSpan); row.appendChild(delBtn);
+    row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
     box.appendChild(row);
   });
 }
 
+/* ★ 서류 다운로드 — base64 데이터를 파일로 저장 */
+function downloadDoc(d){
+  try{
+    if(!d || !d.data){ showAlert('⚠️ 서류 데이터를 찾을 수 없습니다.'); return false; }
+    var a=document.createElement('a');
+    a.href=d.data;
+    a.download=d.name || ('서류.'+(d.type==='pdf'?'pdf':'jpg'));
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return true;
+  }catch(e){
+    showAlert('⚠️ 다운로드에 실패했습니다.');
+    return false;
+  }
+}
+
 function deleteDoc(id){
-  if(!confirm('이 서류를 삭제할까요?')) return;
+  /* ★ FIX: confirm() 대신 앱 내 miniConfirm 사용 (모바일 웹뷰 차단 방지) */
+  _miniConfirmType='delete_doc';
+  _miniConfirmPayload={docId:id};
+  document.getElementById('miniConfirmIcon').textContent='🗑️';
+  document.getElementById('miniConfirmMsg').textContent='이 서류를 삭제할까요?';
+  var _docDelBtn=document.getElementById('miniConfirmOkBtn');
+  _docDelBtn.className='mini-confirm-ok clear'; _docDelBtn.style.cssText=''; _docDelBtn.textContent='삭제';
+  document.getElementById('miniConfirmOv').classList.add('show');
+}
+function _doDeleteDoc(id){
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
   var key=_docKeyFromCar(car);
-  var ref=_docsRoomRef();
-  if(!ref||!key) return;
-  ref.child(key).child(id).remove().then(function(){
+  var code=_pbCode();
+  if(!key || !code || typeof fbDb==='undefined' || !fbDb) return;
+  var updates={};
+  updates['kd_docs/'+key+'/'+id]=null;
+  updates['kd_docs_data/'+key+'/'+id]=null;
+  fbDb.ref('kd_rooms/'+code).update(updates).then(function(){
     delete _curDocs[id];
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
@@ -10122,12 +10188,16 @@ function _compressDocImage(file, cb){
 }
 
 function _saveDoc(key, name, type, dataUrl, size, cb){
-  var ref=_docsRoomRef();
-  if(!ref){ showAlert('⚠️ Firebase 연결 후 서류를 첨부할 수 있습니다.'); if(cb) cb(); return; }
+  var code=_pbCode();
+  if(!code || typeof fbDb==='undefined' || !fbDb){ showAlert('⚠️ Firebase 연결 후 서류를 첨부할 수 있습니다.'); if(cb) cb(); return; }
   var docId='d'+Date.now()+Math.floor(Math.random()*1000);
-  var payload={ name:name, type:type, data:dataUrl, size:size, at:Date.now() };
-  ref.child(key).child(docId).set(payload).then(function(){
-    _curDocs[docId]=payload;
+  var meta={ name:name, type:type, size:size, at:Date.now() };
+  var updates={};
+  updates['kd_docs/'+key+'/'+docId]=meta;
+  updates['kd_docs_data/'+key+'/'+docId]=dataUrl;
+  fbDb.ref('kd_rooms/'+code).update(updates).then(function(){
+    /* ★ 방금 올린 원본은 메모리에도 같이 보관 — 이번 세션에선 재요청 없이 바로 다운로드 가능 */
+    _curDocs[docId]=Object.assign({}, meta, {data:dataUrl});
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
     /* ★ 서류첨부 플래그 갱신 (📄 아이콘 표시용, 실패해도 서류 저장 자체엔 영향 없음) */
@@ -10160,28 +10230,36 @@ function _migrateCarDocs(oldCarText, newCarText){
   if(!oldKey || !newKey || oldKey===newKey) return;
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb) return;
-  var roomRef=_docsRoomRef();
-  if(!roomRef) return;
-  roomRef.child(oldKey).once('value').then(function(oldSnap){
-    var oldDocs=oldSnap.val();
-    if(!oldDocs || !Object.keys(oldDocs).length) return; /* 옮길 서류 없음 */
-    roomRef.child(newKey).once('value').then(function(newSnap){
-      var newDocs=newSnap.val()||{};
-      var merged=Object.assign({}, newDocs, oldDocs); /* docId 충돌 가능성 사실상 없음 */
+  var roomRef=fbDb.ref('kd_rooms/'+code);
+  roomRef.child('kd_docs/'+oldKey).once('value').then(function(oldMetaSnap){
+    var oldMeta=oldMetaSnap.val();
+    if(!oldMeta || !Object.keys(oldMeta).length) return; /* 옮길 서류 없음 */
+    Promise.all([
+      roomRef.child('kd_docs_data/'+oldKey).once('value'),
+      roomRef.child('kd_docs/'+newKey).once('value'),
+      roomRef.child('kd_docs_data/'+newKey).once('value')
+    ]).then(function(snaps){
+      var oldData=snaps[0].val()||{};
+      var newMeta=snaps[1].val()||{};
+      var newData=snaps[2].val()||{};
+      var mergedMeta=Object.assign({}, newMeta, oldMeta); /* docId 충돌 가능성 사실상 없음 */
+      var mergedData=Object.assign({}, newData, oldData);
       var updates={};
-      updates['kd_docs/'+newKey]=merged;
+      updates['kd_docs/'+newKey]=mergedMeta;
       updates['kd_docs/'+oldKey]=null;
+      updates['kd_docs_data/'+newKey]=mergedData;
+      updates['kd_docs_data/'+oldKey]=null;
       updates['kd_doc_flags/'+newKey]=true;
       updates['kd_doc_flags/'+oldKey]=null;
-      fbDb.ref('kd_rooms/'+code).update(updates).then(function(){
-        console.log('[서류 이전] "'+oldCarText+'" → "'+newCarText+'" ('+Object.keys(oldDocs).length+'건)');
+      roomRef.update(updates).then(function(){
+        console.log('[서류 이전] "'+oldCarText+'" → "'+newCarText+'" ('+Object.keys(oldMeta).length+'건)');
         delete _docFlags[oldKey];
         _docFlags[newKey]=true;
         _saveDocFlagsCache();
         /* 모달이 아직 이 슬롯(새 차량번호)을 보여주고 있으면 서류 목록도 즉시 갱신 */
         var carEl=document.getElementById('mCarInput');
         if(carEl && _docKeyFromCar(carEl.value.trim())===newKey){
-          _curDocs=merged;
+          _curDocs=mergedMeta; /* 원본 데이터는 다운로드 시 개별로 불러옴 */
           _renderDocList();
           if(typeof refreshStorageBadge==='function') refreshStorageBadge();
         }
@@ -10220,23 +10298,30 @@ function _deleteCarDocs(carText){
   var bucket=_docArchiveBucket();
   var archivePath='kd_docs_archive/'+bucket+'/'+key;
 
-  roomRef.child('kd_docs/'+key).once('value').then(function(liveSnap){
-    var liveDocs=liveSnap.val();
+  Promise.all([
+    roomRef.child('kd_docs/'+key).once('value'),
+    roomRef.child('kd_docs_data/'+key).once('value')
+  ]).then(function(snaps){
+    var liveMeta=snaps[0].val();
+    var liveData=snaps[1].val();
     var updates={};
     updates['kd_docs/'+key]=null;
+    updates['kd_docs_data/'+key]=null;
     updates['kd_doc_flags/'+key]=null;
-    if(!liveDocs || !Object.keys(liveDocs).length){
+    if(!liveMeta || !Object.keys(liveMeta).length){
       /* 실제 서류가 없으면 보관할 것도 없음 — 플래그만 정리하고 끝 */
       roomRef.update(updates).catch(function(e){ console.warn('[서류 정리 실패]', e); });
       return;
     }
     roomRef.child(archivePath).once('value').then(function(arSnap){
       var existing=arSnap.val();
-      var existingDocs=(existing && existing.docs) || {};
-      var mergedDocs=Object.assign({}, existingDocs, liveDocs); /* docId 충돌 사실상 없음 */
-      updates[archivePath]={ carText:carText, archivedAt:Date.now(), docs:mergedDocs };
+      var existingMeta=(existing && existing.docs) || {};
+      var existingData=(existing && existing.docsData) || {};
+      var mergedMeta=Object.assign({}, existingMeta, liveMeta); /* docId 충돌 사실상 없음 */
+      var mergedData=Object.assign({}, existingData, liveData||{});
+      updates[archivePath]={ carText:carText, archivedAt:Date.now(), docs:mergedMeta, docsData:mergedData };
       roomRef.update(updates).then(function(){
-        console.log('[서류 보관] "'+carText+'" → 보관함('+bucket+') 이동 완료 ('+Object.keys(liveDocs).length+'건)');
+        console.log('[서류 보관] "'+carText+'" → 보관함('+bucket+') 이동 완료 ('+Object.keys(liveMeta).length+'건)');
       }).catch(function(e){ console.warn('[서류 보관 실패]', e); });
     }).catch(function(e){ console.warn('[서류 보관함 조회 실패]', e); });
   }).catch(function(e){ console.warn('[서류 원본 조회 실패]', e); });
@@ -10289,7 +10374,10 @@ document.addEventListener('DOMContentLoaded', function(){
     if(ci){
       ci.addEventListener('blur', function(){
         var ov=document.getElementById('modalOv');
-        if(ov && ov.classList.contains('show') && typeof loadSlotDocs==='function') loadSlotDocs();
+        if(!ov || !ov.classList.contains('show') || typeof loadSlotDocs!=='function') return;
+        var key=_docKeyFromCar(ci.value.trim());
+        if(key===_lastDocCarKey) return; /* ★ 차량번호가 실제로 안 바뀌었으면 재로딩 생략 (다른 버튼 클릭 시 목록이 중간에 다시 그려져 첫 클릭이 씹히는 문제 방지) */
+        loadSlotDocs();
       });
     }
   }catch(e){}
@@ -10376,6 +10464,7 @@ function _calcDbStorageUsage(cb){
      pb_daily_backup(백업 이력)은 용량 계산에서 제외 — 개수만 별도로 셈 (무거운 다운로드 방지) */
   Promise.all([
     _fbGetPath(roomRef, 'kd_docs', 12000),
+    _fbGetPath(roomRef, 'kd_docs_data', 12000),
     _fbGetPath(roomRef, 'common_docs', 12000),
     _fbGetPath(roomRef, 'pb_part_photos', 10000),
     _fbGetPath(roomRef, 'pb_part_canvases', 10000),
@@ -10393,12 +10482,16 @@ function _calcDbStorageUsage(cb){
 
       var kdDocs = byPath.kd_docs.val;
       if(byPath.kd_docs.timeout) anyTimeout=true;
+      var kdDocsData = byPath.kd_docs_data.val;
+      if(byPath.kd_docs_data.timeout) anyTimeout=true;
       if(kdDocs){
         Object.keys(kdDocs).forEach(function(carKey){
           var docsForCar=kdDocs[carKey]||{};
+          var dataForCar=(kdDocsData && kdDocsData[carKey]) || {};
           Object.keys(docsForCar).forEach(function(docId){
             var d=docsForCar[docId]||{};
-            docsSize += _byteLen(d.data)+_byteLen(d.name);
+            var dataStr = d.data || dataForCar[docId] || ''; /* 레거시(통합저장) 또는 신규(분리저장) 모두 지원 */
+            docsSize += _byteLen(dataStr)+_byteLen(d.name);
           });
         });
       }
@@ -10451,9 +10544,11 @@ function _calcDbStorageUsage(cb){
             archiveCount++;
             var entry=bucket[carKey]||{};
             var docsInEntry=entry.docs||{};
+            var dataInEntry=entry.docsData||{};
             Object.keys(docsInEntry).forEach(function(docId){
               var d=docsInEntry[docId]||{};
-              archiveSize += _byteLen(d.data)+_byteLen(d.name);
+              var dataStr = d.data || dataInEntry[docId] || '';
+              archiveSize += _byteLen(dataStr)+_byteLen(d.name);
             });
           });
         });
@@ -10953,6 +11048,44 @@ function miniConfirmOk(){
     var _pl=_miniConfirmPayload||{};
     _b2msg('⏳ Firebase 백업 복원 중... ('+(_pl.label||'')+')', '#7C3AED','#F5F3FF','#C4B5FD');
     restoreFbBackup_execute(_pl.dateKey, _pl._db, _pl._code, _pl.label);
+  } else if(type==='delete_fb_backup'){
+    var _pd=_miniConfirmPayload||{};
+    if(_pd.db && _pd.code && _pd.key){
+      _pd.db.ref('kd_rooms/'+_pd.code+'/pb_daily_backup/'+_pd.key).remove()
+        .then(function(){
+          showAlert('🗑️ 백업 삭제 완료');
+          setTimeout(function(){ hideAlert(); if(typeof _pd.refreshFn==='function') _pd.refreshFn(); },1500);
+        })
+        .catch(function(e){ alert('삭제 실패: '+(e&&e.message?e.message:'')); });
+    }
+  } else if(type==='delete_local_backup'){
+    var _pdl=_miniConfirmPayload||{};
+    if(_pdl.snapKey){
+      localStorage.removeItem(_pdl.snapKey);
+      if(_pdl.rowEl){
+        _pdl.rowEl.style.transition='opacity .3s';
+        _pdl.rowEl.style.opacity='0';
+      }
+      setTimeout(function(){ if(typeof showLocalBackupList==='function') showLocalBackupList(); }, 350);
+    }
+  } else if(type==='download_doc'){
+    var _pld=_miniConfirmPayload||{};
+    showAlert('⏳ 다운로드 중...');
+    setTimeout(function(){
+      _fetchDocData(_pld.doc, _pld.docId, function(fullDoc){
+        if(!fullDoc){ hideAlert(); return; }
+        var _dlOk=downloadDoc(fullDoc);
+        if(_dlOk){
+          showAlert('✅ 다운로드 완료');
+          setTimeout(hideAlert, 1500);
+        } else {
+          hideAlert();
+        }
+      });
+    }, 300);
+  } else if(type==='delete_doc'){
+    var _pdd=(_miniConfirmPayload||{}).docId;
+    if(_pdd) _doDeleteDoc(_pdd);
   } else if(type==='remove_row'){
     var _p2 = (_miniConfirmPayload && _miniConfirmPayload.pNum) || 1;
     _doRemovePartRow(_p2);
@@ -13660,11 +13793,14 @@ function showLocalBackupList(){
     delBtn.title = '이 로컬 백업 삭제';
     (function(snapKey, rowEl){
       delBtn.addEventListener('click', function(){
-        if(!confirm('이 로컬 백업을 삭제하시겠습니까?')) return;
-        localStorage.removeItem(snapKey);
-        rowEl.style.transition = 'opacity .3s';
-        rowEl.style.opacity = '0';
-        setTimeout(function(){ showLocalBackupList(); }, 350);
+        /* ★ FIX: confirm() 대신 앱 내 miniConfirm 사용 (모바일 웹뷰 차단 방지) */
+        _miniConfirmType='delete_local_backup';
+        _miniConfirmPayload={snapKey:snapKey, rowEl:rowEl};
+        document.getElementById('miniConfirmIcon').textContent='🗑️';
+        document.getElementById('miniConfirmMsg').textContent='이 로컬 백업을 삭제할까요?';
+        var _delBtn3=document.getElementById('miniConfirmOkBtn');
+        _delBtn3.className='mini-confirm-ok clear'; _delBtn3.style.cssText=''; _delBtn3.textContent='삭제';
+        document.getElementById('miniConfirmOv').classList.add('show');
       });
     })(k, row);
     row.appendChild(delBtn);
@@ -14093,13 +14229,14 @@ function showFbBackupList(){
           del.title='이 백업 삭제';
           (function(k,dateKeyRow){
             del.addEventListener('click',function(){
-              if(!confirm('Firebase에서 이 백업을 삭제하시겠습니까?\n'+k)) return;
-              db.ref('kd_rooms/'+code+'/pb_daily_backup/'+k).remove()
-                .then(function(){
-                  showAlert('🗑️ 백업 삭제 완료');
-                  setTimeout(function(){ hideAlert(); showFbBackupList(); },1500);
-                })
-                .catch(function(e){ alert('삭제 실패: '+e.message); });
+              /* ★ FIX: confirm() 대신 앱 내 miniConfirm 사용 (모바일 웹뷰 차단 방지) */
+              _miniConfirmType='delete_fb_backup';
+              _miniConfirmPayload={db:db, code:code, key:k, refreshFn:showFbBackupList};
+              document.getElementById('miniConfirmIcon').textContent='🗑️';
+              document.getElementById('miniConfirmMsg').textContent='Firebase에서 이 백업을 삭제할까요?\n'+k;
+              var _delBtn=document.getElementById('miniConfirmOkBtn');
+              _delBtn.className='mini-confirm-ok clear'; _delBtn.style.cssText=''; _delBtn.textContent='삭제';
+              document.getElementById('miniConfirmOv').classList.add('show');
             });
           })(key);
           wrap.appendChild(b);
@@ -14203,10 +14340,14 @@ function _doShowFbBackupList(useListCode){
           var d2=document.createElement('button'); d2.style.cssText='background:#EF4444;color:#fff;border:none;border-radius:7px;padding:6px 8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;flex-shrink:0;';
           d2.textContent='🗑️';
           (function(k){ d2.addEventListener('click',function(){
-            if(!confirm('삭제하시겠습니까?\n'+k)) return;
-            db.ref('kd_rooms/'+code+'/pb_daily_backup/'+k).remove()
-              .then(function(){ showAlert('🗑️ 삭제 완료'); setTimeout(function(){ hideAlert(); _doShowFbBackupList(code); },1500); })
-              .catch(function(e){ alert('삭제 실패: '+e.message); });
+            /* ★ FIX: confirm() 대신 앱 내 miniConfirm 사용 (모바일 웹뷰 차단 방지) */
+            _miniConfirmType='delete_fb_backup';
+            _miniConfirmPayload={db:db, code:code, key:k, refreshFn:function(){ _doShowFbBackupList(code); }};
+            document.getElementById('miniConfirmIcon').textContent='🗑️';
+            document.getElementById('miniConfirmMsg').textContent='이 백업을 삭제할까요?\n'+k;
+            var _delBtn2=document.getElementById('miniConfirmOkBtn');
+            _delBtn2.className='mini-confirm-ok clear'; _delBtn2.style.cssText=''; _delBtn2.textContent='삭제';
+            document.getElementById('miniConfirmOv').classList.add('show');
           }); })(key);
           wr.appendChild(b); wr.appendChild(d2); br.appendChild(wr);
         }
@@ -15211,7 +15352,7 @@ function _initPcScrollLimiter2(){
       /* ★ 캔버스 원본(pb_part_canvas_) 우선 — 없으면 합성이미지(pb_part_photo_) 사용
          이렇게 해야 수정 시 경로안내 텍스트 중복 방지 */
       var canvasData=localStorage.getItem('pb_part_canvas_'+partNo)||'';
-      var photoData=canvasData||localStorage.getItem('pb_part_photo_'+partNo)||'';
+      var photoData=canvasData||(typeof window._getPartPhotoCache==='function'?window._getPartPhotoCache(partNo):'')||localStorage.getItem('pb_part_photo_'+partNo)||'';
       if(photoData){
         var img=new Image();
         img.onload=function(){
@@ -18166,6 +18307,7 @@ window._drawQRCanvas = function(container, text, size){
 (function(){
   'use strict';
   var LS_PREFIX = 'pb_part_photo_'; /* pb_part_photo_1, pb_part_photo_2, ... */
+  var _memCache = {}; /* ★ 인메모리 캐시 — localStorage 용량초과와 무관하게 항상 표시/동기화 가능 */
   var _popupTimer = null;
   var _popupPhone = '';   /* ★ 키불출앱에서 들어온 딜러 전화번호 */
   var _popupQrUrl = '';   /* ★ 현재 팝업의 QR 링크 (수동 약도전송 합성용) */
@@ -18200,6 +18342,7 @@ window._drawQRCanvas = function(container, text, size){
 
   /* 저장/불러오기 (base64) */
   function _getPhoto(partNo){
+    if(_memCache[partNo]) return _memCache[partNo];
     try{ return localStorage.getItem(LS_PREFIX+partNo) || ''; }catch(e){ return ''; }
   }
   function _fbPhotoRef(partNo){
@@ -18212,30 +18355,38 @@ window._drawQRCanvas = function(container, text, size){
   }
   var _photoSuppressUntil={}; /* 에코 방지 */
   function _setPhoto(partNo, base64){
-    /* localStorage 저장 */
+    /* ★ 인메모리 캐시는 항상 저장 — 이번 세션에서는 용량과 무관하게 즉시 반영 */
+    _memCache[partNo] = base64;
+    /* localStorage 저장 (best-effort 캐시일 뿐, 실패해도 Firebase 저장은 계속 진행) */
     var lsSaved=true;
     try{ localStorage.setItem(LS_PREFIX+partNo, base64); }catch(e){
       lsSaved=false;
-      console.warn('[파트사진] localStorage 저장 실패 (용량 부족)');
+      console.warn('[파트사진] localStorage 저장 실패 (용량 부족) — Firebase로는 계속 저장 시도');
     }
-    if(!lsSaved) return false; /* localStorage 실패 시 Firebase도 저장 안 함 */
-    /* ★ Firebase 동기화 */
+    /* ★ Firebase 동기화 — localStorage 성공 여부와 무관하게 항상 시도 (실제 저장소는 Firebase) */
+    var fbAttempted=false;
     try{
       var ref=_fbPhotoRef(partNo);
       if(ref){
+        fbAttempted=true;
         _photoSuppressUntil[partNo]=Date.now()+5000; /* ★ 5초로 연장 — 대용량 이미지 업로드 시간 여유 */
-        ref.set(base64).catch(function(err){
+        ref.set(base64).then(function(){
+          if(!lsSaved){
+            try{ alert('✅ 사진은 저장되었습니다.\n(참고: 이 기기의 임시 저장공간이 부족해 새로고침 전까지만 빠르게 보이고, 그 후에는 Firebase에서 다시 불러옵니다.)'); }catch(ex){}
+          }
+        }).catch(function(err){
           console.warn('[파트사진] Firebase 저장 실패:', err && err.message);
-          try{ alert('⚠️ 다른 기기와의 동기화(Firebase) 저장에 실패했습니다.\n이 기기에는 저장되었지만 다른 기기에는 반영되지 않을 수 있습니다.\n(오류: '+(err&&err.message?err.message:'알 수 없음')+')'); }catch(ex){}
+          try{ alert('⚠️ 다른 기기와의 동기화(Firebase) 저장에 실패했습니다.\n(오류: '+(err&&err.message?err.message:'알 수 없음')+')'); }catch(ex){}
         });
       } else {
         console.warn('[파트사진] Firebase 미연결 상태 — 이 기기에만 저장됨');
         try{ alert('⚠️ 현재 다른 기기와 연동되지 않은 상태입니다.\n이 사진은 이 기기에만 저장되며, 새로고침하면 사라질 수 있습니다.\n네트워크/코드 연결 상태를 확인한 뒤 다시 등록해 주세요.'); }catch(ex){}
       }
     }catch(e){ console.warn('[파트사진] Firebase 오류',e); }
-    return true;
+    return fbAttempted || lsSaved;
   }
   function _clearPhoto(partNo){
+    delete _memCache[partNo];
     try{ localStorage.removeItem(LS_PREFIX+partNo); }catch(e){}
     /* ★ 캔버스 원본도 같이 삭제 */
     try{ localStorage.removeItem('pb_part_canvas_'+partNo); }catch(e){}
@@ -18324,8 +18475,10 @@ window._drawQRCanvas = function(container, text, size){
           if(_photoSuppressUntil[partNo]&&Date.now()<_photoSuppressUntil[partNo]) return;
           var photo=data[partNo];
           if(typeof photo==='string'&&photo.length>0){
+            _memCache[partNo]=photo;
             try{ localStorage.setItem(LS_PREFIX+partNo, photo); }catch(e){}
           } else {
+            delete _memCache[partNo];
             try{ localStorage.removeItem(LS_PREFIX+partNo); }catch(e){}
           }
         });
@@ -18336,7 +18489,7 @@ window._drawQRCanvas = function(container, text, size){
             if(_photoSuppressUntil[pNo]&&Date.now()<_photoSuppressUntil[pNo]) return;
             var prev=document.getElementById('ppsPreview'+pNo);
             if(prev){
-              var newPhoto=localStorage.getItem(LS_PREFIX+pNo)||'';
+              var newPhoto=_getPhoto(pNo);
               if(newPhoto){ prev.src=newPhoto; prev.classList.add('show'); }
               else { prev.src=''; prev.classList.remove('show'); }
             }
@@ -18360,6 +18513,7 @@ window._drawQRCanvas = function(container, text, size){
   window._syncPartPhotoToFirebase = function(partNo, base64){
     _setPhoto(partNo, base64);
   };
+  window._getPartPhotoCache = function(partNo){ return _getPhoto(partNo); };
 
   /* 설정 모달 열기 */
   window._openPartPhotoSetting = function(){
@@ -18416,11 +18570,7 @@ window._drawQRCanvas = function(container, text, size){
                   cx.fillStyle = '#fff'; cx.fillRect(0,0,w,h);
                   cx.drawImage(img,0,0,w,h);
                   var base64 = cnv.toDataURL('image/jpeg', 0.85);
-                  var ok = _setPhoto(partNo, base64);
-                  if(!ok){
-                    alert('⚠️ 저장 공간이 부족하여 사진을 저장하지 못했습니다.\n다른 사진으로 시도하거나 기존 파트사진을 정리해 주세요.');
-                    return;
-                  }
+                  _setPhoto(partNo, base64); /* 저장 상황별 알림은 _setPhoto 내부에서 처리 */
                   var prev = document.getElementById('ppsPreview'+partNo);
                   if(prev){ prev.src=base64; prev.classList.add('show'); }
                   /* 삭제 버튼 추가 */
@@ -18437,7 +18587,12 @@ window._drawQRCanvas = function(container, text, size){
                 }
               };
               img.onerror = function(){
-                alert('이미지를 불러올 수 없습니다. 다른 사진으로 시도해 주세요.');
+                var isHeic = /heic|heif/i.test(file.type||'') || /\.hei[cf]$/i.test(file.name||'');
+                if(isHeic){
+                  alert('⚠️ 이 사진은 아이폰 HEIC 형식이라 이 브라우저에서 열 수 없습니다.\n갤러리(사진) 앱에서 "JPG로 저장" 또는 "다른 이름으로 저장(호환성 우선)" 후 다시 시도해 주세요.');
+                } else {
+                  alert('이미지를 불러올 수 없습니다. 다른 사진으로 시도해 주세요.');
+                }
               };
               img.src = ev.target.result;
             };
