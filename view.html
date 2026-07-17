@@ -442,19 +442,33 @@ function sharePage(){
   var _carDocs = null;   /* { docId: {name,type,data,size,at} } */
   /* ★★ QR 스캔 기록 — 딜러가 실제로 약도를 열었는지 키불출앱 이력에 표시하기 위함.
      차량번호 키로 "마지막 조회 시각"만 기록 (값 1개라 통신·요금 부담 사실상 없음) */
+  /* ★ 화면 진단 표시 (임시) */
+  function _dbgScan(msg){
+    try{
+      var d=document.getElementById('scanDbg');
+      if(!d){
+        d=document.createElement('div'); d.id='scanDbg';
+        d.style.cssText='position:fixed;right:6px;bottom:6px;z-index:99999;background:rgba(2,6,23,.92);color:#7DD3FC;font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;max-width:70vw;line-height:1.4;border:1px solid #38BDF8;';
+        document.body.appendChild(d);
+      }
+      d.textContent='🔎 '+msg;
+    }catch(e){}
+  }
   function _logScan(carNo){
     try{
-      if(!carNo || !fdb || !code) return;
+      if(!carNo){ _dbgScan('❌ 차량번호 없음 (서류·스캔 불가)'); return; }
+      if(!fdb){ _dbgScan('❌ DB 미연결'); return; }
+      if(!code){ _dbgScan('❌ 공유코드 없음'); return; }
       var k = _docKeyFromCar(carNo);
       if(!k) return;
       var sKey = 'view_scan_'+code+'_'+k;
       if(sessionStorage.getItem(sKey)) return; /* 같은 세션 중복 기록 방지 */
       sessionStorage.setItem(sKey,'1');
       var _p = 'kd_rooms/'+code+'/scan_log/'+k;
-      console.log('[SCAN] 기록 시도 →', _p);
+      _dbgScan('기록 시도 car='+carNo);
       fdb.ref(_p).set({ at: Date.now() })
-        .then(function(){ console.log('[SCAN] ✅ 기록 성공'); })
-        .catch(function(err){ console.warn('[SCAN] ❌ 기록 실패:', err && err.message); sessionStorage.removeItem(sKey); });
+        .then(function(){ _dbgScan('✅ 기록성공 car='+carNo); })
+        .catch(function(err){ _dbgScan('❌ 실패: '+(err&&err.message||'')); sessionStorage.removeItem(sKey); });
     }catch(e){}
   }
   function _docKeyFromCar(car){
@@ -1086,7 +1100,7 @@ function sharePage(){
         applyPromo(d.pt); /* ★ 제휴점 정보 */
         renderHeader();
       }
-      if(car){ startLiveTracking(car); _logScan(car); } /* ★ 실시간 반영 시작 + 스캔기록 */
+      if(car){ startLiveTracking(car); _logScan(car); } else { _logScan(''); } /* ★ 실시간 반영 + 스캔기록 */
       _lastPartLoaded = part;
       if(part){ loadPart(); }
       else { showStatus('⚠️ 링크 정보가 만료되었거나 없습니다.'); }
@@ -1105,6 +1119,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v5</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v6</div>
 </body>
 </html>
