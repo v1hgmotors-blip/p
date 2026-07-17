@@ -1215,6 +1215,7 @@ function sharePage(){
         applyBiz(d.bz); /* ★ 업체명 */
         applyBizInfo(d.bi); /* ★ 업체정보 */
         applyPromo(d.pt); /* ★ 제휴점 정보 */
+        try{ if(!eid && d.eid) eid = String(d.eid); }catch(e){} /* ★ 단축링크 payload의 eid도 인정 */
         renderHeader();
       }
       if(car){ startLiveTracking(car); _checkAuthThenLog(car); } else { _logScan(''); } /* ★ 실시간 반영 + 본인확인/기록 */
@@ -1236,6 +1237,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v12</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v13</div>
 </body>
 </html>
