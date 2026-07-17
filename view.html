@@ -450,7 +450,11 @@ function sharePage(){
       var sKey = 'view_scan_'+code+'_'+k;
       if(sessionStorage.getItem(sKey)) return; /* 같은 세션 중복 기록 방지 */
       sessionStorage.setItem(sKey,'1');
-      fdb.ref('kd_rooms/'+code+'/scan_log/'+k).set({ at: Date.now() }).catch(function(){});
+      var _p = 'kd_rooms/'+code+'/scan_log/'+k;
+      console.log('[SCAN] 기록 시도 →', _p);
+      fdb.ref(_p).set({ at: Date.now() })
+        .then(function(){ console.log('[SCAN] ✅ 기록 성공'); })
+        .catch(function(err){ console.warn('[SCAN] ❌ 기록 실패:', err && err.message); sessionStorage.removeItem(sKey); });
     }catch(e){}
   }
   function _docKeyFromCar(car){
@@ -1101,6 +1105,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v4</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v5</div>
 </body>
 </html>
