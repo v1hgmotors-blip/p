@@ -454,7 +454,7 @@ function sharePage(){
       }
       /* ★ 이전 메시지가 덮이지 않게 최근 3줄 유지 */
       var lines = (d.dataset.lines ? d.dataset.lines.split('|') : []);
-      lines.push(msg); if(lines.length>3) lines = lines.slice(-3);
+      lines.push(msg); if(lines.length>4) lines = lines.slice(-4);
       d.dataset.lines = lines.join('|');
       d.innerHTML = lines.map(function(x){ return '🔎 '+String(x).replace(/[<>]/g,''); }).join('<br>');
     }catch(e){}
@@ -508,6 +508,7 @@ function sharePage(){
   /* 인증 필요 여부 판단 → 필요하면 잠금 표시, 아니면 바로 기록 */
   function _checkAuthThenLog(carNo){
     try{
+      _dbgScan('URL파라미터: '+String(location.search||'(없음)').slice(0,90));
       if(!eid){ _dbgScan('인증생략: 링크에 eid 없음(옛 링크)'); _logScan(carNo); return; }
       if(!fdb || !code){ _dbgScan('인증생략: DB/코드 없음'); _logScan(carNo); return; }
       if(sessionStorage.getItem('view_auth_'+eid)==='1'){ _authUnlocked=true; _dbgScan('인증생략: 이미 인증된 기기'); _logScan(carNo); return; }
@@ -1237,6 +1238,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v13</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v14</div>
 </body>
 </html>
