@@ -497,31 +497,65 @@ function sharePage(){
       }).catch(function(){ _docDataLoaded = true; cb(); });
     }catch(e){ _docDataLoaded = true; cb(); }
   }
-  function loadCarDocs(car){
-    var key = _docKeyFromCar(car);
+  /* ★★ FIX: 현황판 QR은 슬롯의 차량번호(예:123가6678), 키불출앱 QR은 입력값(예:6678)을 보낸다.
+     서류는 차량번호 키로 저장되므로 정확히 안 맞으면 못 찾음 → 뒤 4자리로도 찾는 폴백 추가 */
+  function _findDocKeyByLast4(car, cb){
+    try{
+      var digits = String(car||'').replace(/[^0-9]/g,'');
+      if(digits.length < 4){ cb(''); return; }
+      var last4 = digits.slice(-4);
+      var base = String(db||'').replace(/\/+$/,'');
+      fetch(base + '/kd_rooms/' + encodeURIComponent(code) + '/kd_docs.json?shallow=true')
+        .then(function(r){ return r.json(); })
+        .then(function(keys){
+          if(!keys || typeof keys!=='object'){ cb(''); return; }
+          var found = '';
+          Object.keys(keys).forEach(function(k){
+            var kd = String(k).replace(/[^0-9]/g,'');
+            if(kd.length >= 4 && kd.slice(-4) === last4) found = k;
+          });
+          cb(found);
+        }).catch(function(){ cb(''); });
+    }catch(e){ cb(''); }
+  }
+  function _renderDocBox(v, car){
+    var box = document.getElementById('docBox');
+    if(box) box.style.display = 'block'; /* 서류 없어도 영역 표시 */
+    var cn = document.getElementById('docCarNo');
+    if(cn && car) cn.textContent = '차량번호:' + car;
+    if(v && typeof v==='object' && Object.keys(v).length){
+      _carDocs = v;
+      var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
+      var none=document.getElementById('docNoneMsg'); if(none) none.style.display='none';
+      try{
+        var _dl=row&&row.querySelector('button[onclick*="download"]'); if(_dl) _dl.style.display='';
+        var _sh=row&&row.querySelector('button[onclick*="share"]'); if(_sh) _sh.style.display='';
+      }catch(e){}
+    } else {
+      var row2=document.getElementById('docBtnRow');
+      if(row2){
+        var dl=row2.querySelector('button[onclick*="download"]'); if(dl) dl.style.display='none';
+        var sh=row2.querySelector('button[onclick*="share"]'); if(sh) sh.style.display='none';
+      }
+      var none2=document.getElementById('docNoneMsg'); if(none2) none2.style.display='block';
+    }
+  }
+  function loadCarDocs(car, _retryKey){
+    var key = _retryKey || _docKeyFromCar(car);
     if(!key) return;
     _docKeyCur = key; _docDataLoaded = false;
     try{
       fdb.ref('kd_rooms/'+code+'/kd_docs/'+key).once('value').then(function(snap){
         var v = snap.val();
-        var box = document.getElementById('docBox');
-        if(box) box.style.display = 'block'; /* ★ 서류 없어도 영역 표시 */
-        var cn = document.getElementById('docCarNo');
-        if(cn && car) cn.textContent = '차량번호:' + car;
-        if(v && typeof v==='object' && Object.keys(v).length){
-          /* 서류 있음 → 버튼 표시 */
-          _carDocs = v;
-          var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
-          var none=document.getElementById('docNoneMsg'); if(none) none.style.display='none';
-        } else {
-          /* 서류 없음 → 안내 문구, 다운로드/공유 버튼 숨김 (판매확인서 버튼은 별도 유지) */
-          var row=document.getElementById('docBtnRow');
-          if(row){
-            var dl=row.querySelector('button[onclick*="download"]'); if(dl) dl.style.display='none';
-            var sh=row.querySelector('button[onclick*="share"]'); if(sh) sh.style.display='none';
-          }
-          var none=document.getElementById('docNoneMsg'); if(none) none.style.display='block';
+        /* ★ 정확 키로 못 찾으면 뒤 4자리로 재시도 (1회) */
+        if((!v || !Object.keys(v).length) && !_retryKey){
+          _findDocKeyByLast4(car, function(altKey){
+            if(altKey && altKey !== key){ loadCarDocs(car, altKey); }
+            else { _renderDocBox(null, car); }
+          });
+          return;
         }
+        _renderDocBox(v, car);
       }).catch(function(){});
     }catch(e){}
     /* ★ 공통서류(판매확인서) 로드 — 있으면 「판매확인서 다운」 버튼 표시 */
@@ -1119,6 +1153,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v6</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v7</div>
 </body>
 </html>
