@@ -443,22 +443,7 @@ function sharePage(){
   var _carDocs = null;   /* { docId: {name,type,data,size,at} } */
   /* ★★ QR 스캔 기록 — 딜러가 실제로 약도를 열었는지 키불출앱 이력에 표시하기 위함.
      차량번호 키로 "마지막 조회 시각"만 기록 (값 1개라 통신·요금 부담 사실상 없음) */
-  /* ★ 화면 진단 표시 (임시) */
-  function _dbgScan(msg){
-    try{
-      var d=document.getElementById('scanDbg');
-      if(!d){
-        d=document.createElement('div'); d.id='scanDbg';
-        d.style.cssText='position:fixed;right:6px;bottom:6px;z-index:99999;background:rgba(2,6,23,.92);color:#7DD3FC;font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;max-width:70vw;line-height:1.4;border:1px solid #38BDF8;';
-        document.body.appendChild(d);
-      }
-      /* ★ 이전 메시지가 덮이지 않게 최근 3줄 유지 */
-      var lines = (d.dataset.lines ? d.dataset.lines.split('|') : []);
-      lines.push(msg); if(lines.length>4) lines = lines.slice(-4);
-      d.dataset.lines = lines.join('|');
-      d.innerHTML = lines.map(function(x){ return '🔎 '+String(x).replace(/[<>]/g,''); }).join('<br>');
-    }catch(e){}
-  }
+  function _dbgScan(){}   /* 진단 표시 제거됨 */
 
   /* ★★ 약도 본인확인 — 딜러 전화 뒤 4자리 입력해야 열람 (현황판 설정 ON일 때만)
      · 뒤4자리는 URL에 없음 → Firebase에서 eid로 조회 (유출 방지)
@@ -1262,6 +1247,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v16</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v17</div>
 </body>
 </html>
