@@ -452,7 +452,11 @@ function sharePage(){
         d.style.cssText='position:fixed;right:6px;bottom:6px;z-index:99999;background:rgba(2,6,23,.92);color:#7DD3FC;font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;max-width:70vw;line-height:1.4;border:1px solid #38BDF8;';
         document.body.appendChild(d);
       }
-      d.textContent='🔎 '+msg;
+      /* ★ 이전 메시지가 덮이지 않게 최근 3줄 유지 */
+      var lines = (d.dataset.lines ? d.dataset.lines.split('|') : []);
+      lines.push(msg); if(lines.length>3) lines = lines.slice(-3);
+      d.dataset.lines = lines.join('|');
+      d.innerHTML = lines.map(function(x){ return '🔎 '+String(x).replace(/[<>]/g,''); }).join('<br>');
     }catch(e){}
   }
 
@@ -1232,6 +1236,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v11</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v12</div>
 </body>
 </html>
