@@ -504,13 +504,15 @@ function sharePage(){
   /* 인증 필요 여부 판단 → 필요하면 잠금 표시, 아니면 바로 기록 */
   function _checkAuthThenLog(carNo){
     try{
-      if(!eid || !fdb || !code){ _logScan(carNo); return; }
-      if(sessionStorage.getItem('view_auth_'+eid)==='1'){ _authUnlocked=true; _logScan(carNo); return; }
+      if(!eid){ _dbgScan('인증생략: 링크에 eid 없음(옛 링크)'); _logScan(carNo); return; }
+      if(!fdb || !code){ _dbgScan('인증생략: DB/코드 없음'); _logScan(carNo); return; }
+      if(sessionStorage.getItem('view_auth_'+eid)==='1'){ _authUnlocked=true; _dbgScan('인증생략: 이미 인증된 기기'); _logScan(carNo); return; }
       Promise.all([
         fdb.ref('kd_rooms/'+code+'/pb_settings/viewAuth').once('value').then(function(s){return s.val();}).catch(function(){return null;}),
         fdb.ref('kd_rooms/'+code+'/dispatch_auth/'+eid+'/ph4').once('value').then(function(s){return s.val();}).catch(function(){return null;})
       ]).then(function(r){
         var need = (String(r[0])==='1'), ph4 = r[1];
+        _dbgScan('eid='+eid+' / 설정viewAuth='+r[0]+' / ph4='+(ph4?'있음':'없음'));
         if(need && ph4 && String(ph4).length===4){ _showAuthLock(String(ph4)); }
         else { _logScan(carNo); }   /* 설정 꺼짐 또는 번호 없음 → 바로 열람 */
       }).catch(function(){ _logScan(carNo); });
@@ -1230,6 +1232,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v10</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v11</div>
 </body>
 </html>
