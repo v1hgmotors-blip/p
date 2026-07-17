@@ -8871,7 +8871,13 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
     /* ★ 본인확인용 뒤4자리 저장 (URL에 노출 안 됨 — view가 eid로 조회) */
     try{
       var _p4 = String(dealerPhone||'').replace(/[^0-9]/g,'').slice(-4);
-      if(_p4.length===4 && fbDb && code){ fbDb.ref('kd_rooms/'+code+'/dispatch_auth/'+id).set({ ph4:_p4 }); }
+      if(_p4.length===4 && fbDb && code){
+        fbDb.ref('kd_rooms/'+code+'/dispatch_auth/'+id).set({ ph4:_p4 });
+        /* ★★ 차량번호(뒤4자리) 기준으로도 저장 — 알림톡/문자 링크엔 eid가 없으므로
+           view가 차량번호만으로 본인확인 정보를 찾을 수 있게 함 */
+        var _c4 = String(carNo||'').replace(/[^0-9]/g,'').slice(-4);
+        if(_c4.length===4){ fbDb.ref('kd_rooms/'+code+'/dispatch_auth_car/'+_c4).set({ ph4:_p4, eid:id, at:id }); }
+      }
     }catch(e){}
     var committedId = id; /* ★ transaction 커밋 시 실제 사용된 id로 갱신됨 */
     var entry = { id:id, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx,
@@ -20780,7 +20786,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결v7</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결v8</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
