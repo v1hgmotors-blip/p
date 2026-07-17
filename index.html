@@ -15433,6 +15433,7 @@ function _initPcScrollLimiter2(){
       <button id="partPhotoPopupShare" onclick="_sharePartPhoto()" style="display:none;flex:1;min-width:80px;padding:8px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖼️ 약도공유</button>
       <button id="partPhotoPopupPrint" onclick="_printPartPhoto()" style="flex:1;min-width:80px;padding:8px;background:#1E3A5F;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🖨️ 인쇄</button>
       <button id="partPhotoPopupDownload" onclick="_downloadPartPhoto()" style="flex:1;min-width:80px;padding:8px;background:#065F46;color:#FEE500;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 다운로드</button>
+      <button id="pbCopyLinkBtn" onclick="_copyPbRouteLink()" style="flex:1;min-width:80px;padding:8px;background:#0369A1;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">🔗 링크복사</button>
       <button id="partPhotoPopupClose" onclick="_closePartPhotoPopup()" style="flex:1;min-width:80px;padding:8px;background:#334155;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">닫기</button>
     </div>
   </div>
@@ -18310,7 +18311,32 @@ window._drawQRCanvas = function(container, text, size){
   var _memCache = {}; /* ★ 인메모리 캐시 — localStorage 용량초과와 무관하게 항상 표시/동기화 가능 */
   var _popupTimer = null;
   var _popupPhone = '';   /* ★ 키불출앱에서 들어온 딜러 전화번호 */
-  var _popupQrUrl = '';   /* ★ 현재 팝업의 QR 링크 (수동 약도전송 합성용) */
+  var _popupQrUrl = '';
+  /* ★ 약도 링크 복사 */
+  window._copyPbRouteLink = function(){
+    var url = _popupQrUrl || '';
+    if(!url){ alert('복사할 약도 링크가 아직 없습니다.\n(Firebase 연결 후 다시 시도해 주세요)'); return; }
+    var btn = document.getElementById('pbCopyLinkBtn');
+    function done(ok){
+      if(!btn) return;
+      btn.textContent = ok ? '✅ 복사됨!' : '⚠️ 실패';
+      btn.style.background = ok ? '#166534' : '#B45309';
+      setTimeout(function(){ btn.textContent='🔗 링크복사'; btn.style.background='#0369A1'; }, 2200);
+    }
+    function fb(){
+      try{
+        var ta=document.createElement('textarea');
+        ta.value=url; ta.style.cssText='position:fixed;left:-9999px;top:0;';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        var ok=document.execCommand('copy'); ta.remove(); done(!!ok);
+      }catch(e){ done(false); }
+    }
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(function(){ done(true); }).catch(fb);
+      } else fb();
+    }catch(e){ fb(); }
+  };   /* ★ 현재 팝업의 QR 링크 (수동 약도전송 합성용) */
   var _pbSavedHref = null; /* ★ 약도 팝업 열릴 때 원래 주소 저장 (삼성 '출처로 이동' 대응) */
   /* ★ 010-1234-5678 형태로 표시 */
   function _fmtPhone(p){
@@ -20712,7 +20738,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결v2</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결v3</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
