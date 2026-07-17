@@ -509,11 +509,23 @@ function sharePage(){
      · eid 있으면(QR) → dispatch_auth/{eid}
      · eid 없으면(알림톡·문자 링크) → 차량번호 뒤4자리로 dispatch_auth_car/{last4} 조회
        → 그 차의 최근 불출건 전화번호로 본인확인 + eid도 함께 받아 건별 집계 */
+  /* ★★ 잠금 판정 전 내용 노출 방지 — 먼저 가려놓고, 인증 불필요로 확인되면 걷어냄 */
+  function _showPreVeil(){
+    if(document.getElementById('preVeil')) return;
+    var v=document.createElement('div');
+    v.id='preVeil';
+    v.style.cssText='position:fixed;inset:0;z-index:99998;background:#0F172A;display:flex;align-items:center;justify-content:center;';
+    v.innerHTML='<div style="text-align:center;color:#94A3B8;font-size:13px;font-weight:800;">'
+      +'<div style="font-size:34px;margin-bottom:8px;">🔐</div>확인 중...</div>';
+    document.body.appendChild(v);
+  }
+  function _hidePreVeil(){ try{ var v=document.getElementById('preVeil'); if(v) v.remove(); }catch(e){} }
   function _last4Digits(v){ var d=String(v||'').replace(/[^0-9]/g,''); return d.length>=4 ? d.slice(-4) : ''; }
   function _checkAuthThenLog(carNo){
     try{
       _dbgScan('URL파라미터: '+String(location.search||'(없음)').slice(0,90));
-      if(!fdb || !code){ _dbgScan('인증생략: DB/코드 없음'); _logScan(carNo); return; }
+      _showPreVeil();   /* ★ 판정 끝날 때까지 가림 */
+      if(!fdb || !code){ _hidePreVeil(); _dbgScan('인증생략: DB/코드 없음'); _logScan(carNo); return; }
       var c4 = _last4Digits(carNo);
       var pA = fdb.ref('kd_rooms/'+code+'/pb_settings/viewAuth').once('value').then(function(s){return s.val();}).catch(function(){return null;});
       var pB = eid ? fdb.ref('kd_rooms/'+code+'/dispatch_auth/'+eid).once('value').then(function(s){return s.val();}).catch(function(){return null;})
@@ -529,11 +541,11 @@ function sharePage(){
         }
         var sKey = 'view_auth_' + (eid || ('car'+c4));
         _dbgScan('eid='+(eid||'없음')+' / 설정='+r[0]+' / ph4='+(ph4?'있음':'없음'));
-        if(sessionStorage.getItem(sKey)==='1'){ _authUnlocked=true; _dbgScan('인증생략: 이미 인증된 기기'); _logScan(carNo); return; }
-        if(need && ph4 && String(ph4).length===4){ _showAuthLock(String(ph4)); }
-        else { _logScan(carNo); }
-      }).catch(function(){ _logScan(carNo); });
-    }catch(e){ _logScan(carNo); }
+        if(sessionStorage.getItem(sKey)==='1'){ _authUnlocked=true; _hidePreVeil(); _dbgScan('인증생략: 이미 인증된 기기'); _logScan(carNo); return; }
+        if(need && ph4 && String(ph4).length===4){ _showAuthLock(String(ph4)); _hidePreVeil(); }
+        else { _hidePreVeil(); _logScan(carNo); }
+      }).catch(function(){ _hidePreVeil(); _logScan(carNo); });
+    }catch(e){ _hidePreVeil(); _logScan(carNo); }
   }
   function _logScan(carNo){
     try{
@@ -1250,6 +1262,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v15</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v16</div>
 </body>
 </html>
