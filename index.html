@@ -392,6 +392,30 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   content:'✎'; writing-mode:horizontal-tb; opacity:.55; font-size:13px;
 }
 
+/* ★★ 열 사이 "실제 간격" — 별도의 스페이서 트랙으로 벌린다.
+   → 모든 실제 열은 동일 폭(1fr)을 유지하므로 열 헤더/슬롯 크기가 일정하고,
+     간격은 두 열 정중앙에 위치한다. mm=0이면 트랙 자체가 없어 완전히 사라진다. */
+.col-gap-spacer{
+  align-self:stretch;
+  display:flex; align-items:center; justify-content:center;
+  writing-mode:vertical-rl; text-orientation:upright;
+  font-size:12px; font-weight:800; color:#FACC15;
+  letter-spacing:1px; line-height:1.2;
+  cursor:pointer; overflow:hidden; user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  border-radius:4px; min-width:0; box-sizing:border-box;
+  background:rgba(250,204,21,.10);
+}
+.col-gap-spacer:active{ filter:brightness(1.15); }
+.col-gap-spacer.empty::after{
+  content:'✎'; writing-mode:horizontal-tb; opacity:.5; font-size:12px;
+}
+.col-hgap-spacer{
+  align-self:stretch; min-width:0; border-radius:4px;
+  pointer-events:none; box-sizing:border-box;
+  background:rgba(250,204,21,.10);
+}
+
 
 /* ★ PC 열 스크롤 화살표 버튼 */
 @media(min-width:601px){
@@ -4804,31 +4828,120 @@ function _layoutColGapOverlay(part, col, g){
     ov.style.width = Math.round(effPx) + 'px';
   }catch(e){}
 }
-function _applyAllColGaps(){
-  /* 먼저 모든 열의 간격 여백을 초기화 */
-  document.querySelectorAll('.col-hc[data-col], .slot[data-col]').forEach(function(el){
-    el.style.marginRight = '';
-  });
-  var o = getColGaps();
-  var activeKeys = {};
+var _PX_PER_MM = 3.7795275591;
+/* 특정 파트의 간격(px) 합계 — 접힘(가로 스크롤) 상태의 폭 계산 보정용 */
+function _partGapPxSum(part){
+  var o = getColGaps(); var sum = 0;
   Object.keys(o).forEach(function(key){
-    var g = _normColGap(o[key]); if(!g) return;  /* ★ mm=0이어도 g가 존재하면 계속 처리 */
-    var m = key.match(/^p(\d+)c(\d+)$/); if(!m) return;
-    var part = m[1], col = m[2];
-    activeKeys[key] = true;
+    var m = key.match(/^p(\d+)c(\d+)$/); if(!m || m[1] !== String(part)) return;
+    var g = _normColGap(o[key]); if(!g) return;
     var effMm = _colGapEffMm(g.mm);
-    /* mm=0이면 여백 없이, mm>0이면 여백 적용 */
-    if(effMm > 0){
-      document.querySelectorAll('.col-hc[data-part="'+part+'"][data-col="'+col+'"], .slot[data-part="'+part+'"][data-col="'+col+'"]')
-        .forEach(function(el){ el.style.marginRight = effMm+'mm'; });
-      _layoutColGapOverlay(part, col, g);
+    if(effMm > 0) sum += effMm * _PX_PER_MM;
+  });
+  return sum;
+}
+/* 파트별 간격 정보 → { col : {effPx, g} } (mm>0만) */
+function _buildPartGapMap(part){
+  var o = getColGaps(); var map = {};
+  Object.keys(o).forEach(function(key){
+    var m = key.match(/^p(\d+)c(\d+)$/); if(!m || m[1] !== String(part)) return;
+    var g = _normColGap(o[key]); if(!g) return;
+    var effMm = _colGapEffMm(g.mm);
+    if(effMm > 0) map[parseInt(m[2])] = { effPx: Math.max(1, Math.round(effMm * _PX_PER_MM)), g: g };
+  });
+  return map;
+}
+/* 파트의 grid-template-columns 문자열 생성:
+   실제 열은 모두 minmax(0,1fr)로 동일 폭, 간격이 있는 열 뒤에 고정폭 스페이서 트랙 삽입.
+   그리드 전체 폭은 100%로 유지되므로 1fr 열들이 균등하게 조금씩 줄어들 뿐,
+   서로 다른 크기가 되지 않는다. */
+function _colTemplateFor(part, pcCols){
+  var map = _buildPartGapMap(part);
+  var tracks = []; var gapTracks = []; var idx = 0;
+  for(var c=1; c<=pcCols; c++){
+    tracks.push('minmax(0,1fr)'); idx++;
+    if(map[c]){
+      tracks.push(map[c].effPx + 'px'); idx++;
+      gapTracks.push({ col:c, trackIndex:idx, effPx:map[c].effPx, g:map[c].g });
     }
+  }
+  return { template: tracks.join(' '), gapTracks: gapTracks, hasGap: gapTracks.length > 0 };
+}
+
+function _applyAllColGaps(){
+  /* 구버전(여백 방식)에서 남았을 수 있는 marginLeft/Right 및 절대배치 오버레이 정리 */
+  document.querySelectorAll('.col-hc[data-col], .slot[data-col]').forEach(function(el){
+    if(el.style.marginRight) el.style.marginRight = '';
+    if(el.style.marginLeft)  el.style.marginLeft  = '';
   });
-  /* 더 이상 유효하지 않은 오버레이 제거 */
-  document.querySelectorAll('.col-gap-ov').forEach(function(el){
-    var m = el.id.match(/^gapOv_p(\d+)c(\d+)$/); if(!m) return;
-    if(!activeKeys['p'+m[1]+'c'+m[2]]) el.remove();
-  });
+  document.querySelectorAll('.col-gap-ov').forEach(function(el){ el.remove(); });
+
+  var np = (typeof NUM_PARTS === 'number') ? NUM_PARTS
+         : (Array.isArray(PART_COL_COUNTS) ? PART_COL_COUNTS.length : 0);
+
+  for(var p=1; p<=np; p++){
+    var pg = document.getElementById('parkingGrid'+p);
+    var ch = document.getElementById('colHeader'+p);
+    if(!pg && !ch) continue;
+    var pcCols = (PART_COL_COUNTS && PART_COL_COUNTS[p-1]) || COLS_PER_PART;
+    var info = _colTemplateFor(p, pcCols);
+
+    if(!info.hasGap){
+      /* 이 파트의 스페이서 제거 — 템플릿은 fitLayout이 설정한 repeat(pc,1fr) 그대로 둔다 */
+      Array.prototype.slice.call(
+        document.querySelectorAll('.col-gap-spacer[data-part="'+p+'"], .col-hgap-spacer[data-part="'+p+'"]')
+      ).forEach(function(el){ el.remove(); });
+      continue;
+    }
+
+    if(pg) pg.style.gridTemplateColumns = info.template;
+    if(ch) ch.style.gridTemplateColumns = info.template;
+
+    var activeCols = {};
+    info.gapTracks.forEach(function(gt){
+      activeCols[gt.col] = true;
+      /* 슬롯 영역 스페이서 — 세로텍스트 표시 + 탭하면 편집 */
+      if(pg){
+        var sid = 'gapSp_p'+p+'c'+gt.col;
+        var sp = document.getElementById(sid);
+        if(!sp || sp.parentNode !== pg){
+          if(sp) sp.remove();
+          sp = document.createElement('div');
+          sp.id = sid; sp.className = 'col-gap-spacer';
+          sp.dataset.part = p; sp.dataset.col = gt.col;
+          (function(pp, cc){ sp.onclick = function(){ _openColGapEditor(pp, cc); }; })(p, gt.col);
+          pg.appendChild(sp);
+        }
+        sp.style.gridColumn = gt.trackIndex + ' / ' + (gt.trackIndex + 1);
+        sp.style.gridRow = '1 / -1';
+        sp.textContent = gt.g.text || '';
+        sp.classList.toggle('empty', !gt.g.text);
+        sp.style.background = gt.g.color || '';
+        sp.style.color = gt.g.textColor || '';
+        sp.style.fontSize = (gt.g.fontSize || 12) + 'px';
+      }
+      /* 열 헤더 영역 스페이서 — 색 막대만 (헤더와 슬롯 트랙 구조 일치 → 정렬 유지) */
+      if(ch){
+        var hid = 'hgapSp_p'+p+'c'+gt.col;
+        var hp = document.getElementById(hid);
+        if(!hp || hp.parentNode !== ch){
+          if(hp) hp.remove();
+          hp = document.createElement('div');
+          hp.id = hid; hp.className = 'col-hgap-spacer';
+          hp.dataset.part = p; hp.dataset.col = gt.col;
+          ch.appendChild(hp);
+        }
+        hp.style.gridColumn = gt.trackIndex + ' / ' + (gt.trackIndex + 1);
+        hp.style.gridRow = '1';
+        hp.style.background = gt.g.color || '';
+      }
+    });
+
+    /* 더 이상 유효하지 않은 스페이서 제거 */
+    Array.prototype.slice.call(
+      document.querySelectorAll('.col-gap-spacer[data-part="'+p+'"], .col-hgap-spacer[data-part="'+p+'"]')
+    ).forEach(function(el){ if(!activeCols[el.dataset.col]) el.remove(); });
+  }
   _ensureColGapResizeObservers();
 }
 window.addEventListener('resize', function(){ if(typeof _applyAllColGaps==='function') _applyAllColGaps(); });
@@ -4848,23 +4961,17 @@ function _ensureColGapResizeObservers(){
     var _t = null;
     _colGapRO = new ResizeObserver(function(){
       clearTimeout(_t);
-      _t = setTimeout(function(){ try{ _applyAllColGapsRaw(); }catch(e){} }, 60);
+      _t = setTimeout(function(){ try{ _applyAllColGapsRaw(); }catch(e){} }, 80);
     });
   }
   wraps.forEach(function(w){
     if(_colGapROTargets.indexOf(w) === -1){ _colGapRO.observe(w); _colGapROTargets.push(w); }
   });
 }
-/* _applyAllColGaps을 그대로 재호출하면 ResizeObserver 콜백 안에서 다시
-   marginRight를 바꿔 또 resize를 유발할 수 있어, 위치만 재계산하는 경량 버전 사용 */
+/* 스페이서 트랙은 그리드 흐름 안에 있어 자동 재배치되므로, 폭 변화 시엔
+   템플릿·스페이서만 다시 맞춰주면 된다. (그리드 폭은 100%라 되먹임 루프 없음) */
 function _applyAllColGapsRaw(){
-  var o = getColGaps();
-  Object.keys(o).forEach(function(key){
-    var g = _normColGap(o[key]); if(!g) return;  /* ★ mm=0이어도 처리 */
-    var m = key.match(/^p(\d+)c(\d+)$/); if(!m) return;
-    /* mm>0일 때만 오버레이 배치 (mm=0이면 표시 안 함) */
-    if(g.mm > 0) _layoutColGapOverlay(m[1], m[2], g);
-  });
+  try{ _applyAllColGaps(); }catch(e){}
 }
 
 
@@ -6371,9 +6478,13 @@ function _applyColFoldLayout(p){
     ch.querySelectorAll('.col-hc').forEach(function(hc){ hc.style.display=''; });
   }
 
+  /* ★ 열 간격(스페이서 트랙) 재적용 — 템플릿이 repeat(pc,1fr)로 되돌려졌으므로 */
+  try{ if(typeof _applyAllColGaps === 'function') _applyAllColGaps(); }catch(e){}
+
   /* ③ 스크롤 래퍼 뷰포트 (레이아웃 확정 후 픽셀 계산) */
   requestAnimationFrame(function(){
     _applyColScrollViewport(p, totalCols, visCols);
+    try{ if(typeof _applyAllColGaps === 'function') _applyAllColGaps(); }catch(e){}
   });
 
   /* ④ 버튼 상태 갱신 */
@@ -6408,6 +6519,8 @@ function _applyColScrollViewport(p, totalCols, visCols){
     var _gap = 2; /* column-gap */
     var slotW_scroll = (wrapW - _gap * (visCols - 1)) / visCols;
     var totalW = Math.ceil(slotW_scroll * totalCols + _gap * (totalCols - 1));
+    /* ★ 열 간격(스페이서 트랙)이 있으면 그 폭만큼 전체 폭을 늘려 슬롯 폭 유지 */
+    try{ if(typeof _partGapPxSum === 'function') totalW += Math.round(_partGapPxSum(p)); }catch(e){}
 
     /* parking-grid, col-header-row, col-header, inner 동일 픽셀 너비 */
     if(pg)   { pg.style.width    = totalW+'px'; pg.style.minWidth    = totalW+'px'; }
@@ -6665,6 +6778,8 @@ function _applyAllColFolds(){
       _applyColScrollViewport(k, totalCols, visCols);
       _updateColFoldBtns(k);
     }
+    /* ★ 접힘 재계산으로 템플릿이 repeat(pc,1fr)로 되돌려졌으므로 열 간격(스페이서) 재적용 */
+    try{ if(typeof _applyAllColGaps === 'function') _applyAllColGaps(); }catch(e){}
   }
   /* 즉시 1회 + 레이아웃 확정 후 1회 더 (격자/PC 레이아웃 계산 보장) */
   _doApply();
@@ -21132,7 +21247,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-18 · 한결v17</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v18</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
