@@ -4239,7 +4239,9 @@ function _showColShiftMenu(part, col, anchorEl){
   m.id='colShiftMenu';
   m.style.cssText='position:fixed;z-index:99000;background:#1E293B;border:2px solid #FACC15;border-radius:12px;'
     +'padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);font-family:inherit;min-width:220px;';
-  var _curMm = (getColGap(part,col) || {mm:0}).mm;
+  var _gapData = getColGap(part, col);
+  var _curMm = (_gapData || {mm:0}).mm;
+  console.log('[메뉴열림] p'+part+'c'+col+' | getColGap 반환:', _gapData, '| _curMm:', _curMm);
   m.innerHTML =
      '<div style="text-align:center;color:#FACC15;font-weight:900;font-size:14px;margin-bottom:8px;">📍 '+_escHtml(name)+' 열</div>'
     +'<div style="display:flex;gap:8px;">'
@@ -4638,7 +4640,8 @@ function getColGaps(){ try{ return JSON.parse(localStorage.getItem(LS_COL_GAPS)|
 function _normColGap(v){
   if(!v) return null;
   if(v === true) return {mm:8, text:'', color:'', textColor:'', fontSize:12};   /* ★ 구버전(불리언) 값 호환 */
-  if(typeof v === 'object' && v.mm) return {
+  /* ★ FIX: v.mm이 0이어도 처리하려면 v.mm (falsy) 대신 v.mm !== undefined 사용 */
+  if(typeof v === 'object' && v.mm !== undefined) return {
     mm:Math.max(0,Math.min(COL_GAP_MAX_MM, parseInt(v.mm)||0)),
     text:String(v.text||''),
     color:String(v.color||''),
@@ -4647,23 +4650,25 @@ function _normColGap(v){
   };
   return null;
 }
-function getColGap(part, col){ return _normColGap(getColGaps()['p'+part+'c'+col]); }
+function getColGap(part, col){ 
+  var raw = getColGaps()['p'+part+'c'+col];
+  var normalized = _normColGap(raw);
+  console.log('[getColGap] p'+part+'c'+col+' | raw:', raw, '| normalized:', normalized);
+  return normalized;
+}
 function hasColGap(part, col){ var g=getColGap(part,col); return !!(g && g.mm>0); }
 function setColGapMm(part, col, mm){
   mm = Math.max(0, Math.min(COL_GAP_MAX_MM, Math.round(mm)));
   var o = getColGaps();
   var key = 'p'+part+'c'+col;
-  if(mm<=0){
-    delete o[key];
-  } else {
-    /* ★ FIX: 기존 텍스트·색상·글자크기를 그대로 보존 (예전엔 mm만 바꿔도 색상이 초기화되던 버그) */
-    var cur = _normColGap(o[key]) || {text:'', color:'', textColor:'', fontSize:12};
-    cur.mm = mm;
-    o[key] = cur;
-  }
+  /* ★ mm=0이어도 항상 데이터 보존 — 나중에 mm>0으로 올리면 색상/텍스트/글자크기 살아남 */
+  var cur = _normColGap(o[key]) || {text:'', color:'', textColor:'', fontSize:12};
+  cur.mm = mm;
+  o[key] = cur;
   localStorage.setItem(LS_COL_GAPS, JSON.stringify(o));
+  console.log('[Gap-MM] p'+part+'c'+col+' → '+mm+'mm | 저장됨:', cur, '| localStorage:', o);
   _applyAllColGaps();
-  if(typeof pushSettings==='function'){ var u={}; u['colGaps/'+key] = o[key] ? o[key] : null; pushSettings(u); }
+  if(typeof pushSettings==='function'){ var u={}; u['colGaps/'+key] = cur; pushSettings(u); }
 }
 function setColGapText(part, col, text){
   var o = getColGaps();
@@ -4807,14 +4812,17 @@ function _applyAllColGaps(){
   var o = getColGaps();
   var activeKeys = {};
   Object.keys(o).forEach(function(key){
-    var g = _normColGap(o[key]); if(!g || !g.mm) return;
+    var g = _normColGap(o[key]); if(!g) return;  /* ★ mm=0이어도 g가 존재하면 계속 처리 */
     var m = key.match(/^p(\d+)c(\d+)$/); if(!m) return;
     var part = m[1], col = m[2];
     activeKeys[key] = true;
     var effMm = _colGapEffMm(g.mm);
-    document.querySelectorAll('.col-hc[data-part="'+part+'"][data-col="'+col+'"], .slot[data-part="'+part+'"][data-col="'+col+'"]')
-      .forEach(function(el){ el.style.marginRight = effMm+'mm'; });
-    _layoutColGapOverlay(part, col, g);
+    /* mm=0이면 여백 없이, mm>0이면 여백 적용 */
+    if(effMm > 0){
+      document.querySelectorAll('.col-hc[data-part="'+part+'"][data-col="'+col+'"], .slot[data-part="'+part+'"][data-col="'+col+'"]')
+        .forEach(function(el){ el.style.marginRight = effMm+'mm'; });
+      _layoutColGapOverlay(part, col, g);
+    }
   });
   /* 더 이상 유효하지 않은 오버레이 제거 */
   document.querySelectorAll('.col-gap-ov').forEach(function(el){
@@ -4852,9 +4860,10 @@ function _ensureColGapResizeObservers(){
 function _applyAllColGapsRaw(){
   var o = getColGaps();
   Object.keys(o).forEach(function(key){
-    var g = _normColGap(o[key]); if(!g || !g.mm) return;
+    var g = _normColGap(o[key]); if(!g) return;  /* ★ mm=0이어도 처리 */
     var m = key.match(/^p(\d+)c(\d+)$/); if(!m) return;
-    _layoutColGapOverlay(m[1], m[2], g);
+    /* mm>0일 때만 오버레이 배치 (mm=0이면 표시 안 함) */
+    if(g.mm > 0) _layoutColGapOverlay(m[1], m[2], g);
   });
 }
 
@@ -21123,7 +21132,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-18 · 한결v14</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-18 · 한결v17</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
