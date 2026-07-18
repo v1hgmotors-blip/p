@@ -373,6 +373,24 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .col-scroll-inner .col-header{
   box-sizing:border-box;
 }
+/* ★★ 열 띄우기(간격) — 벌어진 공간에 세로 텍스트를 표시/입력하는 오버레이 */
+.col-gap-ov{
+  position:absolute;
+  top:0; bottom:0;
+  background:rgba(250,204,21,.08);
+  border-left:1px dashed rgba(250,204,21,.55);
+  border-right:1px dashed rgba(250,204,21,.55);
+  display:flex; align-items:center; justify-content:center;
+  writing-mode:vertical-rl; text-orientation:upright;
+  font-size:12px; font-weight:800; color:#FACC15;
+  letter-spacing:1px; line-height:1.25;
+  cursor:pointer; overflow:hidden; z-index:6; user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.col-gap-ov:active{ background:rgba(250,204,21,.22); }
+.col-gap-ov.empty::after{
+  content:'✎'; writing-mode:horizontal-tb; opacity:.55; font-size:13px;
+}
 
 
 /* ★ PC 열 스크롤 화살표 버튼 */
@@ -3932,6 +3950,9 @@ function _syncAllSettingsToFirebase(){
   var _bmf = localStorage.getItem('pb_board_memo_fs'); if(_bmf) allSettings.boardMemoFs = parseInt(_bmf);
   var colOneColors = getColOneColors();
   if(Object.keys(colOneColors).length > 0) allSettings.colColors = colOneColors;
+  /* ★ 열 띄우기(간격) */
+  var colGaps = getColGaps();
+  if(Object.keys(colGaps).length > 0) allSettings.colGaps = colGaps;
   /* 열 색상 */
   var colColor = localStorage.getItem(LS_COL_HC_COLOR);
   if(colColor) allSettings.colHcColor = colColor;
@@ -4148,6 +4169,7 @@ function renderColHeaders(){
     }
     _applyAllPartColors(); /* ★ 파트별 색상 적용 */
 }
+  _applyAllColGaps(); /* ★ 열 띄우기(간격) 적용 */
 }
 
 function onColHcClick(e){
@@ -4217,11 +4239,24 @@ function _showColShiftMenu(part, col, anchorEl){
   m.id='colShiftMenu';
   m.style.cssText='position:fixed;z-index:99000;background:#1E293B;border:2px solid #FACC15;border-radius:12px;'
     +'padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);font-family:inherit;min-width:220px;';
+  var _curMm = (getColGap(part,col) || {mm:0}).mm;
   m.innerHTML =
      '<div style="text-align:center;color:#FACC15;font-weight:900;font-size:14px;margin-bottom:8px;">📍 '+_escHtml(name)+' 열</div>'
     +'<div style="display:flex;gap:8px;">'
     +'<button type="button" id="_colPushBtn" style="flex:1;padding:11px 8px;background:#0369A1;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">▶ 열 밀기</button>'
     +'<button type="button" id="_colPullBtn" style="flex:1;padding:11px 8px;background:#166534;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">◀ 열 당기기</button>'
+    +'</div>'
+    +'<div style="margin-top:8px;background:#334155;border-radius:9px;padding:8px;">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
+    +'<span style="color:#FACC15;font-size:12px;font-weight:800;">↔️ 다음 열과 간격</span>'
+    +'<span id="_colGapMmLbl" style="color:#fff;font-size:13px;font-weight:900;">'+_curMm+'mm</span>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:6px;">'
+    +'<button type="button" id="_colGapMinusBtn" style="flex:0 0 auto;width:34px;height:34px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:900;cursor:pointer;">−</button>'
+    +'<input type="range" id="_colGapRange" min="0" max="'+COL_GAP_MAX_MM+'" step="1" value="'+_curMm+'" style="flex:1;">'
+    +'<button type="button" id="_colGapPlusBtn" style="flex:0 0 auto;width:34px;height:34px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:900;cursor:pointer;">＋</button>'
+    +'</div>'
+    +'<button type="button" id="_colGapTextBtn" style="width:100%;margin-top:8px;padding:9px;background:#B45309;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;" '+(_curMm<=0?'disabled':'')+'>✎ 간격에 세로 텍스트 입력</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:8px;">'
     +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;background:#7C3AED;color:#fff;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;position:relative;">🎨 이 열 색상<input type="color" id="_colOneColorInp" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;"></label>'
@@ -4239,6 +4274,20 @@ function _showColShiftMenu(part, col, anchorEl){
   }catch(e){ m.style.left='50%'; m.style.top='40%'; m.style.transform='translate(-50%,-50%)'; }
   document.getElementById('_colPushBtn').onclick=function(){ _closeColShiftMenu(); _colPush(part,col); };
   document.getElementById('_colPullBtn').onclick=function(){ _closeColShiftMenu(); _colPull(part,col); };
+  var _gapLbl=document.getElementById('_colGapMmLbl');
+  var _gapRange=document.getElementById('_colGapRange');
+  var _gapMinus=document.getElementById('_colGapMinusBtn');
+  var _gapPlus=document.getElementById('_colGapPlusBtn');
+  var _gapTextBtn=document.getElementById('_colGapTextBtn');
+  function _syncGapUi(mm){
+    if(_gapLbl) _gapLbl.textContent = mm+'mm';
+    if(_gapRange) _gapRange.value = mm;
+    if(_gapTextBtn) _gapTextBtn.disabled = (mm<=0);
+  }
+  if(_gapRange) _gapRange.oninput = function(){ var mm=parseInt(this.value)||0; setColGapMm(part,col,mm); _syncGapUi(mm); };
+  if(_gapMinus) _gapMinus.onclick = function(){ var mm=Math.max(0,(parseInt(_gapRange.value)||0)-1); setColGapMm(part,col,mm); _syncGapUi(mm); };
+  if(_gapPlus)  _gapPlus.onclick  = function(){ var mm=Math.min(COL_GAP_MAX_MM,(parseInt(_gapRange.value)||0)+1); setColGapMm(part,col,mm); _syncGapUi(mm); };
+  if(_gapTextBtn) _gapTextBtn.onclick = function(){ _closeColShiftMenu(); _openColGapEditor(part,col); };
   var _cInp=document.getElementById('_colOneColorInp');
   if(_cInp){
     _cInp.value = getColOneColor(part,col) || '#F2D900';
@@ -4312,6 +4361,19 @@ function _colPush(part, col){
   }
   localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(_cc));
   if(Object.keys(_ccUpd).length && typeof pushSettings==='function') pushSettings(_ccUpd);
+  /* ★ 열 띄우기(간격)도 데이터·이름·색상과 같은 규칙으로 오른쪽 이동 */
+  var _gp=getColGaps(), _gpSnap=Object.assign({},_gp), _gpUpd={};
+  var _setGp=function(c,v){
+    var key='p'+part+'c'+c;
+    if(!v){ if(_gp[key]!==undefined){ delete _gp[key]; _gpUpd['colGaps/'+key]=null; } }
+    else if(_gp[key]!==v){ _gp[key]=v; _gpUpd['colGaps/'+key]=v; }
+  };
+  for(var _gpi=col;_gpi<=newCols;_gpi++){
+    if(_gpi===col) _setGp(_gpi, undefined);
+    else _setGp(_gpi, _gpSnap['p'+part+'c'+(_gpi-1)]);
+  }
+  localStorage.setItem(LS_COL_GAPS, JSON.stringify(_gp));
+  if(Object.keys(_gpUpd).length && typeof pushSettings==='function') pushSettings(_gpUpd);
   PART_COL_COUNTS[part-1]=newCols;
   localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
   _rebuildColIds(part, newCols, rows);   /* ★ FIX: _ids 재생성 (gridConfig-ids 불일치 방지) */
@@ -4383,6 +4445,20 @@ function _colPull(part, col){
   if(_cc2[_lastCcKey]!==undefined){ delete _cc2[_lastCcKey]; _ccUpd2['colColors/'+_lastCcKey]=null; }
   localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(_cc2));
   if(Object.keys(_ccUpd2).length && typeof pushSettings==='function') pushSettings(_ccUpd2);
+  /* ★ 열 띄우기(간격)도 데이터·이름·색상과 같은 규칙으로 왼쪽 당김, 마지막 열 간격 삭제 */
+  var _gp2=getColGaps(), _gpSnap2=Object.assign({},_gp2), _gpUpd2={};
+  var _setGp2=function(c,v){
+    var key='p'+part+'c'+c;
+    if(!v){ if(_gp2[key]!==undefined){ delete _gp2[key]; _gpUpd2['colGaps/'+key]=null; } }
+    else if(_gp2[key]!==v){ _gp2[key]=v; _gpUpd2['colGaps/'+key]=v; }
+  };
+  for(var _gp2i=prev;_gp2i<=newCols;_gp2i++){
+    _setGp2(_gp2i, _gpSnap2['p'+part+'c'+(_gp2i+1)]);
+  }
+  var _lastGpKey='p'+part+'c'+cols;
+  if(_gp2[_lastGpKey]!==undefined){ delete _gp2[_lastGpKey]; _gpUpd2['colGaps/'+_lastGpKey]=null; }
+  localStorage.setItem(LS_COL_GAPS, JSON.stringify(_gp2));
+  if(Object.keys(_gpUpd2).length && typeof pushSettings==='function') pushSettings(_gpUpd2);
   PART_COL_COUNTS[part-1]=newCols;
   localStorage.setItem(LS_PART_COLS+'_'+part, String(newCols));
   _rebuildColIds(part, newCols, rows);   /* ★ FIX: _ids 재생성 (gridConfig-ids 불일치 방지) */
@@ -4547,6 +4623,242 @@ function _applyAllColOneColors(){
     var el=document.querySelector('.col-hc[data-part="'+m[1]+'"][data-col="'+m[2]+'"]'); if(el) el.style.background=o[key];
   });
 }
+
+/* ★★ 열 띄우기 — 열추가/삭제(밀기/당기기)와 달리 실제 열 수를 바꾸지 않고,
+   지정한 열과 다음 열 사이에 시각적인 간격(여백, mm 단위)만 벌려주고,
+   그 벌어진 공간을 누르면 세로쓰기 텍스트를 입력·저장할 수 있다.
+   저장 방식은 colOneColors와 동일한 패턴(로컬 + Firebase 실시간 동기화).
+   저장값: { mm: 0~30, text: '메모' } */
+var LS_COL_GAPS = 'pb_col_gaps';
+var COL_GAP_MAX_MM = 30;              /* PC 기준 최대값(mm) */
+var COL_GAP_MOBILE_RATIO = 1/5;       /* ★ PC 5mm당 모바일 1mm — 화면 작은 모바일에서 과도한 여백 방지 */
+function _isMobileView(){ return window.innerWidth <= 600; }
+function _colGapEffMm(mm){ return _isMobileView() ? (mm * COL_GAP_MOBILE_RATIO) : mm; }
+function getColGaps(){ try{ return JSON.parse(localStorage.getItem(LS_COL_GAPS)||'{}'); }catch(e){ return {}; } }
+function _normColGap(v){
+  if(!v) return null;
+  if(v === true) return {mm:8, text:'', color:'', textColor:'', fontSize:12};   /* ★ 구버전(불리언) 값 호환 */
+  if(typeof v === 'object' && v.mm) return {
+    mm:Math.max(0,Math.min(COL_GAP_MAX_MM, parseInt(v.mm)||0)),
+    text:String(v.text||''),
+    color:String(v.color||''),
+    textColor:String(v.textColor||''),
+    fontSize:Math.max(8,Math.min(28, parseInt(v.fontSize)||12))
+  };
+  return null;
+}
+function getColGap(part, col){ return _normColGap(getColGaps()['p'+part+'c'+col]); }
+function hasColGap(part, col){ var g=getColGap(part,col); return !!(g && g.mm>0); }
+function setColGapMm(part, col, mm){
+  mm = Math.max(0, Math.min(COL_GAP_MAX_MM, Math.round(mm)));
+  var o = getColGaps();
+  var key = 'p'+part+'c'+col;
+  if(mm<=0){
+    delete o[key];
+  } else {
+    /* ★ FIX: 기존 텍스트·색상·글자크기를 그대로 보존 (예전엔 mm만 바꿔도 색상이 초기화되던 버그) */
+    var cur = _normColGap(o[key]) || {text:'', color:'', textColor:'', fontSize:12};
+    cur.mm = mm;
+    o[key] = cur;
+  }
+  localStorage.setItem(LS_COL_GAPS, JSON.stringify(o));
+  _applyAllColGaps();
+  if(typeof pushSettings==='function'){ var u={}; u['colGaps/'+key] = o[key] ? o[key] : null; pushSettings(u); }
+}
+function setColGapText(part, col, text){
+  var o = getColGaps();
+  var key = 'p'+part+'c'+col;
+  var cur = _normColGap(o[key]);
+  if(!cur || !cur.mm) return false; /* 간격이 없으면 텍스트만 저장하지 않음 */
+  cur.text = String(text||'').slice(0,60);
+  o[key] = cur;
+  localStorage.setItem(LS_COL_GAPS, JSON.stringify(o));
+  _applyAllColGaps();
+  if(typeof pushSettings==='function'){ var u={}; u['colGaps/'+key] = cur; pushSettings(u); }
+  return true;
+}
+function setColGapColor(part, col, color, textColor){
+  var o = getColGaps();
+  var key = 'p'+part+'c'+col;
+  var cur = _normColGap(o[key]);
+  if(!cur || !cur.mm) return false;
+  if(color !== undefined)     cur.color = String(color||'');
+  if(textColor !== undefined) cur.textColor = String(textColor||'');
+  o[key] = cur;
+  localStorage.setItem(LS_COL_GAPS, JSON.stringify(o));
+  _applyAllColGaps();
+  if(typeof pushSettings==='function'){ var u={}; u['colGaps/'+key] = cur; pushSettings(u); }
+  return true;
+}
+function setColGapFontSize(part, col, fontSize){
+  var o = getColGaps();
+  var key = 'p'+part+'c'+col;
+  var cur = _normColGap(o[key]);
+  if(!cur || !cur.mm) return false;
+  cur.fontSize = Math.max(8, Math.min(28, parseInt(fontSize)||12));
+  o[key] = cur;
+  localStorage.setItem(LS_COL_GAPS, JSON.stringify(o));
+  _applyAllColGaps();
+  if(typeof pushSettings==='function'){ var u={}; u['colGaps/'+key] = cur; pushSettings(u); }
+  return true;
+}
+function _closeColGapEditor(){
+  var m = document.getElementById('colGapEditor'); if(m) m.remove();
+}
+function _openColGapEditor(part, col){
+  _closeColGapEditor();
+  var g = getColGap(part, col) || {mm:8, text:'', color:'', textColor:'', fontSize:12};
+  var name = getColName(part, col);
+  var ov = document.createElement('div');
+  ov.id = 'colGapEditor';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99500;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
+  ov.innerHTML =
+     '<div style="background:#1E293B;border:2px solid #FACC15;border-radius:14px;padding:16px;width:min(320px,86vw);font-family:inherit;">'
+    +'<div style="text-align:center;color:#FACC15;font-weight:900;font-size:14px;margin-bottom:10px;">↔️ '+_escHtml(name)+' 다음 간격</div>'
+    +'<textarea id="_colGapTextInp" maxlength="60" placeholder="이 간격에 표시할 세로 텍스트..." style="width:100%;box-sizing:border-box;min-height:64px;border-radius:9px;border:1px solid #475569;background:#0F172A;color:#fff;padding:8px;font-size:14px;font-family:inherit;resize:vertical;"></textarea>'
+    +'<div style="margin-top:10px;background:#334155;border-radius:9px;padding:8px;">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
+    +'<span style="color:#FACC15;font-size:12px;font-weight:800;">🔠 글자 크기</span>'
+    +'<span id="_colGapFsLbl" style="color:#fff;font-size:13px;font-weight:900;">'+(g.fontSize||12)+'px</span>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:6px;">'
+    +'<button type="button" id="_colGapFsMinusBtn" style="flex:0 0 auto;width:34px;height:34px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:900;cursor:pointer;">−</button>'
+    +'<input type="range" id="_colGapFsRange" min="8" max="28" step="1" value="'+(g.fontSize||12)+'" style="flex:1;">'
+    +'<button type="button" id="_colGapFsPlusBtn" style="flex:0 0 auto;width:34px;height:34px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:900;cursor:pointer;">＋</button>'
+    +'</div></div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px;">'
+    +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 6px;background:#334155;color:#fff;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;position:relative;">🎨 배경색<input type="color" id="_colGapColorInp" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;"></label>'
+    +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 6px;background:#334155;color:#fff;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;position:relative;">🖍 글자색<input type="color" id="_colGapTextColorInp" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;"></label>'
+    +'<button type="button" id="_colGapColorResetBtn" style="flex:0 0 auto;padding:9px 10px;background:#475569;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">색 초기화</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px;">'
+    +'<button type="button" id="_colGapSaveBtn" style="flex:1;padding:10px;background:#166534;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">💾 저장</button>'
+    +'<button type="button" id="_colGapCancelBtn" style="flex:0 0 auto;padding:10px 14px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;">취소</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  var ta = document.getElementById('_colGapTextInp');
+  ta.value = g.text || '';
+  ta.focus();
+  var _fsLbl = document.getElementById('_colGapFsLbl');
+  var _fsRange = document.getElementById('_colGapFsRange');
+  var _fsMinus = document.getElementById('_colGapFsMinusBtn');
+  var _fsPlus  = document.getElementById('_colGapFsPlusBtn');
+  function _syncFsUi(fs){ if(_fsLbl) _fsLbl.textContent = fs+'px'; if(_fsRange) _fsRange.value = fs; }
+  if(_fsRange) _fsRange.oninput = function(){ var fs=parseInt(this.value)||12; setColGapFontSize(part,col,fs); _syncFsUi(fs); };
+  if(_fsMinus) _fsMinus.onclick = function(){ var fs=Math.max(8,(parseInt(_fsRange.value)||12)-1); setColGapFontSize(part,col,fs); _syncFsUi(fs); };
+  if(_fsPlus)  _fsPlus.onclick  = function(){ var fs=Math.min(28,(parseInt(_fsRange.value)||12)+1); setColGapFontSize(part,col,fs); _syncFsUi(fs); };
+  var _cInp = document.getElementById('_colGapColorInp');
+  var _tInp = document.getElementById('_colGapTextColorInp');
+  if(_cInp) _cInp.value = g.color || '#FACC15';
+  if(_tInp) _tInp.value = g.textColor || '#FACC15';
+  if(_cInp) _cInp.oninput = function(){ setColGapColor(part, col, this.value, undefined); };
+  if(_tInp) _tInp.oninput = function(){ setColGapColor(part, col, undefined, this.value); };
+  var _rBtn = document.getElementById('_colGapColorResetBtn');
+  if(_rBtn) _rBtn.onclick = function(){
+    setColGapColor(part, col, '', '');
+    if(_cInp) _cInp.value = '#FACC15';
+    if(_tInp) _tInp.value = '#FACC15';
+  };
+  document.getElementById('_colGapSaveBtn').onclick = function(){
+    setColGapText(part, col, ta.value.trim());
+    _closeColGapEditor();
+  };
+  document.getElementById('_colGapCancelBtn').onclick = _closeColGapEditor;
+  ov.addEventListener('click', function(e){ if(e.target === ov) _closeColGapEditor(); });
+}
+function _layoutColGapOverlay(part, col, g){
+  var key = 'gapOv_p'+part+'c'+col;
+  var wrap = document.getElementById('colScrollWrap'+part);
+  /* ★ 슬롯 그리드가 fitLayout의 실제 폭 재계산 대상이므로, 슬롯 요소를
+     1순위 기준으로 사용 (헤더 그리드는 별도 계산이라 미세하게 어긋날 수 있음) */
+  var refEl = document.querySelector('.slot[data-part="'+part+'"][data-col="'+col+'"]')
+           || document.querySelector('.col-hc[data-part="'+part+'"][data-col="'+col+'"]');
+  if(!refEl || !wrap || !g || !g.mm){
+    var stale=document.getElementById(key); if(stale) stale.remove();
+    return;
+  }
+  var ov = document.getElementById(key);
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = key;
+    ov.className = 'col-gap-ov';
+    ov.onclick = function(){ _openColGapEditor(part, col); };
+    wrap.appendChild(ov);
+  }
+  ov.textContent = g.text || '';
+  ov.classList.toggle('empty', !g.text);
+  ov.style.background = g.color || '';
+  ov.style.color = g.textColor || '';
+  ov.style.fontSize = (g.fontSize || 12) + 'px';
+  try{
+    var effMm = _colGapEffMm(g.mm);
+    var effPx = effMm * 3.7795275591; /* ★ margin-right(mm)과 정확히 동일한 px로 맞춰 오차 제거 */
+    var wr = wrap.getBoundingClientRect();
+    var rr = refEl.getBoundingClientRect();
+    ov.style.left  = Math.round(rr.right - wr.left + wrap.scrollLeft) + 'px';
+    ov.style.width = Math.round(effPx) + 'px';
+  }catch(e){}
+}
+function _applyAllColGaps(){
+  /* 먼저 모든 열의 간격 여백을 초기화 */
+  document.querySelectorAll('.col-hc[data-col], .slot[data-col]').forEach(function(el){
+    el.style.marginRight = '';
+  });
+  var o = getColGaps();
+  var activeKeys = {};
+  Object.keys(o).forEach(function(key){
+    var g = _normColGap(o[key]); if(!g || !g.mm) return;
+    var m = key.match(/^p(\d+)c(\d+)$/); if(!m) return;
+    var part = m[1], col = m[2];
+    activeKeys[key] = true;
+    var effMm = _colGapEffMm(g.mm);
+    document.querySelectorAll('.col-hc[data-part="'+part+'"][data-col="'+col+'"], .slot[data-part="'+part+'"][data-col="'+col+'"]')
+      .forEach(function(el){ el.style.marginRight = effMm+'mm'; });
+    _layoutColGapOverlay(part, col, g);
+  });
+  /* 더 이상 유효하지 않은 오버레이 제거 */
+  document.querySelectorAll('.col-gap-ov').forEach(function(el){
+    var m = el.id.match(/^gapOv_p(\d+)c(\d+)$/); if(!m) return;
+    if(!activeKeys['p'+m[1]+'c'+m[2]]) el.remove();
+  });
+  _ensureColGapResizeObservers();
+}
+window.addEventListener('resize', function(){ if(typeof _applyAllColGaps==='function') _applyAllColGaps(); });
+
+/* ★★ 핵심 안정화: fitLayout 등 어떤 경로로든 열 폭 컨테이너의 실제 렌더 크기가
+   바뀌면(원인을 일일이 다 후킹하지 않아도) 즉시 감지해서 간격 오버레이를
+   다시 배치한다. 이게 없으면 "새로고침해야 제자리 찾는" 문제가 재발한다. */
+var _colGapRO = null;
+var _colGapROTargets = [];
+function _ensureColGapResizeObservers(){
+  if(!('ResizeObserver' in window)) return;
+  var wraps = document.querySelectorAll('.col-scroll-wrap');
+  var need = false;
+  wraps.forEach(function(w){ if(_colGapROTargets.indexOf(w) === -1) need = true; });
+  if(!need && _colGapRO) return;
+  if(!_colGapRO){
+    var _t = null;
+    _colGapRO = new ResizeObserver(function(){
+      clearTimeout(_t);
+      _t = setTimeout(function(){ try{ _applyAllColGapsRaw(); }catch(e){} }, 60);
+    });
+  }
+  wraps.forEach(function(w){
+    if(_colGapROTargets.indexOf(w) === -1){ _colGapRO.observe(w); _colGapROTargets.push(w); }
+  });
+}
+/* _applyAllColGaps을 그대로 재호출하면 ResizeObserver 콜백 안에서 다시
+   marginRight를 바꿔 또 resize를 유발할 수 있어, 위치만 재계산하는 경량 버전 사용 */
+function _applyAllColGapsRaw(){
+  var o = getColGaps();
+  Object.keys(o).forEach(function(key){
+    var g = _normColGap(o[key]); if(!g || !g.mm) return;
+    var m = key.match(/^p(\d+)c(\d+)$/); if(!m) return;
+    _layoutColGapOverlay(m[1], m[2], g);
+  });
+}
+
+
 
 /* ── 헤더 멘트/제휴점 편집 ── */
 var LS_HEADER_MEMO='pb_header_memo';
@@ -5072,6 +5384,13 @@ function fitLayout(){
     }
     /* 슬라이더 동기화 (자동 모드일 때 현재 계산값 반영) */
     setTimeout(_syncCarFsSlider, 30);
+  }
+  /* ★★ FIX: fitLayout이 열 폭을 재계산/재배치하므로, 열 띄우기 오버레이도
+     그 최종 폭 기준으로 다시 위치를 잡아야 함 (안 하면 새로고침 전까지
+     이전 폭 기준 위치에 그려져 다른 칸 위에 겹쳐 보이는 버그 발생) */
+  if(typeof _applyAllColGaps === 'function'){
+    _applyAllColGaps();
+    setTimeout(_applyAllColGaps, 90);   /* ★ setTimeout(_setPcScrollPadding,80) 등 이후 폭이 한 번 더 바뀌는 경우 대비 */
   }
 }
 
@@ -8340,6 +8659,10 @@ function buildGrid(){
     renderSlot(el,i);
     addDragListeners(el,i);
     var part=slotToPart(i);
+    var _localIdx = i - PART_OFFSETS[part-1];
+    var _partCols = PART_COL_COUNTS[part-1] || COLS_PER_PART;
+    el.dataset.part = part;
+    el.dataset.col  = (_localIdx % _partCols) + 1;
     var g=document.getElementById('parkingGrid'+part);
     if(g) g.appendChild(el);
   }
@@ -8359,6 +8682,7 @@ function buildGrid(){
   _applyAllColFolds();
   _restoreAllScrollPos(_buildGridScrollPos);
   _buildGridScrollPos = null;
+  _applyAllColGaps(); /* ★ 열 띄우기(간격) 재적용 — 그리드 재생성 시 유지 */
 }
 
 /* ★ 차량번호 뒤 4자리 → 위2/아래2 분리 */
@@ -11837,6 +12161,19 @@ function applyRemoteSettings(data){
       localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(_lc));
       if(typeof renderColHeaders==='function') renderColHeaders();
     }catch(e){ console.warn('[colColors merge 오류]', e); }
+  }
+  /* ★ 열 띄우기(간격) — 모든 기기 동기화 */
+  if(data.colGaps){
+    try{
+      var _lg=getColGaps();
+      var _rg=data.colGaps;
+      Object.keys(_rg).forEach(function(k){
+        if(_rg[k]===null || _rg[k]===undefined || _rg[k]===''){ delete _lg[k]; }
+        else _lg[k]=_rg[k];
+      });
+      localStorage.setItem(LS_COL_GAPS, JSON.stringify(_lg));
+      if(typeof _applyAllColGaps==='function') _applyAllColGaps();
+    }catch(e){ console.warn('[colGaps merge 오류]', e); }
   }
   /* 열 헤더 색상 */
   if(data.colHcColor){
@@ -20786,7 +21123,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결v8</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-18 · 한결v14</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
