@@ -119,6 +119,15 @@
     padding:1px;vertical-align:middle;
   }
   .amEmpty{ font-size:12px; opacity:.45; }  /* ★ 차량번호 없는 칸의 🅿️ */
+  /* ★ 열 간격(열 띄우기) 세로 띠 — 저장된 텍스트/색상 표시 (본 앱과 동일) */
+  .amGap{
+    min-width:16px;width:16px;padding:4px 1px;
+    writing-mode:vertical-rl;text-orientation:mixed;
+    font-weight:900;font-size:11px;letter-spacing:1px;line-height:1.05;
+    text-align:center;vertical-align:middle;white-space:nowrap;
+    background:#FEF9C3;border:1.5px solid #FDE68A;border-radius:6px;
+    color:#92400E;
+  }
   @keyframes amPulse{
     0%,100%{ box-shadow:0 0 0 2px rgba(224,49,49,.30); }
     50%    { box-shadow:0 0 0 6px rgba(224,49,49,.55); }
@@ -995,6 +1004,14 @@ function sharePage(){
           _ccolors.push((st.colColors&&st.colColors['p'+(pi+1)+'c'+_cd])||null);
         }
         _autoMapData = { partLabel:pl, cols:pC[pi], rows:pR[pi], col:col, row:row, fb:fb, colNames:_cnames, colColors:_ccolors };
+        /* ★ 열 간격(열 띄우기) 정보 — 본 앱과 동일하게 약도에도 표시 (mm>0만) */
+        var _cgaps=[];
+        for(var _cg=1;_cg<=pC[pi];_cg++){
+          var _graw=(st.colGaps&&st.colGaps['p'+(pi+1)+'c'+_cg])||null;
+          var _gn=_normViewGap(_graw);
+          _cgaps[_cg]=(_gn&&_gn.mm>0)?_gn:null;
+        }
+        _autoMapData.colGaps=_cgaps;
         /* ★ 같은 파트의 다른 칸 차량번호 지도 (자동 약도 주변 표시용) */
         var _cellCars={};
         for(var z=0;z<keys.length;z++){
@@ -1098,6 +1115,20 @@ function sharePage(){
     if(box) box.style.display='none';
     _autoMapShown=false;
   }
+  /* ★ 열 간격 값 정규화 — 본 앱 _normColGap 과 동일 구조(mm,text,color,textColor) */
+  function _normViewGap(v){
+    if(!v) return null;
+    if(v===true) return {mm:8,text:'',color:'',textColor:''};
+    if(typeof v==='object' && v.mm!==undefined){
+      return {
+        mm: Math.max(0, Math.min(30, parseInt(v.mm)||0)),
+        text: String(v.text||''),
+        color: String(v.color||''),
+        textColor: String(v.textColor||'')
+      };
+    }
+    return null;
+  }
   /* ★ 자동 약도 그리기 — 현황판 격자(열×줄) 기반, 본인 차 칸만 📍 표시.
      데이터 준비 전이면 false 반환(호출측이 안내문구 유지).
      ★ FIX: 관리자가 등록한 사진/약도가 있어도 함께 표시하도록 변경
@@ -1114,16 +1145,30 @@ function sharePage(){
     html+='<div style="text-align:center;font-weight:900;color:#1e293b;font-size:15px;margin-bottom:2px;">🅿️ '+_esc(d.partLabel||'')+'</div>';
     html+='<div style="text-align:center;color:#64748b;font-size:11px;font-weight:700;margin-bottom:10px;">📍 빨간 칸이 고객님 차량 위치입니다</div>';
     html+='<div style="overflow-x:auto;"><table><tbody>';
+    var _gaps = d.colGaps || [];
+    var _gapSpan = rows + 1; /* 데이터행 전체 + 하단 열이름행까지 세로로 이어지는 띠 */
     for(var r=0;r<rows;r++){
       var kan=rows-r; /* 칸 번호(아래부터) */
       html+='<tr><td style="font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;">'+kan+'칸</td>';
       for(var c2=1;c2<=cols;c2++){
         var isT=(c2===d.col && r===d.row);
-        if(isT){ html+='<td class="amCell amTarget">📍</td>'; continue; }
-        /* ★ 모든 주차 칸의 차량번호 표시 (특수문자 포함). 차주정보는 표시 안 함 */
-        var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
-        if(_cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
-        else{ html+='<td class="amCell amEmpty">🅿️</td>'; }  /* ★ 차량번호 없는 칸 → 🅿️ */
+        if(isT){ html+='<td class="amCell amTarget">📍</td>'; }
+        else{
+          /* ★ 모든 주차 칸의 차량번호 표시 (특수문자 포함). 차주정보는 표시 안 함 */
+          var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
+          if(_cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
+          else{ html+='<td class="amCell amEmpty">🅿️</td>'; }  /* ★ 차량번호 없는 칸 → 🅿️ */
+        }
+        /* ★ 이 열 뒤에 간격(열 띄우기)이 있으면 세로 띠로 표시 — 첫 행에서만 rowspan 셀 생성,
+           나머지 행/하단 열이름행은 rowspan 이 덮으므로 셀을 넣지 않는다(열 정렬 유지) */
+        var _g=_gaps[c2];
+        if(_g && r===0){
+          var _gst='';
+          if(_g.color){ _gst='background:'+_esc(_g.color)+';border-color:'+_esc(_g.color)+';'; }
+          var _gtc=_g.textColor || (_g.color ? _pickTextColor(_g.color) : '#92400E');
+          _gst+='color:'+_esc(_gtc)+';';
+          html+='<td class="amGap" rowspan="'+_gapSpan+'" style="'+_gst+'">'+_esc(_g.text||'')+'</td>';
+        }
       }
       html+='</tr>';
     }
@@ -1250,6 +1295,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-13 · 한결view v19</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결view v20 (열간격)</div>
 </body>
 </html>
