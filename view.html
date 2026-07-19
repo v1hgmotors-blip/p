@@ -1084,12 +1084,38 @@ function sharePage(){
       txt.textContent = stepText;
       if(_isAddr(stepText)){
         var q = stepText.replace(/^.*?주소\s*[:：]\s*/,'').trim();
-        var nav = document.createElement('a');
-        nav.href = 'https://map.kakao.com/link/search/' + encodeURIComponent(q);
-        nav.target = '_blank';
-        nav.textContent = '🗺️ 길찾기';
-        nav.style.cssText = 'display:inline-block;margin-left:8px;background:#16A34A;color:#fff;text-decoration:none;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:900;vertical-align:middle;white-space:nowrap;';
-        txt.appendChild(nav);
+        var eq = encodeURIComponent(q);
+        /* ★ 좌표(위경도)가 링크에 있으면 정밀 길찾기(현재위치→목적지 자동), 없으면 주소검색.
+           구글지도는 주소만으로도 현재위치 길찾기가 바로 됨. */
+        var _gy = qs('glat'), _gx = qs('glng');
+        var _geo = (_gy && _gx && !isNaN(parseFloat(_gy)) && !isNaN(parseFloat(_gx)));
+        var _apn = encodeURIComponent((location.hostname||'parkview'));
+        var _opts = [
+          ['🗺️ 카카오맵', _geo ? ('https://map.kakao.com/link/to/'+eq+','+_gy+','+_gx) : ('https://map.kakao.com/link/search/'+eq), '#16A34A'],
+          ['🟢 네이버지도', _geo ? ('nmap://route/car?dlat='+_gy+'&dlng='+_gx+'&dname='+eq+'&appname='+_apn) : ('https://map.naver.com/p/search/'+eq), '#03C75A'],
+          ['🧭 티맵', _geo ? ('tmap://route?goalname='+eq+'&goalx='+_gx+'&goaly='+_gy) : ('tmap://search?name='+eq), '#8B5CF6'],
+          ['🌐 구글지도', _geo ? ('https://www.google.com/maps/dir/?api=1&destination='+_gy+','+_gx) : ('https://www.google.com/maps/dir/?api=1&destination='+eq), '#2563EB']
+        ];
+        var _navToggle = document.createElement('button');
+        _navToggle.type = 'button';
+        _navToggle.textContent = '🧭 길찾기 ▾';
+        _navToggle.style.cssText = 'display:inline-block;margin-left:8px;background:#0EA5E9;color:#fff;border:none;padding:5px 13px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;vertical-align:middle;white-space:nowrap;';
+        var _navMenu = document.createElement('div');
+        _navMenu.style.cssText = 'display:none;margin-top:7px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:7px;min-width:150px;';
+        _opts.forEach(function(o){
+          var a = document.createElement('a');
+          a.href = o[1]; a.target = '_blank'; a.rel = 'noopener'; a.textContent = o[0];
+          a.style.cssText = 'display:block;margin:4px 0;background:'+o[2]+';color:#fff;text-decoration:none;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:900;text-align:center;white-space:nowrap;';
+          _navMenu.appendChild(a);
+        });
+        _navToggle.addEventListener('click', function(e){
+          e.stopPropagation();
+          var open = (_navMenu.style.display !== 'none' && _navMenu.style.display !== '');
+          _navMenu.style.display = open ? 'none' : 'block';
+          _navToggle.textContent = open ? '🧭 길찾기 ▾' : '🧭 길찾기 ▴';
+        });
+        txt.appendChild(_navToggle);
+        txt.appendChild(_navMenu);
       }
       row.appendChild(num); row.appendChild(txt);
       box.appendChild(row);
@@ -1295,6 +1321,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결view v20 (열간격)</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결view v21 (열간격·길찾기)</div>
 </body>
 </html>
