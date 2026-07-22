@@ -418,6 +418,9 @@ function sharePage(){
   function qs(k){
     try{ return new URLSearchParams(location.search).get(k) || ''; }catch(e){ return ''; }
   }
+  function _b64urlDecode(s){
+    try{ s = String(s||'').replace(/-/g,'+').replace(/_/g,'/'); while(s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }catch(e){ return ''; }
+  }
   var code = qs('code') || qs('c');
   var part = qs('part');
   var car  = qs('car');
@@ -1275,7 +1278,38 @@ function sharePage(){
     }, 8000);
   }
 
-  if(lkey){
+  /* ★ 하이브리드: URL에 담긴 기본정보(d=) 우선 반영 — Firebase 없어도 차량/위치/차주/좌표 표시 */
+  var _urlShown = false;
+  try{
+    var _dParam = qs('d');
+    if(_dParam){
+      var _up = JSON.parse(_b64urlDecode(_dParam));
+      if(_up && typeof _up === 'object'){
+        var _okU = true;
+        if(_up.t){ if(Date.now() - Number(_up.t) > 3*24*60*60*1000){ _okU = false; showStatus('⏰ 유효기간이 만료된 링크입니다.<br>발송 후 3일까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.'); } }
+        if(_okU){
+          part = String(_up.part||part||'');
+          car = String(_up.car||car||'');
+          loc = String(_up.loc||loc||'');
+          oName = String(_up.on||oName||'');
+          oPhone = String(_up.op||oPhone||'').replace(/[^0-9]/g,'');
+          keyNo = String(_up.kn||keyNo||'');
+          applyBiz(_up.bz); applyBizInfo(_up.bi); applyPromo(_up.pt);
+          try{ if(!eid && _up.eid) eid = String(_up.eid); }catch(e){}
+          renderHeader();
+          _urlShown = true;
+        }
+      }
+    }
+  }catch(e){}
+
+  if(_urlShown){
+    /* URL로 기본정보 표시됨 → 지도/서류/추적만 로드 (Firebase 연결 시 보강, 끊겨도 기본정보 유지) */
+    loadCarDocs(car);
+    if(car){ startLiveTracking(car); _checkAuthThenLog(car); } else { _logScan(''); }
+    _lastPartLoaded = part;
+    if(part){ loadPart(); }
+  } else if(lkey){
     /* ★ 단축링크: 상세정보(part/car/loc/담당차주)를 Firebase에서 읽어옴 */
     fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value').then(function(snap){
       var d = snap.val();
@@ -1321,6 +1355,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결view v21 (열간격·길찾기)</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결view v22 (하이브리드 오프라인표시)</div>
 </body>
 </html>
