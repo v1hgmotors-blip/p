@@ -9697,12 +9697,32 @@ function expandPart(n){
   }
 }
 
+/* ★ 키불출 슬롯 매칭 — 정확일치 우선, 전체번호판이면 정확일치만, 4자리뿐이면 뒤4자리(레거시) */
+function _norm2(s){ return String(s||'').replace(/\s/g,'').toLowerCase(); }
+function _dispatchHit(slotCar, dispCar, exactExists){
+  var sN=_norm2(slotCar), dN=_norm2(dispCar);
+  if(!sN||!dN) return false;
+  if(sN===dN) return true;                 /* 정확 일치 */
+  if(exactExists) return false;            /* 다른 슬롯에 정확일치 존재 → 느슨매칭 금지 */
+  var dHasKor=/[^0-9]/.test(dN);
+  var dDigits=dN.replace(/[^0-9]/g,'');
+  if(dHasKor || dDigits.length>4) return false;  /* 전체 번호판인데 정확 안맞음 → hit 아님 */
+  return match4(slotCar, dispCar);          /* 4자리 숫자뿐 → 기존 뒤4자리 매칭 */
+}
 function reapplyBlinks(){
   var slots=getSlots();
   var dcarsRaw=[];
   for(var id in dispatchSet){
     var _de=dispatchSet[id];
     dcarsRaw.push(typeof _de==='object'?(_de.car||''):_de);
+  }
+  /* ★ 각 불출차량에 대해 '정확일치 슬롯 존재' 여부 미리 계산 */
+  var _exactMap={};
+  for(var _ci0=0;_ci0<dcarsRaw.length;_ci0++){
+    var _dn0=_norm2(dcarsRaw[_ci0]); if(_dn0 in _exactMap) continue;
+    var _ex=false;
+    for(var _si0=0;_si0<TOTAL;_si0++){ var _ss=slots[_si0]; if(_ss&&_ss.car&&_norm2(_ss.car)===_dn0){_ex=true;break;} }
+    _exactMap[_dn0]=_ex;
   }
   for(var i=0;i<TOTAL;i++){
     var el=document.getElementById('slot_'+i);if(!el)continue;
@@ -9714,7 +9734,7 @@ function reapplyBlinks(){
     var hit=false;
     if(d.car){
       for(var ci=0;ci<dcarsRaw.length;ci++){
-        if(match4(d.car, dcarsRaw[ci])){hit=true;break;}
+        if(_dispatchHit(d.car, dcarsRaw[ci], _exactMap[_norm2(dcarsRaw[ci])])){hit=true;break;}
       }
     }
     var hasBlink = el.classList.contains('blink-dispatch');
@@ -9726,7 +9746,7 @@ function reapplyBlinks(){
       for(var _eid in dispatchSet){
         var _ee = dispatchSet[_eid];
         var _ec = typeof _ee==='object'?(_ee.car||''):_ee;
-        if(match4(d.car, _ec)){ _hitEntry = _ee; break; }
+        if(_dispatchHit(d.car, _ec, _exactMap[_norm2(_ec)])){ _hitEntry = _ee; break; }
       }
       _addDispatchBadge(i, _hitEntry||{car:d.car});
     } else {
@@ -21338,7 +21358,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v21 (WakeLock 토글)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v22 (키불출 정확일치)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
