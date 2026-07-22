@@ -2067,6 +2067,15 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   </div>
   <!-- ★ 접히는 본문 -->
   <div class="settings-body" id="settingsBody">
+    <!-- ★ 화면 켜짐 유지(WakeLock) 토글 -->
+    <div class="storage-mode-row" style="margin-top:4px;">
+      <span class="storage-mode-label">📱 화면 켜짐</span>
+      <label class="storage-mode-switch" title="켜면 화면이 자동으로 꺼지지 않습니다">
+        <input type="checkbox" id="wakeLockSwitch" onchange="_toggleWakeLock(this.checked)">
+        <span class="storage-mode-slider"></span>
+      </label>
+      <span class="storage-mode-badge both" id="wakeLockBadge">화면 켜짐 유지중</span>
+    </div>
     <!-- ★ 저장소 모드 토글 -->
     <div class="storage-mode-row">
       <span class="storage-mode-label">💾 저장방식</span>
@@ -21293,8 +21302,10 @@ setTimeout(_updatePinToggleBtn, 300);
    다른 앱에 갔다 돌아오면 자동으로 다시 켜짐유지 요청.
    (HTTPS 필요 — github.io에서 정상 동작. 미지원 브라우저에선 조용히 무시) */
 var _wakeLock = null;
+function _wlOn(){ return localStorage.getItem('wl_on') !== '0'; }
 function _requestWakeLock(){
   try{
+    if(!_wlOn()) return;
     if(!('wakeLock' in navigator)) return;
     navigator.wakeLock.request('screen').then(function(wl){
       _wakeLock = wl;
@@ -21305,14 +21316,29 @@ function _requestWakeLock(){
     });
   }catch(e){}
 }
+function _releaseWakeLock(){ try{ if(_wakeLock){ _wakeLock.release(); _wakeLock = null; } }catch(e){} }
+function _updateWakeLockUI(){
+  var sw = document.getElementById('wakeLockSwitch');
+  var bd = document.getElementById('wakeLockBadge');
+  var on = _wlOn();
+  if(sw) sw.checked = on;
+  if(bd) bd.textContent = on ? '화면 켜짐 유지중' : '화면 꺼짐 허용';
+}
+function _toggleWakeLock(on){
+  if(typeof on === 'undefined') on = !_wlOn();
+  localStorage.setItem('wl_on', on ? '1' : '0');
+  if(on) _requestWakeLock(); else _releaseWakeLock();
+  _updateWakeLockUI();
+}
 document.addEventListener('visibilitychange', function(){
   if(document.visibilityState === 'visible' && !_wakeLock){ _requestWakeLock(); }
 });
+try{ _updateWakeLockUI(); }catch(e){}
 _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v20 (좌표길찾기)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v21 (WakeLock 토글)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
