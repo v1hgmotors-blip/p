@@ -1,6 +1,20 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<script>
+/* ★ 새로고침 시 PIN 잠금화면 깜빡임 방지
+   PIN이 "해제중"(사용안함) 상태면, 화면이 그려지기 전에 미리 오버레이를
+   display:none 으로 고정해서 깜빡임(다크 오버레이가 잠깐 보였다 사라지는 현상)을 없앤다. */
+(function(){
+  try{
+    if(localStorage.getItem('pb_pin_disabled') === '1'){
+      var st = document.createElement('style');
+      st.textContent = '#pinLockOv{display:none !important;}';
+      document.head.appendChild(st);
+    }
+  }catch(e){}
+})();
+</script>
 <meta charset="UTF-8">
   <!-- PWA: 앱처럼 실행 (주소줄 숨기기) -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -1804,6 +1818,138 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 </head>
 <body>
 
+<!-- ══ 데이터 안정화 오버레이 (앱 시작 시 로컬+Firebase 동기화가 끝날 때까지 화면 전체를 가려
+     그 아래에서 일어나는 그리드 재구성/색상 재적용 등의 깜빡임을 사용자에게 보이지 않게 함) ══ -->
+<style>
+#stabilizeOv{
+  position:fixed;inset:0;z-index:99995;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(254,229,0,0.08), transparent 55%),
+    linear-gradient(160deg,#1A0F00 0%,#2b1a00 45%,#3A2A00 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;overflow:hidden;
+  transition:opacity .5s ease;
+}
+#stabilizeOv.stabilize-hidden{ opacity:0;pointer-events:none; }
+
+.stab-badge-wrap{
+  position:relative;width:112px;height:112px;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:26px;
+}
+.stab-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:2px solid rgba(254,229,0,0.55);
+  animation:stabRing 2.2s ease-out infinite;
+}
+.stab-ring.r2{ animation-delay:.7s; }
+.stab-ring.r3{ animation-delay:1.4s; }
+@keyframes stabRing{
+  0%   { transform:scale(0.72); opacity:0.75; }
+  70%  { opacity:0.12; }
+  100% { transform:scale(1.55); opacity:0; }
+}
+.stab-badge{
+  position:relative;width:88px;height:88px;border-radius:50%;
+  background:linear-gradient(145deg,#FFE477 0%,#FEE500 45%,#C9A400 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:38px;
+  box-shadow:0 0 0 4px rgba(255,255,255,0.08),
+             0 8px 24px rgba(0,0,0,0.45),
+             0 0 34px rgba(254,229,0,0.55);
+  animation:stabPulse 1.8s ease-in-out infinite;
+}
+@keyframes stabPulse{
+  0%,100%{ transform:scale(1);   box-shadow:0 0 0 4px rgba(255,255,255,0.08),0 8px 24px rgba(0,0,0,0.45),0 0 24px rgba(254,229,0,0.45); }
+  50%    { transform:scale(1.06);box-shadow:0 0 0 4px rgba(255,255,255,0.10),0 8px 26px rgba(0,0,0,0.45),0 0 42px rgba(254,229,0,0.75); }
+}
+
+.stab-title{
+  font-size:21px;font-weight:900;letter-spacing:0.3px;
+  background:linear-gradient(90deg,#FFF6D8,#FEE500 45%,#FFE9A6);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  opacity:0;transform:translateY(10px);
+  animation:stabFadeUp .7s ease .25s forwards;
+  text-align:center;padding:0 24px;
+}
+.stab-sub{
+  margin-top:8px;font-size:13px;font-weight:600;
+  color:rgba(255,255,255,0.55);letter-spacing:0.2px;
+  opacity:0;transform:translateY(10px);
+  animation:stabFadeUp .7s ease .45s forwards;
+  text-align:center;
+}
+@keyframes stabFadeUp{ to{ opacity:1; transform:translateY(0); } }
+
+.stab-loading{
+  margin-top:34px;display:flex;gap:8px;
+  opacity:0;animation:stabFadeUp .6s ease .7s forwards;
+}
+.stab-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#FEE500;
+  animation:stabDot 1.1s ease-in-out infinite;
+}
+.stab-dot:nth-child(2){ animation-delay:.15s; }
+.stab-dot:nth-child(3){ animation-delay:.3s; }
+@keyframes stabDot{
+  0%,80%,100%{ opacity:0.25; transform:scale(0.8); }
+  40%        { opacity:1;    transform:scale(1.15); }
+}
+</style>
+<div id="stabilizeOv">
+  <div class="stab-badge-wrap">
+    <div class="stab-ring"></div>
+    <div class="stab-ring r2"></div>
+    <div class="stab-ring r3"></div>
+    <div class="stab-badge">🚗</div>
+  </div>
+  <div class="stab-title" id="stabTitleTxt">주차현황판 시스템</div>
+  <div class="stab-sub">스마트 차량 출입 관리 솔루션</div>
+  <div class="stab-loading">
+    <div class="stab-dot"></div>
+    <div class="stab-dot"></div>
+    <div class="stab-dot"></div>
+  </div>
+</div>
+<script>
+/* ★ 안정화 오버레이 자동 해제 + 상호(멘트입력) 텍스트 반영
+   - 상단 "상호입력" 필드(pb_header_memo)에 저장된 텍스트를 감지해 제목에 표시
+     예: "한결모터스" 입력 시 → "한결모터스 주차현황판 시스템"
+     비어있거나 기본값이면 → "주차현황판 시스템"
+   - _fbSyncReady가 true가 된 뒤 0.7초 여유를 두고 해제 (그 사이 그리드가 최종 상태로 그려짐)
+   - 어떤 이유로든 9초가 지나면 무조건 강제 해제 (영구 대기 방지 안전장치) */
+(function(){
+  try{
+    var _bizRaw = localStorage.getItem('pb_header_memo') || '';
+    var _biz = _bizRaw.replace(/[^0-9A-Za-z가-힣\s]/g,'').trim();
+    if(_biz && _biz !== '주차위치현황판' && _biz !== '주차현황판'){
+      var _t = document.getElementById('stabTitleTxt');
+      if(_t) _t.textContent = _biz + ' 주차현황판 시스템';
+    }
+  }catch(e){}
+
+  var _stabHidden = false;
+  var _stabStart = Date.now();
+  function _hideStabilizeOv(){
+    if(_stabHidden) return; _stabHidden = true;
+    var ov = document.getElementById('stabilizeOv');
+    if(!ov) return;
+    ov.classList.add('stabilize-hidden');
+    setTimeout(function(){ if(ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 550);
+  }
+  var _stabPoll = setInterval(function(){
+    var elapsed = Date.now() - _stabStart;
+    var ready = (typeof _fbSyncReady !== 'undefined' && _fbSyncReady === true);
+    if((ready && elapsed >= 700) || elapsed >= 9000){
+      clearInterval(_stabPoll);
+      setTimeout(_hideStabilizeOv, 300);
+    }
+  }, 150);
+  window._forceHideStabilizeOv = _hideStabilizeOv; /* 필요시 외부에서 즉시 닫기용 */
+})();
+</script>
+
 <div id="partDragGhost"></div>
 
 <!-- ══ Firebase 수신 대기 배너 (상단 얇은 배너, UI 차단 안 함) ══ -->
@@ -2022,7 +2168,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     </div>
     <button class="btn-reset-all" onclick="openResetConfirm()">🗑️ 전체초기화</button>
     <button class="btn-reset-all" onclick="PIN.change()" style="background:#5A2D00;color:#FEE500;font-weight:900;margin-left:4px;">🔑 비밀번호변경</button>
-    <button class="btn-reset-all" id="pinToggleBtn" onclick="_pinToggle()" style="background:#374151;color:#FEE500;font-weight:900;margin-left:4px;">🔓 잠금사용안함</button>
+    <button class="btn-reset-all" id="pinToggleBtn" onclick="_pinToggle()" style="background:#16A34A;color:#fff;font-weight:900;margin-left:4px;">🔓 해제중</button>
     <button id="partPhotoBtn" onclick="_openPartPhotoSetting()">📸 파트위치사진</button>
     <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
@@ -8816,6 +8962,23 @@ function _setupSlotDelegation(){
   gw.addEventListener('touchend', function(){ clearTimeout(_lpTimer); setTimeout(hideTooltip,2000); }, {passive:true});
   gw.addEventListener('touchmove', function(){ clearTimeout(_lpTimer); }, {passive:true});
 }
+/* ★ 화면 깜빡임 방지용 "무교체" 그리드 갱신
+   buildGrid()는 매번 innerHTML=''로 전체를 지우고 새로 만들어서
+   Firebase 최초 수신 시(새로고침 직후) 이미 로컬캐시로 그려둔 화면이
+   한번 더 통째로 지워졌다 다시 그려지며 전체 슬롯이 깜빡이는 원인이 됨.
+   → 슬롯 DOM이 이미 존재하면 요소를 지우지 않고 내용만 갱신(renderSlot)한다. */
+function buildGridSoft(){
+  for(var i=0;i<TOTAL;i++){
+    if(!document.getElementById('slot_'+i)){ buildGrid(); return; }
+  }
+  for(var i=0;i<TOTAL;i++){
+    renderSlot(document.getElementById('slot_'+i), i);
+  }
+  reapplyBlinks();
+  try{ _restoreSearchReturn(); }catch(e){}
+  try{ _updateKeyIssueBanner(); }catch(e){}
+  try{ updateCarCountBadge(); }catch(e){}
+}
 function buildGrid(){
   _setupSlotDelegation();
   _buildGridScrollPos = _saveAllScrollPos();
@@ -12590,7 +12753,7 @@ function _registerSlotsOnListener(){
         console.log('[로컬 우선] dirty:'+(_hasDirty?'있음':'없음')+' TS차이:'+Math.round((_localTsNow-_fbTs)/1000)+'초 → 로컬→Firebase 업로드 (gridConfig 변경 차단)');
         /* ★ 로컬 구조를 Firebase에 먼저 올리고 난 뒤 리스너가 다시 수신할 때 정상 처리됨 */
         _fbLocalFirstMerge(_localData, _getIds(), _localTsNow);
-        buildGrid();
+        buildGridSoft(); /* ★ FIX: 이미 로컬 캐시로 그려진 화면 재확인일 뿐 → 깜빡임 없는 갱신 */
         _fbSyncMarkReady('local-master');
         return;
       }
@@ -12693,8 +12856,10 @@ function _registerSlotsOnListener(){
          - _fbSyncReady 전(초기 수신): buildGrid 전체
          - _fbSyncReady 후(실시간 수신): diff로 변경 슬롯만 refreshSlot */
       if(!window._fbSyncDone){
-        /* 아직 초기화 미완료 → 전체 재빌드 */
-        buildGrid(); _initAllBadgeSliders();
+        /* 아직 초기화 미완료 → 전체 재빌드
+           ★ FIX: 새로고침 직후에는 이미 로컬 캐시로 그려진 화면이 있으므로
+           destructive한 buildGrid() 대신 buildGridSoft()로 내용만 갱신해 깜빡임 방지 */
+        buildGridSoft(); _initAllBadgeSliders();
       } else {
         /* 실시간 수신: 이전 캐시와 diff 비교 */
         var _prevCache = window._fbPrevSlotCache || {};
@@ -21272,14 +21437,12 @@ var PIN = (function(){
     /* Firebase 연결 후 호출 — 실시간 동기화 시작 */
     startListener: _startPinDisabledListener,
     init: function(){
-      /* ★ 기본값: 사용함 — 앱 실행 시 PIN 입력 필요 (기본 비밀번호 9000)
-         기존 기기도 이 버전 최초 실행 시 1회 '사용함'으로 전환(마이그레이션).
-         이후 토글로 끄면 그 설정(모든 기기 동기화)이 유지됨 */
+      /* ★ 기본값: 사용안함(해제중) — 앱 실행 시 PIN 입력 없이 바로 사용
+         최초 실행 시 1회 '해제중'으로 전환(마이그레이션).
+         이후 토글로 켜면 그 설정(모든 기기 동기화)이 유지됨 */
       if(localStorage.getItem('pb_pin_default_on_v1') === null){
         localStorage.setItem('pb_pin_default_on_v1','1');
-        /* 로컬 기본값만 '사용함'으로 — Firebase 공유 설정은 건드리지 않음
-           (사장님이 다른 기기에서 일부러 꺼둔 경우, 연결 후 그 설정이 자동 반영됨) */
-        localStorage.removeItem(DISABLED_KEY);
+        localStorage.setItem(DISABLED_KEY,'1');
         _updatePinToggleBtn();
       }
       if(isDisabled()){
@@ -21304,14 +21467,14 @@ function _updatePinToggleBtn(){
   var btn = document.getElementById('pinToggleBtn');
   if(!btn) return;
   if(typeof PIN !== 'undefined' && PIN.isDisabled()){
-    btn.textContent = '🔐 잠금사용함';
-    btn.style.background = '#065F46';
-    btn.style.color = '#FEE500';
+    btn.textContent = '🔓 해제중';
+    btn.style.background = '#16A34A';
+    btn.style.color = '#fff';
     btn.style.fontWeight = '900';
   } else {
-    btn.textContent = '🔓 잠금사용안함';
-    btn.style.background = '#374151';
-    btn.style.color = '#FEE500';
+    btn.textContent = '🔐 사용중';
+    btn.style.background = '#DC2626';
+    btn.style.color = '#fff';
     btn.style.fontWeight = '900';
   }
 }
