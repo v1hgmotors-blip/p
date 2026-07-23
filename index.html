@@ -132,7 +132,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .settings-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;min-height:26px;cursor:pointer;user-select:none;}
 .settings-toggle-lbl{font-size:13px;font-weight:800;color:#7A5500;}
 .settings-toggle-btn{background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px;color:#7A5500;line-height:1;flex-shrink:0;}
-.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:170px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 자동문자 줄 추가로 80→140px */
+.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:220px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 화면켜짐 토글 줄 추가로 170→220px (발송방식 줄 안 잘리게) */
 .settings-body.collapsed{max-height:0;opacity:0;padding-bottom:0;}
 /* ★ 메인 스크롤 래퍼 */
 #mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
@@ -1284,22 +1284,26 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .m-close-btn:active{background:rgba(58,29,29,.28);}
 /* ★ 모바일 모달 컴팩트 */
 @media(max-width:600px){
-  .modal{padding:8px 10px 10px;max-height:88vh;}
-  .modal .m-badge{font-size:10px;padding:1px 6px;margin-bottom:2px;}
-  .modal .m-title{font-size:13px;margin-bottom:3px;}
-  .modal .m-section{margin-bottom:5px;}
-  .modal .m-label{font-size:10px;margin-bottom:3px;}
-  .modal .m-input-wrap{padding:0 9px;}
-  .modal .m-input-wrap input{font-size:17px;padding:7px 0;}
+  .modal{padding:6px 9px 8px;max-height:90vh;}
+  .modal .m-badge{font-size:10px;padding:1px 6px;margin-bottom:1px;}
+  .modal .m-title{font-size:12px;margin-bottom:2px;}
+  .modal .m-section{margin-bottom:3px;}
+  .modal .m-label{font-size:10px;margin-bottom:2px;}
+  .modal .m-input-wrap{padding:0 8px;}
+  .modal .m-input-wrap input{font-size:15px;padding:5px 0;}
   .modal .status-btns{gap:4px;}
-  .modal .status-btn{padding:6px 2px;font-size:10px;border-radius:8px;}
-  .modal .m-memo{font-size:15px;padding:6px 9px;}
-  .modal .m-memo-fs-btn{width:24px;height:24px;font-size:14px;}
-  .modal .m-memo-fs-val{font-size:11px;min-width:22px;}
-  .modal .m-btns{gap:5px;margin-top:5px;}
-  .modal .mbtn{padding:9px 8px;font-size:12px;}
-  .modal .m-memo-label-row{margin-bottom:3px;}
-  .m-close-btn{width:28px;height:28px;font-size:15px;top:10px;right:10px;}
+  .modal .status-btn{padding:5px 2px;font-size:10px;border-radius:8px;}
+  .modal .encar-reserve-btn{padding:5px 2px;font-size:10px;border-radius:8px;}
+  .modal .m-memo{font-size:14px;padding:5px 8px;}
+  .modal .m-memo-fs-btn{width:22px;height:22px;font-size:13px;}
+  .modal .m-memo-fs-val{font-size:11px;min-width:20px;}
+  .modal .m-btns{gap:5px;margin-top:4px;}
+  .modal .mbtn{padding:8px 6px;font-size:12px;}
+  .modal .m-memo-label-row{margin-bottom:2px;}
+  .modal #mNumInput{height:32px !important;font-size:14px !important;}
+  .modal #inspectDateInput{padding:5px 8px !important;font-size:13px !important;}
+  .modal .owner-btn,.modal .owner-sel-btn{font-size:11px;padding:5px 8px;}
+  .m-close-btn{width:26px;height:26px;font-size:14px;top:9px;right:9px;}
 }
 @keyframes mSlide{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
 .m-badge{display:inline-flex;align-items:center;gap:6px;background:var(--kakao);color:var(--kakao-deep);font-size:12px;font-weight:900;border-radius:8px;padding:2px 8px;margin-bottom:4px;margin-top:6px;}
@@ -3365,16 +3369,14 @@ function toggleSettingsBar(){
         if(bt) bt.textContent='▼';
         if(lb) lb.textContent='🔥 Firebase 설정 (펼치기)';
         localStorage.setItem(LS_SETTINGS_OPEN,'0');
-        /* ★ FIX: transition(250ms) 완료 후 fitLayout 호출 */
-        setTimeout(fitLayout, 300);
       }
       _settingsAutoCollapseTimer=null;
     }, 20000);
   }
-  /* ★ FIX: settings-body transition이 250ms이므로 300ms 후 fitLayout 호출
-     기존 50ms에서는 애니메이션 진행 중에 mainWrap 높이를 측정해
-     격자모드 슬롯 높이/위치가 잘못 계산되는 버그 발생 */
-  setTimeout(fitLayout, 300);
+  /* ★ FIX v3: 깜박임 해결 — fitLayout 호출 제거
+     설정바의 높이 변화는 ResizeObserver가 이미 감지하고 있으므로
+     별도의 fitLayout 호출이 불필요. 이것이 _applyAllColGaps 호출을
+     트리거해서 열 간격 재계산 중 깜박임이 발생했음. */
 }
 
 function initSettingsBarState(){
@@ -5584,7 +5586,10 @@ function togglePart(n){
     btn.textContent='▶';
     localStorage.setItem(LS_COLLAPSED[n-1],'1');
   }
-  setTimeout(fitLayout, 50);
+  /* ★ FIX v3: 깜박임 해결 — fitLayout 호출 제거
+     파트 접기/펼치기 시 CSS transition(약 250ms) 중에 즉시 fitLayout을 호출하면
+     열 간격 재계산이 애니메이션과 겹쳐 깜박임 발생.
+     ResizeObserver가 이미 파트 크기 변화를 감지하고 있으므로 불필요. */
 }
 function loadPartCollapseStates(){
   for(var n=1;n<=NUM_PARTS;n++){
@@ -10305,19 +10310,11 @@ function openModal(i){
     }
     /* ★ 저장버튼이 화면 중앙까지 올라오도록 modal-ov 자동 스크롤
        저장버튼(.mbtn-save)의 위치를 기준으로 화면 중앙에 맞춤 */
+    /* ★ 모달 상단(차량번호 등)이 항상 먼저 보이도록 최상단부터 표시.
+       (예전: 저장버튼을 화면 중앙에 맞추느라 모달 상단이 화면 밖으로 잘리던 문제 해결)
+       모달이 화면보다 길면 아래로 스크롤해 저장버튼까지 확인 가능. */
     var ov = document.getElementById('modalOv');
-    var saveBtn = ov.querySelector('.mbtn-save');
-    if(saveBtn && ov){
-      requestAnimationFrame(function(){
-        var btnRect = saveBtn.getBoundingClientRect();
-        var screenCenter = window.innerHeight / 2;
-        var btnCenter = btnRect.top + btnRect.height / 2;
-        var scrollAmt = btnCenter - screenCenter;
-        if(scrollAmt > 0){
-          ov.scrollTop = scrollAmt;
-        }
-      });
-    }
+    if(ov){ requestAnimationFrame(function(){ ov.scrollTop = 0; }); }
   },150);
   /* ★ PC: 차량번호 크기 슬라이더 동기화 */
   if(window.innerWidth >= 601 && typeof _syncCarFsSlider === 'function') _syncCarFsSlider();
@@ -21358,7 +21355,7 @@ _requestWakeLock();
 setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _restoreOwnerBackupIfEmpty(); }catch(e){} }, 2000);
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v22 (키불출 정확일치)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v25 (모바일모달 컴팩트)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
