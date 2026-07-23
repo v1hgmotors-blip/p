@@ -6655,18 +6655,24 @@ function _initColScrollArrow(sw){
     return c > 0 ? Math.round(sw.scrollWidth / c) : 80;
   }
 
-  /* 호버 자동 스크롤 */
-  var _hRaf=null, _hDir=0;
+  /* 호버 자동 스크롤 (★ 스무스: 서서히 가속되는 방식으로 변경, 최대 속도 제한) */
+  var _hRaf=null, _hDir=0, _hSpeed=0, _hFrac=0;
+  var _H_MIN  = 1.2;   /* 시작 속도 (px/frame) */
+  var _H_MAX  = 6.5;   /* 최대 속도 (px/frame) — 기존 대비 훨씬 완만 */
+  var _H_RAMP = 0.18;  /* 가속도 (프레임당 속도 증가량) */
   function _hScroll(){
-    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; return; }
-    if(!_hDir){ _hRaf=null; return; }
-    sw.scrollLeft += _hDir * Math.max(3, Math.round(_slotW()*0.05));
+    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hSpeed=0; _hFrac=0; _hRaf=null; return; }
+    if(!_hDir){ _hSpeed=0; _hFrac=0; _hRaf=null; return; }
+    _hSpeed = Math.min(_H_MAX, _hSpeed + _H_RAMP);
+    _hFrac += _hDir * _hSpeed;
+    var step = Math.trunc(_hFrac);
+    if(step !== 0){ sw.scrollLeft += step; _hFrac -= step; }
     _upd();
     _hRaf = requestAnimationFrame(_hScroll);
   }
-  btnL.addEventListener('mouseenter', function(){ _pos(); _hDir=-1; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
+  btnL.addEventListener('mouseenter', function(){ _pos(); _hDir=-1; _hSpeed=_H_MIN; _hFrac=0; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
   btnL.addEventListener('mouseleave', function(){ _hDir=0; });
-  btnR.addEventListener('mouseenter', function(){ _pos(); _hDir=1;  if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
+  btnR.addEventListener('mouseenter', function(){ _pos(); _hDir=1;  _hSpeed=_H_MIN; _hFrac=0; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
   btnR.addEventListener('mouseleave', function(){ _hDir=0; });
   btnL.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft -= _slotW(); _upd(); });
   btnR.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft += _slotW(); _upd(); });
@@ -19883,7 +19889,7 @@ window._drawQRCanvas = function(container, text, size){
     }
   }
 
-  /* ★ 현황판 타이틀(멘트입력 필드)에서 업체명 추출 — 예: "🚗ㅇㅇ모터스🚗" → "ㅇㅇ모터스"
+  /* ★ 현황판 타이틀(멘트입력 필드)에서 업체명 추출 — 예: "🚗한결모터스🚗" → "한결모터스"
      view.html 제목에 "{업체명} 차량 위치 안내"로 자동 표시됨 */
   function _getBizName(){
     var m='';
