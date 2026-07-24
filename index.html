@@ -1605,7 +1605,9 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
                    background:#D1FAE5 !important; transform:scale(1.04); transition:transform .1s; }
 /* ★ 드래그 중 touch-action 전환: body 클래스 1회 토글 → 모든 슬롯 적용 (루프 reflow 제거) */
 body.dragging-slot .slot { touch-action: none; }
-body.dragging-slot #mainWrap { overflow-y:hidden !important; }
+/* ★ BUG FIX: overflow-y:hidden 토글 제거 — 스크롤바가 사라졌다 나타나며
+   #mainWrap 폭이 바뀌어 그리드 전체가 reflow되는 것이 전체 슬롯 깜빡임의 원인이었음.
+   PC 마우스 휠 스크롤 차단은 아래 wheel 이벤트 리스너로 대체 (레이아웃 변경 없음). */
 /* 드래그 중 col-scroll-wrap: touch 차단, overflow-x는 auto 유지(JS로 스크롤) */
 body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 #dragGhost {
@@ -8880,6 +8882,13 @@ window.addEventListener('scroll', function() {
     document.body.classList.remove('dragging-slot'); /* ★ touch-action 복원 */
   }
 }, {passive:true});
+/* ★ BUG FIX: PC 드래그 중 마우스 휠로 스크롤되는 것 방지
+   — 기존에는 #mainWrap에 overflow-y:hidden !important를 걸어 막았으나,
+     스크롤바가 사라지며 폭이 바뀌어 그리드 전체가 reflow(깜빡임)되는 부작용이 있었음.
+   — wheel 이벤트만 막으면 레이아웃 변경 없이 동일한 효과를 낼 수 있음. */
+document.getElementById('mainWrap') && document.getElementById('mainWrap').addEventListener('wheel', function(e){
+  if (document.body.classList.contains('dragging-slot')) e.preventDefault();
+}, {passive:false});
 
 /* ★ 전체 + 파트별 차량 카운트 배지 업데이트 */
 function updateCarCountBadge(){
