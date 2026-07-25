@@ -2185,7 +2185,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     </div>
     <button class="btn-reset-all" onclick="openResetConfirm()">🗑️ 전체초기화</button>
     <button class="btn-reset-all" onclick="PIN.change()" style="background:#5A2D00;color:#FEE500;font-weight:900;margin-left:4px;">🔑 비밀번호변경</button>
-    <button class="btn-reset-all" id="pinToggleBtn" onclick="_pinToggle()" style="background:#16A34A;color:#fff;font-weight:900;margin-left:4px;">🔓 해제중</button>
+    <button class="btn-reset-all" id="pinToggleBtn" onclick="_pinToggle()" style="background:#DC2626;color:#fff;font-weight:900;margin-left:4px;">🔐 사용중</button>
     <button id="partPhotoBtn" onclick="_openPartPhotoSetting()">📸 파트위치사진</button>
     <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
@@ -5420,8 +5420,12 @@ function fitLayout(){
         ? Math.round((vw - hPad - gapW_p) / visCols_calc)
         : Math.floor((vw - hPad - gapW_p) / visCols_calc);
 
-      /* ★ 자연 슬롯 높이 (폭 비례) */
-      var naturalSlotH_p = Math.min(Math.max(Math.floor(slotW_p * 1.15), 58), 110);
+      /* ★ 자연 슬롯 높이 (폭 비례)
+         ★ FIX(세로모드 배지 안 보임): 하한선이 배지 표시 기준선(58px)과 정확히 같아서
+            자동맞춤이 조금만 압축돼도 바로 배지 숨김 경계에 걸림 → 64px로 올려
+            여유를 둠 (사용자 선택: 슬롯이 살짝 커지고 행이 많으면 스크롤이 늘어나더라도
+            배지는 항상 보이게) */
+      var naturalSlotH_p = Math.min(Math.max(Math.floor(slotW_p * 1.15), 64), 110);
 
       /* ★ PC 파트별 자동 맞춤:
          이 파트의 그리드가 화면 높이를 넘지 않도록 slotH 상한 계산
@@ -5446,7 +5450,8 @@ function fitLayout(){
         var _baseRows = Math.min(pr, 4);
         var _partOvhd4 = 80 + _gridPadPc + (_baseRows - 1) * _rowGapPc + _baseRows * _slotMarginPc;
         var _fitH = Math.floor((_pcAvailH - _partOvhd4) / _baseRows);
-        _fitH = Math.min(Math.max(_fitH, 58), 110);
+        /* ★ FIX(세로모드 배지 안 보임): 여기 하한선도 64px로 올림 (위 naturalSlotH_p와 동일 이유) */
+        _fitH = Math.min(Math.max(_fitH, 64), 110);
         slotH_p = (pr > 4) ? _fitH : Math.min(naturalSlotH_p, _fitH);
       }
 
@@ -5767,7 +5772,8 @@ function togglePart(n){
   /* ★ FIX v3: 깜박임 해결 — fitLayout 호출 제거
      파트 접기/펼치기 시 CSS transition(약 250ms) 중에 즉시 fitLayout을 호출하면
      열 간격 재계산이 애니메이션과 겹쳐 깜박임 발생.
-     ResizeObserver가 이미 파트 크기 변화를 감지하고 있으므로 불필요. */
+     ResizeObserver가 이미 파트 크기 변화를 감지하고 있으므로 불필요.
+     toggleSettingsBar()와 동일한 원리로 해결. */
 }
 function loadPartCollapseStates(){
   for(var n=1;n<=NUM_PARTS;n++){
@@ -6833,24 +6839,23 @@ function _initColScrollArrow(sw){
     return c > 0 ? Math.round(sw.scrollWidth / c) : 80;
   }
 
-  /* 호버 자동 스크롤 (★ 스무스: 서서히 가속되는 방식으로 변경, 최대 속도 제한) */
-  var _hRaf=null, _hDir=0, _hSpeed=0, _hFrac=0;
-  var _H_MIN  = 1.2;   /* 시작 속도 (px/frame) */
-  var _H_MAX  = 6.5;   /* 최대 속도 (px/frame) — 기존 대비 훨씬 완만 */
-  var _H_RAMP = 0.18;  /* 가속도 (프레임당 속도 증가량) */
+  /* 호버 자동 스크롤 */
+  var _hRaf=null, _hDir=0;
   function _hScroll(){
-    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hSpeed=0; _hFrac=0; _hRaf=null; return; }
-    if(!_hDir){ _hSpeed=0; _hFrac=0; _hRaf=null; return; }
-    _hSpeed = Math.min(_H_MAX, _hSpeed + _H_RAMP);
-    _hFrac += _hDir * _hSpeed;
-    var step = Math.trunc(_hFrac);
-    if(step !== 0){ sw.scrollLeft += step; _hFrac -= step; }
+    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; return; }
+    if(!_hDir){ _hRaf=null; return; }
+    /* ★ FIX: 화살표 호버 스크롤 속도 개선 (현재의 반 속도)
+       변경 전: Math.max(3, Math.round(_slotW()*0.05)) - 너무 빠름
+       개선 1: Math.max(1, Math.round(_slotW()*0.02)) - 2배 느림
+       개선 2: Math.max(1, Math.round(_slotW()*0.01)) - 4배 느림
+       개선 3: Math.round(_slotW()*0.005) - 8배 느림 (매우 부드러움) */
+    sw.scrollLeft += _hDir * Math.round(_slotW()*0.005);
     _upd();
     _hRaf = requestAnimationFrame(_hScroll);
   }
-  btnL.addEventListener('mouseenter', function(){ _pos(); _hDir=-1; _hSpeed=_H_MIN; _hFrac=0; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
+  btnL.addEventListener('mouseenter', function(){ _pos(); _hDir=-1; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
   btnL.addEventListener('mouseleave', function(){ _hDir=0; });
-  btnR.addEventListener('mouseenter', function(){ _pos(); _hDir=1;  _hSpeed=_H_MIN; _hFrac=0; if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
+  btnR.addEventListener('mouseenter', function(){ _pos(); _hDir=1;  if(!_hRaf) _hRaf=requestAnimationFrame(_hScroll); });
   btnR.addEventListener('mouseleave', function(){ _hDir=0; });
   btnL.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft -= _slotW(); _upd(); });
   btnR.addEventListener('click', function(e){ e.stopPropagation(); sw.scrollLeft += _slotW(); _upd(); });
@@ -21526,12 +21531,14 @@ var PIN = (function(){
     /* Firebase 연결 후 호출 — 실시간 동기화 시작 */
     startListener: _startPinDisabledListener,
     init: function(){
-      /* ★ 기본값: 사용안함(해제중) — 앱 실행 시 PIN 입력 없이 바로 사용
-         최초 실행 시 1회 '해제중'으로 전환(마이그레이션).
-         이후 토글로 켜면 그 설정(모든 기기 동기화)이 유지됨 */
+      /* ★ 기본값: 사용함 — 앱 실행 시 PIN 입력 필요 (기본 비밀번호 9000)
+         기존 기기도 이 버전 최초 실행 시 1회 '사용함'으로 전환(마이그레이션).
+         이후 토글로 끄면 그 설정(모든 기기 동기화)이 유지됨 */
       if(localStorage.getItem('pb_pin_default_on_v1') === null){
         localStorage.setItem('pb_pin_default_on_v1','1');
-        localStorage.setItem(DISABLED_KEY,'1');
+        /* 로컬 기본값만 '사용함'으로 — Firebase 공유 설정은 건드리지 않음
+           (사장님이 다른 기기에서 일부러 꺼둔 경우, 연결 후 그 설정이 자동 반영됨) */
+        localStorage.removeItem(DISABLED_KEY);
         _updatePinToggleBtn();
       }
       if(isDisabled()){
