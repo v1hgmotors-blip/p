@@ -2963,21 +2963,28 @@ function _loadPendingSettings(){
 function _clearPendingSettings(){
   try{ localStorage.removeItem(_LS_PENDING_SETTINGS); }catch(e){}
 }
+var _settingsFlushInProgress = false;
 function _fbSettingsRetryFlush(){
   _fbSettingsRetryTimer = null;
   if(!fbSettingsRef) return;
+  if(_settingsFlushInProgress) return;   /* ★ 이미 전송 중이면 중복 전송 방지 */
   var pending = _loadPendingSettings() || {};
   _fbSettingsRetryQueue.forEach(function(item){ Object.assign(pending, item.upd); });
   _fbSettingsRetryQueue = [];
   if(!Object.keys(pending).length) return;
+  _settingsFlushInProgress = true;
+  _clearPendingSettings();               /* ★ 낙관적 선-제거: 다른 트리거가 같은 설정을 또 안 보내게 */
   fbSettingsRef.update(pending)
     .then(function(){
       console.log('[설정sync] 미전송 설정 Firebase 전송 완료:', Object.keys(pending));
-      _clearPendingSettings();
+      _settingsFlushInProgress = false;
     })
     .catch(function(e){
       console.warn('[설정sync] 재시도 실패 — 다음 온라인 복귀 시 재시도', e);
-      _savePendingSettings(pending);
+      var _p = _loadPendingSettings() || {};
+      Object.assign(_p, pending);          /* 실패분 다시 큐에 (그 사이 새로 들어온 것과 병합) */
+      _savePendingSettings(_p);
+      _settingsFlushInProgress = false;
       _fbSettingsRetryTimer = setTimeout(_fbSettingsRetryFlush, _FB_RETRY_DELAY);
     });
 }
@@ -3013,8 +3020,77 @@ function _fbSafeSet(dataObj,label){
     _fbSafeSetLast=null;
   },300);
 }
+/* ═══════════════════════════════════════════════════════════════
+   ★★ 데이터 무결성 안전장치 1·2층 (v34 데이터보호)
+   전체 슬롯 덮어쓰기(.set)는 유실 사고의 유일한 통로이므로 이 길목에서:
+   [2층] 덮어쓰기 직전, 현재 로컬 데이터를 회전 스냅샷(최근5)으로 저장
+         → 만에 하나 사고가 나도 콘솔에서 즉시 복구 가능
+   [1층] 마지막 동기화본에 "차량이 있는" 슬롯 중 이번 쓰기 객체에서
+         '통째로 빠진' 것이 있으면 자동으로 되살려 넣음
+         → 차 있는 슬롯이 조용히 삭제되는 것을 구조적으로 차단
+         (키가 포함돼 있으면 — 빈칸이라도 — 의도된 비우기/이동이므로 손대지 않음.
+          열밀기/당기기/초기화는 .update()·별도경로라 여기 안 옴)
+   ═══════════════════════════════════════════════════════════════ */
+var LS_PRE_OW_SNAP = 'pb_pre_overwrite_snaps';
+function _savePreOverwriteSnapshot(label){
+  try{
+    var arr = [];
+    try{ arr = JSON.parse(localStorage.getItem(LS_PRE_OW_SNAP)||'[]'); }catch(e){ arr = []; }
+    if(!Array.isArray(arr)) arr = [];
+    arr.push({
+      ts:        Date.now(),
+      label:     label || '',
+      data:      _getData(),
+      ids:       _getIds(),
+      numParts:  NUM_PARTS,
+      colCounts: (typeof PART_COL_COUNTS!=='undefined'&&PART_COL_COUNTS)?PART_COL_COUNTS.slice():[],
+      rowCounts: (typeof PART_ROW_COUNTS!=='undefined'&&PART_ROW_COUNTS)?PART_ROW_COUNTS.slice():[]
+    });
+    while(arr.length > 5) arr.shift();   /* 최근 5개만 유지 */
+    localStorage.setItem(LS_PRE_OW_SNAP, JSON.stringify(arr));
+  }catch(e){ console.warn('[덮어쓰기 스냅샷 실패]', e); }
+}
+/* 콘솔 긴급 복구용 — _listPreOverwriteSnaps() 로 목록, _recoverPreOverwrite(번호) 로 복구 */
+window._listPreOverwriteSnaps = function(){
+  try{
+    var arr = JSON.parse(localStorage.getItem(LS_PRE_OW_SNAP)||'[]');
+    if(!arr.length){ console.log('저장된 덮어쓰기 스냅샷 없음'); return arr; }
+    arr.forEach(function(s,i){
+      var cars = Object.keys(s.data||{}).filter(function(k){return s.data[k]&&s.data[k].car;}).length;
+      console.log('#'+i+'  '+new Date(s.ts).toLocaleString()+'  ['+(s.label||'')+']  차량 '+cars+'대');
+    });
+    console.log('복구하려면 _recoverPreOverwrite(번호) 실행');
+    return arr;
+  }catch(e){ console.warn(e); return []; }
+};
+window._recoverPreOverwrite = function(n){
+  try{
+    var arr = JSON.parse(localStorage.getItem(LS_PRE_OW_SNAP)||'[]');
+    var s = arr[n];
+    if(!s){ console.warn('#'+n+' 스냅샷 없음 — _listPreOverwriteSnaps() 로 확인'); return; }
+    _saveData(s.data||{}); _saveIds(s.ids||{});
+    if(fbSlotsRef){ _fbSafeUpdate(Object.assign({}, s.data, {_ids:s.ids, _localTs:_tsNow()}), 'preOverwrite복구'); }
+    try{ if(typeof buildGrid==='function') buildGrid(); }catch(e){}
+    console.log('스냅샷 #'+n+' 복구 완료 — 화면·Firebase에 반영됨');
+  }catch(e){ console.warn('복구 실패', e); }
+};
 function _doFbSafeSet(dataObj,label){
   if(!fbSlotsRef) return;
+  /* [2층] 덮어쓰기 직전 로컬 스냅샷 저장 (복구 그물) */
+  _savePreOverwriteSnapshot(label);
+  /* [1층] 빠진 차량슬롯 자동 복구 — 의도된 전체초기화(_cleared)는 제외 */
+  if(!(dataObj && dataObj._cleared)){
+    try{
+      var _cache = window._fbPrevSlotCache || {};
+      var _rescued = 0;
+      for(var _rk in _cache){
+        var _rv = _cache[_rk];
+        /* 차량이 실제로 있는 슬롯인데 이번 쓰기 객체에 키 자체가 없음 → 사고로 간주하고 복구 */
+        if(_rv && _rv.car && !(_rk in dataObj)){ dataObj[_rk] = _rv; _rescued++; }
+      }
+      if(_rescued > 0) console.warn('[유실방지] '+(label||'')+' — 빠진 차량슬롯 '+_rescued+'건 자동 복구 후 저장');
+    }catch(e){ console.warn('[유실방지 가드 예외]', e); }
+  }
   fbSlotsRef.set(dataObj)
     .then(function(){
       _fbFailStreak = 0;
@@ -7139,13 +7215,16 @@ function _doRemovePartCol(pNum){
   if(cur<=1){showAlert('⚠️ 최소 1열');setTimeout(hideAlert,2000);return;}
   _saveUndoSnapshot('removePartCol p'+pNum);
 
-  /* ① 마지막 열 데이터 삭제 */
+  /* ① 마지막 열 데이터 삭제 (로컬 + Firebase 일관 삭제) */
   var ids=_getIds(), data=_getData();
   var _removedCarsCol=[];
+  var _fbDelCol={};   /* ★ FIX(유령데이터 방지): Firebase에서도 지울 좌표 목록 */
   for(var r2=0; r2<rows; r2++){
     var rid = _coordId(pNum, cur, r2+1);
     if(data[rid] && data[rid].car) _removedCarsCol.push(data[rid].car);
     delete data[rid];
+    _fbDelCol[rid]=null;                                          /* Firebase에서 삭제 */
+    if(window._fbPrevSlotCache) delete window._fbPrevSlotCache[rid]; /* 가드가 되살리지 않도록 캐시 정리 */
   }
   var newIds=[];
   for(var r3=0; r3<rows; r3++){
@@ -7177,6 +7256,8 @@ function _doRemovePartCol(pNum){
   /* ★ OPT: 전체 set 불필요 — _pushGridStructure()에서 _gridConfig+_ids만 update */
   if(typeof pushSettings==='function') pushSettings({colNames:_cn});
   _cleanColArrows();
+  /* ★ FIX(유령데이터 방지): 삭제된 열 좌표를 Firebase에서도 null로 제거 → 열 재추가 시 유령 부활 차단 */
+  if(fbSlotsRef && Object.keys(_fbDelCol).length){ _fbDelCol._localTs=_tsNow(); _fbSafeUpdate(_fbDelCol,'colDelete'); }
   _recalcPartArrays(); _rebuildAndRefresh(); _pushGridStructure();
 
   /* ★ 삭제 후 마지막 열이 보이도록 스크롤 */
@@ -7233,13 +7314,16 @@ function removePartRow(pNum){
 function _doRemovePartRow(pNum){
   var cur=PART_ROW_COUNTS[pNum-1]||ROWS_PER_PART, cols=PART_COL_COUNTS[pNum-1]||COLS_PER_PART;
   _saveUndoSnapshot('removePartRow p'+pNum);
-  /* 마지막 행 데이터 삭제 (좌표 ID로 직접 접근) */
+  /* 마지막 행 데이터 삭제 (좌표 ID로 직접 접근, 로컬 + Firebase 일관 삭제) */
   var ids=_getIds(), data=_getData();
   var _removedCarsRow=[];
+  var _fbDelRow={};   /* ★ FIX(유령데이터 방지): Firebase에서도 지울 좌표 목록 */
   for(var cc2=0; cc2<cols; cc2++){
     var rid=_coordId(pNum, cc2+1, cur);
     if(data[rid] && data[rid].car) _removedCarsRow.push(data[rid].car);
     delete data[rid];
+    _fbDelRow[rid]=null;                                          /* Firebase에서 삭제 */
+    if(window._fbPrevSlotCache) delete window._fbPrevSlotCache[rid]; /* 가드가 되살리지 않도록 캐시 정리 */
   }
   /* _ids 배열에서 마지막 행 제거 */
   if(ids[pNum]) ids[pNum]=ids[pNum].slice(0, (cur-1)*cols);
@@ -7248,6 +7332,8 @@ function _doRemovePartRow(pNum){
   _localColEditTs = Date.now(); /* ★ Firebase 수신 시 중복 갱신 방지 */
   /* ★ OPT: 전체 set 불필요 — _pushGridStructure()에서 _gridConfig+_ids만 update */
   _cleanColArrows(); /* ★ DOM 재생성 전 버튼 정리 */
+  /* ★ FIX(유령데이터 방지): 삭제된 행 좌표를 Firebase에서도 null로 제거 → 행 재추가 시 유령 부활 차단 */
+  if(fbSlotsRef && Object.keys(_fbDelRow).length){ _fbDelRow._localTs=_tsNow(); _fbSafeUpdate(_fbDelRow,'rowDelete'); }
   _recalcPartArrays();_rebuildAndRefresh();_pushGridStructure();
   showAlert('🗑️ '+pNum+'파트 '+(cur-1)+'행 — 총 '+TOTAL+'칸');setTimeout(hideAlert,2000);
   /* ★ 삭제된 행에 있던 차량들의 서류도 함께 정리 — 같은 번호 재사용 시 예전 서류 방지 */
@@ -7285,7 +7371,7 @@ function _showPartSelectDeletePopup(){
     for(var li=0;li<pIds.length;li++){
       var d=data[pIds[li]];
       if(d&&d.car){carCnt++;hasData=true;}
-      else if(d&&(d.num||d.memo||d.owner||d.disabled)){hasData=true;}
+      else if(d&&((d.num&&d.num!=='0')||d.memo||d.owner||d.disabled)){hasData=true;}  /* ★ FIX: num '0'(=키번호 없음)·빈 값은 데이터로 세지 않음 */
     }
     var label=localStorage.getItem(LS_PARTS[p-1])||(p+'.PART');
     var colCnt=PART_COL_COUNTS[p-1]||COLS_PER_PART;
@@ -21639,7 +21725,7 @@ function _saveAllOnClose(){
 })();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결v33 (스플래시 실데이터 대기)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-26 · 한결v34 (데이터보호 1·2층+삭제전파+판정fix)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
