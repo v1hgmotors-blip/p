@@ -2263,6 +2263,12 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="btn" onclick="openBizInfoEdit()" style="background:#0F766E;color:#fff;font-size:11px;">🏢업체정보</button>
       <span class="save-msg" id="saveMsg"></span>
     </div>
+    <div class="s-row">
+      <span class="s-lbl">🗺️ 약도주소</span>
+      <input id="viewBaseInput" class="s-fb-url" type="url" placeholder="비우면 자동감지 · 예) https://내약도도메인.netlify.app" style="flex:1;min-width:0;" />
+      <button class="btn btn-save" onclick="saveViewBaseUrl()">💾</button>
+      <span class="save-msg" id="viewBaseMsg"></span>
+    </div>
     <!-- ★★ 요금발생차단 마스터 스위치 — OFF면 모든 발송(문자·알림톡·약도전송) 전면 차단 -->
     <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;background:#7F1D1D;border-radius:10px;padding:6px 10px;">
       <span class="storage-mode-label" style="color:#FECACA;">🚫 요금발생차단</span>
@@ -4178,8 +4184,28 @@ function editSlotNum(e, idx) {
   badge.appendChild(inp);
   inp.focus();
   inp.select();
+  var _origVal = inp.value;   /* ★ 원래 값 (수정 여부 판정용) */
+  var _committed = false;
+
+  /* ★ 편집란 밖을 탭하면 확실히 blur 시킴 — 일부 환경에서 blur 미발생으로 흰 칸이 남는 버그 방지 */
+  function _numOutside(ev){ if (ev.target !== inp) { inp.blur(); } }
+  document.addEventListener('mousedown',  _numOutside, true);
+  document.addEventListener('touchstart', _numOutside, true);
+  function _numCleanup(){
+    document.removeEventListener('mousedown',  _numOutside, true);
+    document.removeEventListener('touchstart', _numOutside, true);
+  }
 
   function commit() {
+    if (_committed) return;   /* 중복 실행 방지 */
+    _committed = true;
+    _numCleanup();
+    /* ★ 핵심 FIX: renderSlot의 변경감지 캐시(dataset.sig) 무효화 —
+       키번호를 안 바꿔 데이터가 동일해도, 입력칸을 실제로 다시 그려 제거되게 함 */
+    var _slotEl = document.getElementById('slot_' + idx);
+    if (_slotEl) _slotEl.dataset.sig = '__force_rerender__';
+    /* ★ 아무 수정 없이 벗어나면 경고·저장 없이 조용히 원상복구 */
+    if (inp.value === _origVal) { refreshSlot(idx); return; }
     var val = inp.value.trim();
     if (val === '' || val === undefined) val = '0';
     var s = getSlots();
@@ -6500,6 +6526,9 @@ function _appendGridCellsBalanced(wrap, cells){
 }
 
 function _rebuildGridDOM(){
+  /* ★ 세로 스크롤 보존: DOM 파괴 전 현재 위치 기억 (모든 재생성 경로 공통) */
+  var _rgMw = document.getElementById('mainWrap');
+  var _rgTop = _rgMw ? _rgMw.scrollTop : 0;
   /* ★ DOM 재생성 전 호버 버튼 정리 → 재생성 후 _applyAllColFolds에서 재등록 */
   if(typeof _cleanColArrows === 'function') _cleanColArrows();
   var wrap = document.getElementById('gridWrap');
@@ -6693,6 +6722,12 @@ function _rebuildGridDOM(){
     }
   }
   if(gridMode) _appendGridCellsBalanced(wrap, gridCells);
+  /* ★ 세로 스크롤 복원: 재생성·레이아웃(fitLayout) 완료 후 원위치로 (맨 위로 튐 방지) */
+  if(_rgMw && _rgTop > 0){
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      _rgMw.scrollTop = _rgTop;
+    }); }); });
+  }
 }
 
 /* ★ 파트 추가 */
@@ -7046,6 +7081,8 @@ function _saveAllScrollPos(){
     var sw = document.getElementById('colScrollWrap'+_p);
     if(sw) pos[_p] = sw.scrollLeft;
   }
+  var _mw = document.getElementById('mainWrap');   /* ★ 세로 스크롤 위치도 보존 */
+  if(_mw) pos._vtop = _mw.scrollTop;
   return pos;
 }
 
@@ -7056,9 +7093,12 @@ function _restoreAllScrollPos(pos){
     requestAnimationFrame(function(){
       requestAnimationFrame(function(){
         for(var _p in pos){
+          if(_p==='_vtop') continue;   /* 세로는 아래에서 별도 복원 */
           var sw = document.getElementById('colScrollWrap'+_p);
           if(sw && pos[_p] > 0) sw.scrollLeft = pos[_p];
         }
+        var _mw = document.getElementById('mainWrap');   /* ★ 세로 스크롤 복원 */
+        if(_mw && pos._vtop > 0) _mw.scrollTop = pos._vtop;
       });
     });
   });
@@ -12482,6 +12522,32 @@ function _ensureGridConfigInFirebase() {
   }).catch(function(){});
 }
 
+/* ★ 약도(view.html) 주소 — 수동 지정값 우선, 없으면 자동감지 (한결 전용) */
+function _getViewBase(){
+  var manual='';
+  try{ manual=(localStorage.getItem('pb_view_base_url')||'').trim(); }catch(e){}
+  if(manual){
+    if(!/view\.html(\?|$)/i.test(manual)) manual = manual.replace(/\/+$/,'') + '/view.html';
+    return manual;
+  }
+  var base = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html';
+  if(location.protocol==='http:' || location.protocol==='https:'){
+    try{ base = new URL('view.html', location.href).href; }catch(e){}
+  }
+  return base;
+}
+function saveViewBaseUrl(){
+  var inp=document.getElementById('viewBaseInput'); if(!inp) return;
+  var val=inp.value.trim();
+  try{ localStorage.setItem('pb_view_base_url', val); }catch(e){}
+  if(typeof pushSettings==='function'){ try{ pushSettings({viewBaseUrl: val}); }catch(e){} }
+  var msg=document.getElementById('viewBaseMsg');
+  if(msg){ msg.textContent = val ? '✅ 약도주소 저장됨' : '✅ 자동감지로 전환'; setTimeout(function(){ if(msg) msg.textContent=''; }, 2500); }
+}
+function _loadViewBaseInput(){
+  var inp=document.getElementById('viewBaseInput');
+  if(inp){ try{ inp.value=(localStorage.getItem('pb_view_base_url')||''); }catch(e){} }
+}
 function pushSettings(obj){
   if(!fbSettingsRef){
     var _pend = _loadPendingSettings() || {};
@@ -12597,6 +12663,11 @@ function applyRemoteSettings(data){
   /* ★ 업체정보 수신 반영 */
   if(data.hasOwnProperty('bizInfo')){
     try{ localStorage.setItem(LS_BIZ_INFO, String(data.bizInfo||'')); }catch(e){}
+  }
+  /* ★ 약도주소(수동 지정) 수신 반영 (한결 전용) */
+  if(data.hasOwnProperty('viewBaseUrl')){
+    try{ localStorage.setItem('pb_view_base_url', String(data.viewBaseUrl||'')); }catch(e){}
+    var _vbi=document.getElementById('viewBaseInput'); if(_vbi) _vbi.value=String(data.viewBaseUrl||'');
   }
   /* ★ 주차현황판 하단 메모 (boardMemo) 수신 — 실시간 반영 */
   if(data.hasOwnProperty('boardMemo')){
@@ -13878,6 +13949,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   var c=localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || DEFAULT_FB_CODE;
   document.getElementById('fbUrlInput').value=u;
   document.getElementById('syncCodeInput').value=c;
+  try{ _loadViewBaseInput(); }catch(e){}
   /* ★ 저장소 모드 초기화 — 처음이면 팝업, 아니면 기존 모드 적용 */
   var _initModeResult = _initStorageMode();
   if(_initModeResult === 'pending'){
@@ -19755,10 +19827,7 @@ window._drawQRCanvas = function(container, text, size){
          링크 생성 실패 시에는 기존처럼 텍스트를 QR에 담음 (기능 유지) */
       var _qrUrl = '';
       try{
-        var _vBase = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html'; /* ★ QR/약도 URL 자동감지 */
-        if(location.protocol==='http:' || location.protocol==='https:'){
-          _vBase = new URL('view.html', location.href).href; /* 같은 폴더의 view.html */
-        }
+        var _vBase = _getViewBase(); /* ★ 약도 URL (수동 지정 우선, 없으면 자동감지) */
         var _code9 = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
         var _dbu9  = localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||'';
         if(_code9){
@@ -20253,10 +20322,7 @@ window._drawQRCanvas = function(container, text, size){
       var chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
       var key='';
       for(var i=0;i<6;i++) key += chars[Math.floor(Math.random()*chars.length)];
-      var base = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html'; /* ★ QR/약도 URL 자동감지 */
-      if(location.protocol==='http:' || location.protocol==='https:'){
-        base = new URL('view.html', location.href).href;
-      }
+      var base = _getViewBase(); /* ★ 약도 URL (수동 지정 우선, 없으면 자동감지) */
       payload = payload || {};
       payload.t = Date.now();
       var _bz = _getBizName();
@@ -20291,10 +20357,7 @@ window._drawQRCanvas = function(container, text, size){
   /* ★ QR용 보기 페이지 링크 생성 (팝업 QR과 동일 규칙) */
   function _buildViewerUrl(partNo, carTxt, locTxt, ownerName, ownerPhone, keyNo){
     try{
-      var vBase = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html'; /* ★ QR/약도 URL 자동감지 */
-      if(location.protocol==='http:' || location.protocol==='https:'){
-        vBase = new URL('view.html', location.href).href;
-      }
+      var vBase = _getViewBase(); /* ★ 약도 URL (수동 지정 우선, 없으면 자동감지) */
       var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
       if(!code) return '';
       var dbu = localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||'';
@@ -21725,7 +21788,7 @@ function _saveAllOnClose(){
 })();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-26 · 한결v34 (데이터보호 1·2층+삭제전파+판정fix)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-26 · 한결v34 (데이터보호+스크롤유지+약도주소+키번호fix2)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
