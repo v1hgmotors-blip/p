@@ -2437,7 +2437,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 </div>
 
   <!-- ★ 빌드 정보 뱃지 -->
-  <div id="buildBadge"><span id="storageUsageBadge" onclick="_openStorageDetail()">💾 용량 계산중...</span></div>
+  <div id="buildBadge"><span id="verToggleBtn" onclick="_toggleVerBadge()" style="cursor:pointer;color:#64748B;font-size:11px;font-weight:800;margin-right:8px;padding:2px 7px;border:1px solid #CBD5E1;border-radius:6px;background:rgba(255,255,255,.6);">🔖 버전보기</span><span id="storageUsageBadge" onclick="_openStorageDetail()">💾 용량 계산중...</span></div>
 </div><!-- /mainWrap -->
 
 <!-- ★ 저장용량 상세 팝업 -->
@@ -11669,6 +11669,22 @@ function _calcViewStats(cb){
 }
 
 /* 앱 시작 시 자동 계산 (Firebase 연결까지 약간의 시간을 두고 실행) */
+function _verBadgeHide(){
+  var b=document.getElementById('pbVerBadge'); var t=document.getElementById('verToggleBtn');
+  if(b) b.style.display='none'; if(t) t.textContent='🔖 버전보기';
+  clearTimeout(window._verAutoHide);
+}
+function _toggleVerBadge(){
+  var b=document.getElementById('pbVerBadge'); var t=document.getElementById('verToggleBtn');
+  if(!b) return;
+  var showing=(b.style.display && b.style.display!=='none');
+  if(showing){ _verBadgeHide(); }
+  else {
+    b.style.display='block'; if(t) t.textContent='🔖 접기';
+    clearTimeout(window._verAutoHide);
+    window._verAutoHide=setTimeout(_verBadgeHide, 20000); /* ★ 20초 후 자동 접기 */
+  }
+}
 function _initStorageBadge(){
   setTimeout(function(){
     _logRoomView();     /* ★ 조회수 기록 (다운로드량 추정용) */
@@ -21840,7 +21856,7 @@ function _saveAllOnClose(){
 })();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;">v2026-07-26 · 한결v34 (데이터보호+스크롤유지+약도주소+키번호fix2+로컬모드fix+칸초기화fix+구조덮어쓰기fix+교환중표시+저장잠금)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;display:none;">v2026-07-26 · 한결v34 (데이터보호+스크롤유지+약도주소+키번호fix2+로컬모드fix+칸초기화fix+구조덮어쓰기fix+교환중표시+저장잠금+버전토글20초)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
