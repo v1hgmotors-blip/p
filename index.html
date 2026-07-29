@@ -2613,7 +2613,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div class="m-dup-error" id="mDupError"></div>
     <div class="m-owner-error" id="mOwnerError">🙋 차주입력이 안되었습니다<br><span style="font-size:11px;font-weight:700;opacity:.8;">차주를 입력한 후 저장해 주세요</span></div>
     <div class="m-btns">
-      <button class="mbtn mbtn-cancel" onclick="closeModal()">취소</button>
+      <button class="mbtn mbtn-cancel" onclick="closeModal()">닫기</button>
       <button class="mbtn mbtn-delete" onclick="confirmClear()">🗑️ 초기화</button>
       <button class="mbtn mbtn-save"   onclick="saveSlot()" style="grid-column:auto;">✅ 저장</button>
     </div>
@@ -5940,7 +5940,7 @@ function hideTooltip(){
 
 /* ── 메모 글씨크기 조절 ── */
 function loadMemoFs(){
-  var v=parseInt(localStorage.getItem(LS_MEMO_FS))||18;
+  var v=parseInt(localStorage.getItem(LS_MEMO_FS))||14;
   v=Math.min(Math.max(v,8),32);
   document.documentElement.style.setProperty('--memo-input-fs',v+'px');
   /* ★ PC: 슬롯 메모 표시 크기에도 반영 (모바일은 CSS에서 자동계산값 우선) */
@@ -5949,7 +5949,7 @@ function loadMemoFs(){
   if(el) el.textContent=v;
 }
 function changeMemoFs(delta){
-  var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||18;
+  var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||14;
   var next=Math.min(Math.max(cur+delta,8),32);
   localStorage.setItem(LS_MEMO_FS, next);
   document.documentElement.style.setProperty('--memo-input-fs',next+'px');
@@ -10242,24 +10242,24 @@ function _confirmKeyReturn(slotIdx, entry){
     }
   }
 
-  /* ★ 키불출앱 Firebase 연동: returned 배열에 해당 키 ID 추가 */
+  /* ★ 키불출앱 Firebase 연동: returned 배열에 해당 키 ID 추가
+     ★ FIX(양방향 동기화 누락 방지): once+update(읽고→쓰기) 방식은 그 사이(read~write)에
+     키불출앱이나 다른 기기가 동시에 반납확인을 하면 서로 덮어써서 한쪽 기록이 사라질 수 있었다.
+     Firebase transaction으로 "서버의 현재값 기준 원자적 병합"하도록 수정. */
   if(returnedIds.length > 0 && fbDb){
     try{
       /* ★ BUG FIX: 'pb_sync_code'는 저장되지 않는 키 → LS_CODE('pb_code')로 통일 */
       var _code = localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '';
       if(_code){
         var _kdRef = fbDb.ref('kd_rooms/' + _code);
-        _kdRef.once('value').then(function(snap){
-          var _data = snap.val() || {};
-          var _cur = Array.isArray(_data.returned) ? _data.returned.map(String) : [];
-          returnedIds.forEach(function(rid){
-            if(!_cur.includes(rid)) _cur.push(rid);
-          });
-          _kdRef.update({
-            returned:  _cur,
-            updatedAt: Date.now()
-          });
-        }).catch(function(e){ console.warn('[키반납확인] Firebase 업데이트 실패:', e); });
+        _kdRef.child('returned').transaction(function(cur){
+          var arr = Array.isArray(cur) ? cur.map(String) : [];
+          returnedIds.forEach(function(rid){ if(!arr.includes(rid)) arr.push(rid); });
+          return arr;
+        }, function(err){
+          if(err) console.warn('[키반납확인] Firebase 업데이트 실패:', err);
+        });
+        _kdRef.child('updatedAt').set(Date.now());
       }
     } catch(e){ console.warn('[키반납확인] Firebase 오류:', e); }
   }
@@ -11361,7 +11361,11 @@ function _calcDbStorageUsage(cb){
     _fbGetPath(roomRef, 'pb_slots', 8000),
     _fbGetPath(roomRef, 'pb_settings', 6000),
     _fbGetPath(roomRef, 'pb_daily_backup', 6000),
-    _fbGetPath(roomRef, 'kd_docs_archive', 10000)
+    _fbGetPath(roomRef, 'kd_docs_archive', 10000),
+    _fbGetPath(fbDb.ref('kd_photos'), code, 20000), /* ★ kd_rooms 바깥 별도 경로 — 키불출앱 촬영사진 */
+    _fbGetPath(roomRef, 'hist', 15000),             /* ★ 키불출 이력 — 이전엔 계산 누락 */
+    _fbGetPath(roomRef, 'kd_daily_backup', 15000),  /* ★ pb_daily_backup과 별개인 키불출앱 자체 백업 — 이전엔 계산 누락 */
+    _fbGetPath(roomRef, 'scan_log', 10000)          /* ★ 약도(view.html) QR스캔 로그 — 이전엔 계산 누락 */
   ]).then(function(results){
     try{
       var byPath={};
@@ -11420,7 +11424,41 @@ function _calcDbStorageUsage(cb){
 
       var backups = byPath.pb_daily_backup.val;
       if(byPath.pb_daily_backup.timeout) anyTimeout=true;
-      if(backups) backupCount = Object.keys(backups).length;
+      var backupSize = 0;
+      if(backups){
+        backupCount = Object.keys(backups).length;
+        /* ★ 이미 받아온 backups 데이터를 재사용해 실제 크기 계산 (추가 다운로드 0원) */
+        backupSize = _byteLen(JSON.stringify(backups));
+      }
+
+      /* ★ 키불출앱 촬영사진 (kd_rooms 바깥 kd_photos/{code} 경로 — 이전엔 계산 누락) */
+      var kdPhotosSize=0, kdPhotoCount=0;
+      var kdPhotos = byPath[code] ? byPath[code].val : null;
+      if(byPath[code] && byPath[code].timeout) anyTimeout=true;
+      if(kdPhotos){
+        Object.keys(kdPhotos).forEach(function(pid){
+          kdPhotoCount++;
+          kdPhotosSize += _byteLen(kdPhotos[pid]);
+        });
+      }
+
+      /* ★ 키불출 이력(hist) — 이전엔 계산 누락 */
+      var histSize = 0;
+      if(byPath.hist && byPath.hist.val) histSize = _byteLen(JSON.stringify(byPath.hist.val));
+      if(byPath.hist && byPath.hist.timeout) anyTimeout=true;
+
+      /* ★ 키불출앱 자체 백업(kd_daily_backup) — pb_daily_backup과 별개, 이전엔 계산 누락 */
+      var kdBackupSize=0, kdBackupCount=0;
+      if(byPath.kd_daily_backup && byPath.kd_daily_backup.val){
+        kdBackupCount = Object.keys(byPath.kd_daily_backup.val).length;
+        kdBackupSize = _byteLen(JSON.stringify(byPath.kd_daily_backup.val));
+      }
+      if(byPath.kd_daily_backup && byPath.kd_daily_backup.timeout) anyTimeout=true;
+
+      /* ★ QR스캔 로그(scan_log) — 이전엔 계산 누락 */
+      var scanLogSize = 0;
+      if(byPath.scan_log && byPath.scan_log.val) scanLogSize = _byteLen(JSON.stringify(byPath.scan_log.val));
+      if(byPath.scan_log && byPath.scan_log.timeout) anyTimeout=true;
 
       /* ★ 서류 보관함(kd_docs_archive) — 판매완료 등으로 정리된 서류가 보관 기간
          동안 임시로 머무는 곳. 실제 데이터가 그대로 있으므로 용량 계산에 포함한다. */
@@ -11444,14 +11482,32 @@ function _calcDbStorageUsage(cb){
         });
       }
 
-      var attachTotal = docsSize + commonSize;
-      var total = docsSize + commonSize + photosSize + canvasSize + otherSize + archiveSize;
+      /* ★ 나머지 소규모 경로들 — 개별로는 작지만 빠짐없이 합산 (병렬 조회, 각 5초 타임아웃) */
+      var _miscPaths = ['dispatch_auth','dispatch_auth_car','dispatch_req','dispatch_scan','kd_doc_flags',
+        'links','pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
+        'pb_search_return','returned','search_dispatch_events','sms_queue'];
+      Promise.all(_miscPaths.map(function(p){ return _fbGetPath(roomRef, p, 5000); })).then(function(miscResults){
+        var miscSize=0;
+        miscResults.forEach(function(r){
+          if(r.timeout) anyTimeout=true;
+          if(r.val!=null) miscSize += _byteLen(JSON.stringify(r.val));
+        });
 
-      done({
-        connected:true, timeout:anyTimeout, total: total, attach: attachTotal,
-        docs: docsSize, common: commonSize,
-        photos: photosSize, canvases: canvasSize, other: otherSize,
-        backupCount: backupCount, archive: archiveSize, archiveCount: archiveCount
+        var attachTotal = docsSize + commonSize;
+        /* ★ 백업이력·키불출앱 사진·이력·백업2·스캔로그·기타 실제 크기를 모두 합계에 포함
+           — 요금(저장용량 $5/GB) 산정 기준과 최대한 일치시킴 */
+        var total = docsSize + commonSize + photosSize + canvasSize + otherSize + archiveSize
+                   + backupSize + kdPhotosSize + histSize + kdBackupSize + scanLogSize + miscSize;
+
+        done({
+          connected:true, timeout:anyTimeout, total: total, attach: attachTotal,
+          docs: docsSize, common: commonSize,
+          photos: photosSize, canvases: canvasSize, other: otherSize,
+          backupCount: backupCount, backupSize: backupSize, archive: archiveSize, archiveCount: archiveCount,
+          kdPhotos: kdPhotosSize, kdPhotoCount: kdPhotoCount,
+          histSize: histSize, kdBackupSize: kdBackupSize, kdBackupCount: kdBackupCount,
+          scanLogSize: scanLogSize, miscSize: miscSize
+        });
       });
     }catch(e){
       done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
@@ -11460,10 +11516,11 @@ function _calcDbStorageUsage(cb){
     done({connected:false, error:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
   });
 
-  /* ★ 최종 안전망 — 위 로직이 어떤 이유로든 done()을 못 부르는 극단적 상황 대비 */
+  /* ★ 최종 안전망 — 위 로직이 어떤 이유로든 done()을 못 부르는 극단적 상황 대비
+     (30초로 확대: kd_photos 등 개별 타임아웃이 최대 20초라 기존 15초는 그보다 짧아 모순이었음) */
   setTimeout(function(){
-    done({connected:false, error:true, timeout:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0});
-  }, 15000);
+    done({connected:false, error:true, timeout:true, total:0, attach:0, docs:0, common:0, photos:0, canvases:0, other:0, backupCount:0, archive:0, archiveCount:0, kdPhotos:0, kdPhotoCount:0, histSize:0, kdBackupSize:0, kdBackupCount:0, scanLogSize:0, miscSize:0});
+  }, 30000);
 }
 
 function _sdfRefreshBtnState(busy){
@@ -11544,8 +11601,13 @@ function _renderStorageDetail(){
     +'<div class="storage-detail-row"><span>✏️ 약도 그림데이터</span><b>'+_fmtBytes(db.canvases||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>⚙️ 기타(슬롯·설정 등)</span><b>'+_fmtBytes(db.other||0)+'</b></div>'
     +'<div class="storage-detail-row"><span>🗃️ 서류 보관함 ('+(db.archiveCount||0)+'건, '+DOC_ARCHIVE_RETENTION_DAYS+'일 후 자동삭제)</span><b>'+_fmtBytes(db.archive||0)+'</b></div>'
-    +'<div class="storage-detail-row total"><span>☁️ DB 합계 (백업이력 제외, 보관함 포함)</span><b style="color:'+_dbTotalColor(db.total||0)+';">'+_fmtBytes(db.total||0)+_dbTotalMark(db.total||0)+'</b></div>'
-    +'<div class="storage-detail-row"><span>🗄️ 일별 백업 이력</span><b>'+(db.backupCount||0)+'건</b></div>'
+    +'<div class="storage-detail-row"><span>📷 키불출앱 촬영사진 ('+(db.kdPhotoCount||0)+'건)</span><b>'+_fmtBytes(db.kdPhotos||0)+'</b></div>'
+    +'<div class="storage-detail-row"><span>📋 키불출 이력(hist)</span><b>'+_fmtBytes(db.histSize||0)+'</b></div>'
+    +'<div class="storage-detail-row"><span>🗄️ 일별 백업 이력 ('+(db.backupCount||0)+'건)</span><b>'+_fmtBytes(db.backupSize||0)+'</b></div>'
+    +'<div class="storage-detail-row"><span>🗄️ 키불출앱 백업 ('+(db.kdBackupCount||0)+'건)</span><b>'+_fmtBytes(db.kdBackupSize||0)+'</b></div>'
+    +'<div class="storage-detail-row"><span>🔍 QR스캔 로그</span><b>'+_fmtBytes(db.scanLogSize||0)+'</b></div>'
+    +'<div class="storage-detail-row"><span>🧩 기타 시스템 데이터(발송·인증 등)</span><b>'+_fmtBytes(db.miscSize||0)+'</b></div>'
+    +'<div class="storage-detail-row total"><span>☁️ DB 합계 (백업이력·보관함 모두 포함)</span><b style="color:'+_dbTotalColor(db.total||0)+';">'+_fmtBytes(db.total||0)+_dbTotalMark(db.total||0)+'</b></div>'
     +'<div class="storage-detail-row local"><span>📱 이 기기 로컬 저장공간</span><b>'+_fmtBytes(d.local||0)+'</b></div>';
   if(db.connected===false && !db.error){
     html += '<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;">※ Firebase 미연결 상태 — DB 용량은 표시되지 않습니다.</div>';
@@ -14335,7 +14397,9 @@ function doBackup2Export(){
   var itemCount=0;
   for(var i=0;i<localStorage.length;i++){
     var k=localStorage.key(i);
-    if(k && k.startsWith("pb_")){ data[k]=localStorage.getItem(k); itemCount++; }
+    /* ★ FIX: URL은 백업에서 제외 — 코드 기반 이관 시(다른 Firebase로 이동) 이전 URL로
+       되돌아가 버리는 사고 방지. 자동백업(_collectBackupData)과 동일한 원칙 적용. */
+    if(k && k.startsWith("pb_") && k!==LS_URL){ data[k]=localStorage.getItem(k); itemCount++; }
   }
   data._backup_info.items = itemCount;
   function _finishExport(){
@@ -14354,18 +14418,35 @@ function doBackup2Export(){
       _b2msg("✅ 백업 완료!\n주차칸, 파트설정, 열이름, 엔카이력"+_docN+"\n모두 저장되었습니다.","#1A7A00","#E8FFE0","#AAE0AA");
     }catch(e){ _b2msg("❌ 백업 실패: "+e.message,"#C03030","#FFEEEE","#FFAAAA"); }
   }
-  /* ★ Firebase에서 차량서류(kd_docs)·플래그를 가져와 백업에 포함 */
+  /* ★ FIX(완전 이관): Firebase에 있는 모든 데이터를 백업 파일에 포함
+     — 차량서류뿐 아니라 공통서류·파트사진·약도그림·이력·백업들까지 전부.
+     이 목록은 "저장용량 현황" 팝업이 조회하는 26개 경로와 동일하게 유지한다. */
   var _base=(localStorage.getItem(LS_URL)||"").replace(/\/+$/,"");
   var _code=(localStorage.getItem(LS_CODE)||"");
   if(_base && _code){
-    _b2msg("⏳ 차량서류 포함 백업 중... 잠시만요","#7A5500","#FFF8CC","#E8B800");
-    Promise.all([
-      fetch(_base+"/kd_rooms/"+encodeURIComponent(_code)+"/kd_docs.json").then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
-      fetch(_base+"/kd_rooms/"+encodeURIComponent(_code)+"/kd_doc_flags.json").then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
-    ]).then(function(res){
-      if(res[0]) data._kd_docs=res[0];
-      if(res[1]) data._kd_doc_flags=res[1];
-      data._backup_info.docs=res[0]?Object.keys(res[0]).length:0;
+    _b2msg("⏳ 전체 데이터 포함 백업 중... 잠시만요 (사진·서류가 많으면 오래 걸릴 수 있습니다)","#7A5500","#FFF8CC","#E8B800");
+    var _fbPaths = ['kd_docs','kd_docs_data','common_docs','pb_part_photos','pb_part_canvases',
+      'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','scan_log','kd_doc_flags',
+      'dispatch_auth','dispatch_auth_car','dispatch_req','dispatch_scan','links',
+      'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
+      'pb_search_return','returned','search_dispatch_events','sms_queue','updatedAt'];
+    var _fetchOne = function(p){
+      return fetch(_base+"/kd_rooms/"+encodeURIComponent(_code)+"/"+p+".json")
+        .then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+    };
+    var _fetchPhotos = fetch(_base+"/kd_photos/"+encodeURIComponent(_code)+".json")
+      .then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+    Promise.all(_fbPaths.map(_fetchOne).concat([_fetchPhotos])).then(function(res){
+      var _fbFull={};
+      _fbPaths.forEach(function(p, idx){ if(res[idx]!=null) _fbFull[p]=res[idx]; });
+      data._fbFull = _fbFull;
+      if(res[_fbPaths.length]!=null) data._kdPhotosFull = res[_fbPaths.length];
+      /* ★ 하위 호환용(구버전 복원파일 호환 필드도 계속 채움) */
+      if(_fbFull.kd_docs) data._kd_docs=_fbFull.kd_docs;
+      if(_fbFull.kd_doc_flags) data._kd_doc_flags=_fbFull.kd_doc_flags;
+      data._backup_info.docs=_fbFull.kd_docs?Object.keys(_fbFull.kd_docs).length:0;
+      data._backup_info.fbPathsIncluded = Object.keys(_fbFull).length;
+      data._backup_info.kdPhotos = data._kdPhotosFull ? Object.keys(data._kdPhotosFull).length : 0;
       _finishExport();
     }).catch(function(){ _finishExport(); });
   } else { _finishExport(); }
@@ -14380,13 +14461,14 @@ function doBackup2Import(input){
 
       _b2msg('⏳ 복원 중... 잠시 기다려 주세요','#7A5500','#FFF8CC','#E8B800');
 
-      /* ★ STEP 1: 기존 pb_ 데이터 삭제 (백업 메타 키 보존) */
+      /* ★ STEP 1: 기존 pb_ 데이터 삭제 (백업 메타 키·현재 접속 URL 보존) */
       for(var i=localStorage.length-1; i>=0; i--){
         var k=localStorage.key(i);
         if(k && k.startsWith('pb_') &&
            !k.startsWith('pb_snapshot_') &&
            k!=='pb_backup_am' && k!=='pb_backup_pm' &&
-           k!==LS_LAST_AUTO_BACKUP_DATE) localStorage.removeItem(k);
+           k!==LS_LAST_AUTO_BACKUP_DATE &&
+           k!==LS_URL) localStorage.removeItem(k); /* ★ FIX: 현재 접속 URL은 지우지 않음 */
       }
 
       /* ★ STEP 2: 복원 파일의 pb_ 데이터를 localStorage에 저장 */
@@ -14396,7 +14478,9 @@ function doBackup2Import(input){
            !k.startsWith('pb_snapshot_') &&
            k!=='pb_backup_am' && k!=='pb_backup_pm' &&
            k!==LS_LAST_AUTO_BACKUP_DATE &&
-           k!==LS_PART_VIEW){ /* ★ Fix BUG6c: 격자/1열은 기기별 독립 — JSON복원 시 덮어쓰기 금지 */
+           k!==LS_PART_VIEW &&           /* ★ Fix BUG6c: 격자/1열은 기기별 독립 — JSON복원 시 덮어쓰기 금지 */
+           k!==LS_URL){ /* ★ FIX(이관 안전): 백업 파일 속 예전 URL로 되돌아가는 사고 방지.
+                            지금 화면에 입력된(연결 대상) URL을 그대로 유지한다. */
           localStorage.setItem(k,data[k]); count++;
         }
       });
@@ -14495,16 +14579,31 @@ function doBackup2Import(input){
             }
           })
           .then(function(){
-            /* ★ 차량서류(kd_docs)·플래그 복원 (백업에 포함된 경우) */
+            /* ★ FIX(완전 이관): 백업 파일에 담긴 Firebase 전체 데이터를
+               "지금 연결된(=새) Firebase"로 되돌려 쓴다 — 공통서류·파트사진·
+               약도그림·이력·백업들까지 전부. 예전 형식(_kd_docs만 있는 파일)도
+               계속 지원(하위 호환). */
             try{
               var _rb=(localStorage.getItem(LS_URL)||"").replace(/\/+$/,"");
               var _rc=(localStorage.getItem(LS_CODE)||"");
-              if(_rb && _rc && (data._kd_docs || data._kd_doc_flags)){
-                var _ps=[];
-                if(data._kd_docs) _ps.push(fetch(_rb+"/kd_rooms/"+encodeURIComponent(_rc)+"/kd_docs.json",{method:"PUT",body:JSON.stringify(data._kd_docs)}).catch(function(){}));
-                if(data._kd_doc_flags) _ps.push(fetch(_rb+"/kd_rooms/"+encodeURIComponent(_rc)+"/kd_doc_flags.json",{method:"PUT",body:JSON.stringify(data._kd_doc_flags)}).catch(function(){}));
-                return Promise.all(_ps);
+              if(!_rb || !_rc) return;
+              var _ps=[];
+              var _putOne = function(path, val){
+                _ps.push(fetch(_rb+"/kd_rooms/"+encodeURIComponent(_rc)+"/"+path+".json",
+                  {method:"PUT", body:JSON.stringify(val)}).catch(function(){}));
+              };
+              if(data._fbFull){
+                Object.keys(data._fbFull).forEach(function(p){ _putOne(p, data._fbFull[p]); });
+                if(data._kdPhotosFull){
+                  _ps.push(fetch(_rb+"/kd_photos/"+encodeURIComponent(_rc)+".json",
+                    {method:"PUT", body:JSON.stringify(data._kdPhotosFull)}).catch(function(){}));
+                }
+              } else {
+                /* 하위 호환: 예전 형식 백업 파일(kd_docs만 포함) */
+                if(data._kd_docs) _putOne('kd_docs', data._kd_docs);
+                if(data._kd_doc_flags) _putOne('kd_doc_flags', data._kd_doc_flags);
               }
+              return Promise.all(_ps);
             }catch(e2){}
           })
           .then(done)
@@ -21856,7 +21955,7 @@ function _saveAllOnClose(){
 })();
 </script><!-- ★ 버전 표시 (하단 좌측 고정) — github.io 캐시로 옛 버전이 실행 중인지 폰 화면만으로 확인용.
      파일을 수정해 올릴 때마다 아래 날짜·번호를 갱신하면 됩니다. -->
-<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;display:none;">v2026-07-26 · 한결v34 (데이터보호+스크롤유지+약도주소+키번호fix2+로컬모드fix+칸초기화fix+구조덮어쓰기fix+교환중표시+저장잠금+버전토글20초)</div>
+<div id="pbVerBadge" style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.72);color:#94A3B8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;letter-spacing:.2px;pointer-events:none;font-family:inherit;display:none;">v2026-07-26 · 한결v34 (데이터보호+스크롤유지+약도주소+키번호fix2+로컬모드fix+칸초기화fix+구조덮어쓰기fix+교환중표시+저장잠금+버전토글20초+반납sync fix)</div>
 <style>
 #boardMemoPanel{margin:6px 8px 24px;background:#FFFDF5;border:2px solid #E9C46A;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:border-color .2s,background .2s;}
 #boardMemoPanel.notice-on{border-color:#DC2626;background:#FFF5F5;}
