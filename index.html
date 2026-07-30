@@ -2570,7 +2570,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
                  style="flex:1;min-width:100px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#FFF8CC;font-family:inherit;outline:none;box-sizing:border-box;" />
           <!-- ★ 차주 전화번호 입력 (약도 문자/팝업의 담당차주 전화·전화걸기에 사용) -->
           <input id="mOwnerPhoneInput" type="tel" inputmode="numeric" autocomplete="off"
-                 placeholder="📞 차주 전화번호"
+                 placeholder="📲 차주 전화번호"
                  maxlength="13"
                  oninput="onOwnerPhoneInput(this.value)"
                  style="flex:1;min-width:120px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#E8F5E9;font-family:inherit;outline:none;box-sizing:border-box;" />
@@ -2592,7 +2592,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
                    onkeydown="if(event.key==='Enter')addOwner()">
             <!-- ★ 차주 전화번호 (이름과 세트로 저장 → 칩 선택 시 함께 입력됨) -->
             <input class="owner-add-input" id="ownerAddPhone" type="tel" inputmode="numeric"
-                   placeholder="📞 전화번호" maxlength="13"
+                   placeholder="📲 전화번호" maxlength="13"
                    onkeydown="if(event.key==='Enter')addOwner()"
                    style="background:#E8F5E9;">
             <button class="owner-add-save" onclick="addOwner()">＋ 추가</button>
@@ -3763,11 +3763,11 @@ function renderOwnerList() {
     var phone = _ownerEntryPhone(entry);
     var chip = document.createElement('div');
     chip.className = 'owner-chip owner-chip-default';
-    chip.title = '기본 차주 (삭제 불가)' + (phone ? ' · 📞 ' + phone : '');
+    chip.title = '기본 차주 (삭제 불가)' + (phone ? ' · 📲 ' + phone : '');
     chip.addEventListener('click', function() { applyOwnerSelection(name, phone); });
     var span = document.createElement('span');
     span.className = 'owner-chip-name';
-    span.textContent = name + (phone ? ' 📞' : '');
+    span.textContent = name + (phone ? ' 📲' : '');
     chip.appendChild(span);
     wrap.appendChild(chip);
   });
@@ -3794,7 +3794,7 @@ function renderOwnerList() {
     var chip = document.createElement('div');
     chip.className = 'owner-chip' + (_ownerDelMode ? ' sel-mode' : '');
     chip.dataset.idx = i;
-    if (phone) chip.title = '📞 ' + phone;
+    if (phone) chip.title = '📲 ' + phone;
     if (_ownerDelMode) {
       var cb = document.createElement('input');
       cb.type = 'checkbox';
@@ -3811,7 +3811,7 @@ function renderOwnerList() {
     }
     var span = document.createElement('span');
     span.className = 'owner-chip-name';
-    span.textContent = name + (phone ? ' 📞' : '');
+    span.textContent = name + (phone ? ' 📲' : '');
     chip.appendChild(span);
     wrap.appendChild(chip);
   });
@@ -10316,7 +10316,7 @@ function _openKeyReturnPopup(slotIdx, entry){
       '🚗 차량번호: <strong>'+(d.car||entry.car||'-')+'</strong><br>'+
       '👤 딜러: <strong>'+(entry.name||'-')+'</strong><br>'+
       (entry.pr ? '🏢 소속: <strong>'+entry.pr+'</strong><br>' : '')+
-      '📞 전화: <strong>'+(entry.phone||'-')+'</strong><br>'+
+      '📲 전화: <strong>'+(entry.phone||'-')+'</strong><br>'+
       '🕐 반납시각: <strong>'+(entry.returnedAt||entry.timestamp||'-')+'</strong>';
   }
   document.getElementById('keyReturnPopupOv').classList.add('show');
@@ -10434,7 +10434,7 @@ function showDispatchPopup(entryOrCar){
   if(dealerInfoEl){
     var parts=[];
     if(entryName)  parts.push('👤 '+entryName);
-    if(entryPhone) parts.push('📞 '+entryPhone);
+    if(entryPhone) parts.push('📲 '+entryPhone);
     if(entryPr)    parts.push('🏢 '+entryPr);
     dealerInfoEl.textContent = parts.length ? parts.join('  ') : '';
     dealerInfoEl.style.display = parts.length ? 'block' : 'none';
@@ -16561,11 +16561,11 @@ function _initPcScrollLimiter2(){
     <!-- ★ 담당차주 이름 + 전화번호 + 전화걸기 (슬롯 차주 필드에서 자동 표시) -->
     <div id="partPhotoOwnerLine" style="display:none;font-size:13px;font-weight:900;color:#7CE38B;background:#0F2A4A;border-radius:8px;padding:8px 12px;margin-bottom:6px;align-items:center;gap:10px;flex-wrap:wrap;">
       <span id="partPhotoOwnerTxt"></span>
-      <a id="partPhotoOwnerCall" href="#" style="display:none;background:#16A34A;color:#fff;text-decoration:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:900;">📞 전화걸기</a>
+      <a id="partPhotoOwnerCall" href="#" style="display:none;background:#16A34A;color:#fff;text-decoration:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:900;">📲 전화걸기</a>
     </div>
     <!-- ★ 전화번호 직접 입력 (검색 키불출 등 번호가 없는 경우) -->
     <div id="partPhotoPhoneInputWrap" style="display:none;gap:8px;margin-bottom:6px;align-items:center;">
-      <input id="partPhotoPhoneInput" type="tel" inputmode="numeric" placeholder="📞 딜러 전화번호 입력 (숫자만)" style="flex:1;min-width:0;padding:9px 12px;border-radius:8px;border:1.5px solid #334E75;background:#0F2A4A;color:#fff;font-size:13px;font-weight:700;font-family:inherit;">
+      <input id="partPhotoPhoneInput" type="tel" inputmode="numeric" placeholder="📲 딜러 전화번호 입력 (숫자만)" style="flex:1;min-width:0;padding:9px 12px;border-radius:8px;border:1.5px solid #334E75;background:#0F2A4A;color:#fff;font-size:13px;font-weight:700;font-family:inherit;">
       <button type="button" id="partPhotoManualSendBtn" onclick="_sendManualRouteSms()" style="flex-shrink:0;padding:9px 14px;background:#B45309;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;transition:background .2s;">📲 약도전송</button>
     </div>
     <!-- ★ 경로 안내 텍스트 표시 영역 -->
@@ -19826,7 +19826,7 @@ window._drawQRCanvas = function(container, text, size){
         }
       }
       if(ownerLine && ownerTxt && (oName || oPhone)){
-        ownerTxt.textContent = '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📞 ' + _fmtPhone(oPhone) : '');
+        ownerTxt.textContent = '👤 담당차주: ' + (oName||'-') + (oPhone ? '  📲 ' + _fmtPhone(oPhone) : '');
         if(ownerCall){
           if(oPhone){ ownerCall.href = 'tel:' + oPhone; ownerCall.style.display = 'inline-block'; }
           else { ownerCall.style.display = 'none'; }
@@ -19861,7 +19861,7 @@ window._drawQRCanvas = function(container, text, size){
       if(phoneInputWrap) phoneInputWrap.style.display = 'none';
       if(phoneLine){
         if(_popupPhone){
-          phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(_popupPhone) + ' (자동문자 꺼짐 — 문자전송 비활성)';
+          phoneLine.textContent = '📲 딜러 연락처: ' + _fmtPhone(_popupPhone) + ' (자동문자 꺼짐 — 문자전송 비활성)';
           phoneLine.style.display = 'block';
         } else {
           phoneLine.style.display = 'none';
@@ -19870,7 +19870,7 @@ window._drawQRCanvas = function(container, text, size){
       if(shareBtn) shareBtn.style.display = (navigator.share ? '' : 'none');
     } else if(_popupPhone){
       if(phoneLine){
-        phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(_popupPhone);
+        phoneLine.textContent = '📲 딜러 연락처: ' + _fmtPhone(_popupPhone);
         phoneLine.style.display = 'block';
       }
       /* ★ 번호가 있어도 입력란(번호 자동입력) + 약도전송 버튼 항상 표시
@@ -20124,7 +20124,7 @@ window._drawQRCanvas = function(container, text, size){
     var img = document.getElementById('partPhotoPopupImg');
     if(!img || !img.src){ alert('약도 이미지가 없습니다.'); return; }
     var body = _buildRouteSmsBody();
-    if(_popupPhone) body += '\n📞 받는분: ' + _fmtPhone(_popupPhone);
+    if(_popupPhone) body += '\n📲 받는분: ' + _fmtPhone(_popupPhone);
     if(!navigator.share){
       alert('이 브라우저는 공유 기능을 지원하지 않습니다.\n「⬇️ 다운로드」 후 문자/카톡에 첨부해 주세요.');
       return;
@@ -20607,14 +20607,14 @@ window._drawQRCanvas = function(container, text, size){
             if(_pm9) _oPhone9 = _pm9[0].replace(/[^0-9]/g,'');
           }
           if(_oName9 || _oPhone9){
-            _ownerTxt = '👤 담당차주: ' + (_oName9||'-') + (_oPhone9 ? '  📞 ' + _fmtPhone(_oPhone9) : '');
+            _ownerTxt = '👤 담당차주: ' + (_oName9||'-') + (_oPhone9 ? '  📲 ' + _fmtPhone(_oPhone9) : '');
           }
         }
       }catch(e){}
 
       var text = '차량번호:' + (car||'-') + ' 차량위치:' + loc;
       if(_oName9 || _oPhone9){
-        text += '\n담당차주:' + (_oName9||'-') + (_oPhone9 ? ' 📞 ' + _fmtPhone(_oPhone9) : '');
+        text += '\n담당차주:' + (_oName9||'-') + (_oPhone9 ? ' 📲 ' + _fmtPhone(_oPhone9) : '');
       }
       /* ★ 업체정보 (구형폰 대비 텍스트로 포함) */
       try{
@@ -20789,7 +20789,7 @@ window._drawQRCanvas = function(container, text, size){
     _popupPhone = phone;
     var phoneLine = document.getElementById('partPhotoPhoneLine');
     if(phoneLine){
-      phoneLine.textContent = '📞 딜러 연락처: ' + _fmtPhone(phone);
+      phoneLine.textContent = '📲 딜러 연락처: ' + _fmtPhone(phone);
       phoneLine.style.display = 'block';
     }
     var smsBtn = document.getElementById('partPhotoPopupSms');
@@ -20836,7 +20836,7 @@ window._drawQRCanvas = function(container, text, size){
       return;
     }
     var _nm2 = String((_pl2.on!=null?_pl2.on:'') || _ownTxt || '')
-                 .replace(/^👤\s*/,'').replace(/📞[\s\S]*$/,'').replace(/담당차주:\s*/,'').trim();
+                 .replace(/^👤\s*/,'').replace(/📲[\s\S]*$/,'').replace(/담당차주:\s*/,'').trim();
     _queueRouteDispatch(code, phone, _car2, _nm2, 'manual_'+Date.now(), function(status, via){
       if(status==='sent'){
         var lbl = (via==='alimtalk') ? '✅ 알림톡 전송완료'
