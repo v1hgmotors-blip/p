@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>한결모터스 차량 위치 안내</title>
+<title>차량 위치 안내</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{
@@ -83,6 +83,13 @@
   .foot{
     text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:18px;
   }
+  .foot.foot-sub{
+    display:inline-block;margin:18px auto 0;padding:9px 22px;
+    background:#1A1A00;color:#FEE500;font-size:19px;font-weight:900;
+    border:2px solid #B45309;border-radius:12px;letter-spacing:.3px;
+    box-shadow:0 3px 10px rgba(0,0,0,.3);
+  }
+  .foot-sub-wrap{ text-align:center; }
   /* ★ 주차위치 보기 토글 버튼 — 눈에 확 띄도록 (접힘 상태에서 은은하게 깜빡임) */
   @keyframes parkLocPulse{
     0%,100%{ box-shadow:0 3px 10px rgba(245,158,11,.40); transform:scale(1); }
@@ -136,14 +143,14 @@
 </head>
 <body>
 <div class="wrap" id="wrap">
-  <div class="top-title" id="topTitle">🚗 한결모터스 차량 위치 안내</div>
+  <div class="top-title" id="topTitle">🚗 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
   <div id="bizInfo" style="display:none;text-align:center;font-size:14px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-5px 0 14px;padding:0 8px;white-space:pre-line;"></div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
     <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
-    <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 한결모터스 사무실로 문의 주세요!</div>
+    <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:0;padding:13px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
       <button onclick="docAction('share')" style="flex:1;min-width:0;padding:13px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
@@ -202,7 +209,7 @@
   <!-- ★ 이 약도 링크 복사 -->
   <button id="viewCopyLinkBtn" onclick="copyViewLink()" style="width:100%;margin:16px 0 0;padding:13px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🔗 이 약도 링크 복사</button>
   <div style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;line-height:1.5;">복사해서 카톡·메모에 저장하면<br>나중에 다시 약도를 볼 수 있습니다</div>
-  <div class="foot" id="footTxt">한결모터스 주차현황판 · 위치 안내</div>
+  <div class="foot" id="footTxt">주차현황판 · 위치 안내</div>
 </div>
 
 <!-- html2canvas (화면 전체 다운로드용) -->
@@ -425,17 +432,23 @@ function sharePage(){
   var part = qs('part');
   var car  = qs('car');
   var loc  = qs('loc');
-  var db   = qs('db') || 'https://hg-motors-default-rtdb.firebaseio.com';
+  var db   = qs('db') || ''; /* ★ (OEM) 기본 Firebase 폴백 제거 — db는 링크에서만 받음 */
   var eid  = qs('eid') || '';  /* ★ 불출건 ID — 건별 스캔/다운로드 집계용 */
   var lkey = qs('k');   /* ★ 단축링크 키 — Firebase에서 상세정보를 읽어옴 */
-  var bz   = qs('bz');  /* ★ 업체명 — 현황판 타이틀에서 자동 전달됨 */
+  var bz   = qs('bz');  /* ★ 업체명(상호명) — 현황판/키불출앱에서 자동 전달됨 */
+  var sub  = qs('sub'); /* ★ 메인타이틀이름 — 하단 중앙에 표시 */
   function applyBiz(name){
     if(!name) return;
     try{
       document.getElementById('topTitle').textContent = '🚗 ' + name + ' 차량 위치 안내';
       document.title = name + ' 차량 위치 안내';
       var f = document.getElementById('footTxt');
-      if(f) f.textContent = name + ' 주차현황판 · 위치 안내';
+      if(f){
+        if(sub){ f.textContent = sub; f.classList.add('foot-sub'); }
+        else{ f.textContent = name + ' 주차현황판 · 위치 안내'; f.classList.remove('foot-sub'); }
+      }
+      var dn = document.getElementById('docNoneMsg');
+      if(dn) dn.textContent = '● 출고서류는 ' + name + ' 사무실로 문의 주세요!';
     }catch(e){}
   }
   applyBiz(bz);
@@ -928,6 +941,7 @@ function sharePage(){
   var _partHasPhoto = null;  /* null=미확인, true=사진있음, false=사진없음 */
   var _autoMapShown = false;
   var fdb = null;
+  if(!db){ showStatus('⚠️ 잘못된 링크입니다.<br>QR을 다시 스캔해 주세요.'); return; } /* ★ (OEM) db 없으면 연결하지 않음 */
   try{
     firebase.initializeApp({ databaseURL: db });
     fdb = firebase.database();
@@ -1310,8 +1324,20 @@ function sharePage(){
     _lastPartLoaded = part;
     if(part){ loadPart(); }
   } else if(lkey){
-    /* ★ 단축링크: 상세정보(part/car/loc/담당차주)를 Firebase에서 읽어옴 */
-    fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value').then(function(snap){
+    /* ★ FIX(카카오 템플릿 c= 고정 문제 대응): link_index에서 이 k(단축키)의
+       "진짜 코드"를 먼저 확인하고, URL의 c= 값과 다르면 진짜 값으로 바로잡는다.
+       (기존 구조는 그대로 두고, 조회 직전에 code만 보정) */
+    fdb.ref('link_index/'+lkey).once('value').then(function(idxSnap){
+      var _trueCode = idxSnap.val();
+      if(_trueCode && _trueCode !== code){
+        console.log('[코드보정] URL의 c=' + code + ' → 실제 ' + _trueCode + ' 로 보정');
+        code = _trueCode;
+      }
+      return fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value');
+    }).catch(function(){
+      /* link_index 조회 실패해도 원래 code로 그대로 진행(하위 호환) */
+      return fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value');
+    }).then(function(snap){
       var d = snap.val();
       /* ★ 유효기간 3일 — 생성(d.t) 후 3일 지나면 만료 안내 */
       if(d && typeof d === 'object' && d.t){
@@ -1355,6 +1381,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · 한결view v22 (하이브리드 오프라인표시)</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · OEM view v22 (하이브리드 오프라인표시)</div>
 </body>
 </html>
