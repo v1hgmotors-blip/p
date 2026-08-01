@@ -207,7 +207,7 @@
   <!-- ★ 이 약도 링크 복사 -->
   <button id="viewCopyLinkBtn" onclick="copyViewLink()" style="width:100%;margin:16px 0 0;padding:13px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🔗 이 약도 링크 복사</button>
   <div style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;line-height:1.5;">복사해서 카톡·메모에 저장하면<br>나중에 다시 약도를 볼 수 있습니다</div>
-  <div class="foot" id="footTxt">📍Suwon skv1motors</div>
+  <div class="foot foot-sub" id="footTxt">📍Suwon skv1motors</div>
 </div>
 
 <!-- html2canvas (화면 전체 다운로드용) -->
@@ -443,7 +443,7 @@ function sharePage(){
       var f = document.getElementById('footTxt');
       if(f){
         if(sub){ f.textContent = sub; f.classList.add('foot-sub'); }
-        else{ f.textContent = '📍Suwon skv1motors'; f.classList.remove('foot-sub'); }
+        else{ f.textContent = '📍Suwon skv1motors'; f.classList.add('foot-sub'); }
       }
       var dn = document.getElementById('docNoneMsg');
       if(dn) dn.textContent = '● 출고서류는 ' + name + ' 사무실로 문의 주세요!';
