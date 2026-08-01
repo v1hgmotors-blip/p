@@ -926,7 +926,7 @@ function sharePage(){
   }
   renderHeader();
 
-  if(!code || (!part && !lkey)){
+  if((!code && !lkey) || (!part && !lkey)){
     showStatus('⚠️ 잘못된 링크입니다.<br>QR을 다시 스캔해 주세요.');
     return;
   }
