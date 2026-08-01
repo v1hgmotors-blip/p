@@ -84,12 +84,10 @@
     text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:18px;
   }
   .foot.foot-sub{
-    display:inline-block;margin:18px auto 0;padding:9px 22px;
-    background:#1A1A00;color:#FEE500;font-size:19px;font-weight:900;
-    border:2px solid #B45309;border-radius:12px;letter-spacing:.3px;
-    box-shadow:0 3px 10px rgba(0,0,0,.3);
+    display:block;margin:18px auto 0;
+    color:#FEE500;font-size:19px;font-weight:900;
+    text-align:center;letter-spacing:.3px;
   }
-  .foot-sub-wrap{ text-align:center; }
   /* ★ 주차위치 보기 토글 버튼 — 눈에 확 띄도록 (접힘 상태에서 은은하게 깜빡임) */
   @keyframes parkLocPulse{
     0%,100%{ box-shadow:0 3px 10px rgba(245,158,11,.40); transform:scale(1); }
@@ -209,7 +207,7 @@
   <!-- ★ 이 약도 링크 복사 -->
   <button id="viewCopyLinkBtn" onclick="copyViewLink()" style="width:100%;margin:16px 0 0;padding:13px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🔗 이 약도 링크 복사</button>
   <div style="text-align:center;font-size:11px;font-weight:700;color:#94A3B8;margin-top:6px;line-height:1.5;">복사해서 카톡·메모에 저장하면<br>나중에 다시 약도를 볼 수 있습니다</div>
-  <div class="foot" id="footTxt">주차현황판 · 위치 안내</div>
+  <div class="foot" id="footTxt">📍Suwon skv1motors</div>
 </div>
 
 <!-- html2canvas (화면 전체 다운로드용) -->
@@ -445,7 +443,7 @@ function sharePage(){
       var f = document.getElementById('footTxt');
       if(f){
         if(sub){ f.textContent = sub; f.classList.add('foot-sub'); }
-        else{ f.textContent = name + ' 주차현황판 · 위치 안내'; f.classList.remove('foot-sub'); }
+        else{ f.textContent = '📍Suwon skv1motors'; f.classList.remove('foot-sub'); }
       }
       var dn = document.getElementById('docNoneMsg');
       if(dn) dn.textContent = '● 출고서류는 ' + name + ' 사무실로 문의 주세요!';
@@ -941,7 +939,10 @@ function sharePage(){
   var _partHasPhoto = null;  /* null=미확인, true=사진있음, false=사진없음 */
   var _autoMapShown = false;
   var fdb = null;
-  if(!db){ showStatus('⚠️ 잘못된 링크입니다.<br>QR을 다시 스캔해 주세요.'); return; } /* ★ (OEM) db 없으면 연결하지 않음 */
+  /* ★ FIX(요청): 카카오 승인 템플릿 버튼 URL엔 변수 1개(k)만 허용돼 db=가 아예
+     빠져 있음 — 이 시스템의 모든 업체가 결국 같은 Firebase 프로젝트를 쓰므로,
+     db가 없으면 이 기본값으로 안전하게 접속한다(URL에 db가 있으면 그 값이 우선). */
+  if(!db){ db = 'https://hg-motors-default-rtdb.firebaseio.com'; }
   try{
     firebase.initializeApp({ databaseURL: db });
     fdb = firebase.database();
