@@ -862,6 +862,8 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     background:#10B981;color:#fff;overflow:visible;
   }
 }
+.slot-safe6-icon{ position:absolute;bottom:3px;left:3px;z-index:4;pointer-events:none;background:#0D9488;border-radius:50%;width:9px;height:9px;font-size:0;line-height:1;padding:0;overflow:hidden; }
+@media(min-width:600px){ .slot-safe6-icon{ width:auto;height:auto;border-radius:4px;padding:1px 4px;font-size:10px;font-weight:900;background:#0D9488;color:#fff;overflow:visible; } }
 @keyframes encarCountBlink{
   0%,100%{opacity:1;}
   50%{opacity:0.35;}
@@ -2512,7 +2514,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
         <button class="status-btn" id="sbSale"     onclick="confirmSale()">💰 판매완료</button>
         <button class="status-btn" id="sbWaiting"  onclick="selStatus('waiting')">🚗 출고대기</button>
         <button class="status-btn" id="sbDisabled" onclick="selStatus('disabled')">✖ 사용안함</button>
-        <button class="status-btn" id="sbSafe6"    onclick="selStatus('safe6')">🛡️ 세이프6</button>
+        <button class="status-btn" id="sbSafe6"    onclick="toggleSafe6()">🛡️ 세이프6</button>
       </div>
     </div>
 
@@ -2577,7 +2579,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
                  maxlength="13"
                  oninput="onOwnerPhoneInput(this.value)"
                  style="flex:1;min-width:120px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#E8F5E9;font-family:inherit;outline:none;box-sizing:border-box;" />
-          <!-- ★ 차주 알림 토픽 (키불출 시 이 토픽으로 ntfy 전송) -->
+          <!-- ★ 차주 알림 토픽 -->
           <input id="mTopicInput" type="text" autocomplete="off" placeholder="📲 차주 알림 토픽 (선택)" maxlength="60" style="flex:1;min-width:140px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#EDE9FE;font-family:inherit;outline:none;box-sizing:border-box;" />
         </div>
         <div class="m-memo-fs-ctrl">
@@ -2600,7 +2602,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
                    placeholder="📞 전화번호" maxlength="13"
                    onkeydown="if(event.key==='Enter')addOwner()"
                    style="background:#E8F5E9;">
-            <!-- ★ 차주 알림 토픽 (이름·전화와 세트로 저장 → 칩 선택 시 함께 입력) -->
+            <!-- ★ 차주 알림 토픽 세트 -->
             <input class="owner-add-input" id="ownerAddTopic" type="text"
                    placeholder="📲 알림 토픽(선택)" maxlength="60"
                    onkeydown="if(event.key==='Enter')addOwner()"
@@ -3690,6 +3692,7 @@ var LS_OWNER_LIST = 'pb_owner_list';
 var _ownerDelMode = false;
 var _ownerEditMode = false;
 var _ownerEditIdx = -1;
+var _safe6Selected = false;
 
 /* ★ 하드코딩 기본 차주 목록 (항상 상단 표시, 삭제 불가) */
 
@@ -3725,7 +3728,6 @@ function applyOwnerSelection(name, phone, topic){
     if(pi) pi.value = phone;
     if(typeof onOwnerPhoneInput === 'function') onOwnerPhoneInput(phone);
   }
-  /* ★ 차주에 저장된 알림 토픽을 슬롯 토픽칸에 자동 입력 */
   var _tp = document.getElementById('mTopicInput');
   if(_tp) _tp.value = String(topic||'');
 }
@@ -3848,7 +3850,6 @@ function addOwner() {
   var tInp = document.getElementById('ownerAddTopic');
   var topic = tInp ? tInp.value.trim() : '';
   if (!name) return;
-  /* ★ 수정모드: 선택한 칩을 통째로 교체 (이름 변경·필드 비우기 허용) */
   if (_ownerEditIdx >= 0) {
     var _elist = getOwnerList();
     if (_ownerEditIdx < _elist.length) { _elist[_ownerEditIdx] = (phone||topic) ? { n: name, p: phone, t: topic } : name; saveOwnerList(_elist); }
@@ -3955,6 +3956,11 @@ function insertOwnerToMemo(name) {
   if (btn)   btn.textContent = '👤 차주';
 }
 
+function toggleSafe6(){
+  _safe6Selected = !_safe6Selected;
+  var b=document.getElementById('sbSafe6');
+  if(b) b.classList.toggle('sel-safe6', _safe6Selected);
+}
 function loadOwnerForEdit(i){
   var list = getOwnerList();
   var e = list[i]; if(!e) return;
@@ -8532,6 +8538,8 @@ openModal = function(i){
   _encarUpdateBtn(i);
   _inspectUpdateModal(i);
   var d  = getSlot(i);
+  _safe6Selected = !!d.safe6;
+  var _s6b=document.getElementById('sbSafe6'); if(_s6b) _s6b.classList.toggle('sel-safe6', _safe6Selected);
   var ec = d.encar || {time:'', done:false};
   var hasDoneBtn = !!(ec.time || ec.done);
 };
@@ -9335,7 +9343,6 @@ function renderSlot(el,idx){
     else if(d.status==='product') html+='<div class="slot-status product">상품화중</div>';
     else if(d.status==='sale')    html+='<div class="slot-status sale">💰판매완료</div>';
     else if(d.status==='waiting') html+='<div class="slot-status waiting">출고대기</div>';
-    else if(d.status==='safe6')   html+='<div class="slot-status safe6">🛡️세이프6</div>';
     /* 성능검사 만료 배지 */
     var _ins=d.inspect||{};
     if(_ins.date && !_ins.done){
@@ -9385,6 +9392,12 @@ function renderSlot(el,idx){
       _docIcon.className='slot-doc-icon'; _docIcon.textContent='📄';
       el.appendChild(_docIcon);
     }
+  }
+  /* ★ 세이프6 아이콘 (개별 slot.safe6 또는 협력업체 모드) */
+  if(d.car && (d.safe6 || (typeof _safe6Partner!=='undefined' && _safe6Partner))){
+    var _s6i=document.createElement('div');
+    _s6i.className='slot-safe6-icon'; _s6i.textContent='🛡️';
+    el.appendChild(_s6i);
   }
 }
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -9950,15 +9963,15 @@ function _postSearchNtfy(topic, car, owner, dealerName, dealerPhone, dealerPr){
   if(!topic) return;
   try {
     var t = new Date(Date.now()+9*3600*1000).toISOString().slice(0,16).replace('T',' ');
-    var body = '\uD83D\uDD11 \uD0A4 \uBD88\uCD9C \uC54C\uB9BC (\uAC80\uC0C9\uD0A4\uBD88\uCD9C)\n'
-      + '\uD83D\uDE97 \uCC28\uB7C9\uBC88\uD638: ' + (car||'') + '\n'
-      + (owner ? ('\uD83D\uDE4B \uCC28\uC8FC: ' + owner + '\n') : '')
-      + '\uD83C\uDFE2 \uC18C\uC18D\uC0C1\uC0AC: ' + (dealerPr||'') + '\n'
-      + '\uD83D\uDC64 \uB531\uB7EC\uC774\uB984: ' + (dealerName||'') + '\n'
-      + '\uD83D\uDCF2 \uC804\uD654\uBC88\uD638: ' + (dealerPhone||'') + '\n'
-      + '\uD83D\uDD52 ' + t;
+    var body = '🔑 키 불출 알림 (검색키불출)\n'
+      + '🚗 차량번호: ' + (car||'') + '\n'
+      + (owner ? ('🙋 차주: ' + owner + '\n') : '')
+      + '🏢 소속상사: ' + (dealerPr||'') + '\n'
+      + '👤 딜러이름: ' + (dealerName||'') + '\n'
+      + '📲 전화번호: ' + (dealerPhone||'') + '\n'
+      + '🕒 ' + t;
     fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body });
-  } catch(e){ console.warn('[\uAC80\uC0C9\uD0A4\uBD88\uCD9C \uCC28\uC8FCntfy] \uC2E4\uD328', e); }
+  } catch(e){ console.warn('[검색키불출 차주ntfy] 실패', e); }
 }
 function _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr){
   try {
@@ -9978,7 +9991,7 @@ function _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr){
     } else {
       _postSearchNtfy('myshop-key-9000', car, owner, dealerName, dealerPhone, dealerPr);
     }
-  } catch(e){ console.warn('[\uAC80\uC0C9\uD0A4\uBD88\uCD9C \uCC28\uC8FCntfy] \uC608\uC678', e); }
+  } catch(e){ console.warn('[검색키불출 차주ntfy] 예외', e); }
 }
 function _saveSearchIssueInfo(){
   var slotIdx = _pendingSearchIssueSlot;
@@ -10735,11 +10748,11 @@ function hideAlert(){
 /* ── 모달 ── */
 function selStatus(v){
   selectedStatus=v;
-  ['sbNone','sbContract','sbProduct','sbSale','sbWaiting','sbDisabled','sbSafe6'].forEach(function(id){
+  ['sbNone','sbContract','sbProduct','sbSale','sbWaiting','sbDisabled'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.className='status-btn';
   });
-  var map={none:'sbNone',contract:'sbContract',product:'sbProduct',sale:'sbSale',waiting:'sbWaiting',disabled:'sbDisabled',safe6:'sbSafe6'};
-  var cls={none:'sel-none',contract:'sel-contract',product:'sel-product',sale:'sel-sale',waiting:'sel-waiting',disabled:'sel-disabled',safe6:'sel-safe6'};
+  var map={none:'sbNone',contract:'sbContract',product:'sbProduct',sale:'sbSale',waiting:'sbWaiting',disabled:'sbDisabled'};
+  var cls={none:'sel-none',contract:'sel-contract',product:'sel-product',sale:'sel-sale',waiting:'sel-waiting',disabled:'sel-disabled'};
   if(map[v]){ var el=document.getElementById(map[v]); if(el) el.className='status-btn '+cls[v]; }
 }
 function openModal(i){
@@ -12030,6 +12043,7 @@ function saveSlot(){
   s[activeSlot] = {
     car:      isClear ? '' : car,
     status:   isClear ? 'none' : selectedStatus,
+    safe6:    isClear ? false : _safe6Selected,
     memo:     isClear ? '' : memo,
     owner:    isClear ? '' : _newOwner,
     ownerPhone: isClear ? '' : _newOwnerPhone,
