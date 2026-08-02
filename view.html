@@ -9,19 +9,19 @@
   body{
     font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
     background:#0F1E33;color:#fff;
-    min-height:100vh;padding:14px 12px 40px;
+    min-height:100vh;padding:8px 12px 14px;
   }
   .wrap{max-width:720px;margin:0 auto;}
   .top-title{
     text-align:center;font-size:16px;font-weight:900;color:#FEE500;
-    padding:10px 0 14px;letter-spacing:-.3px;line-height:1.35;
+    padding:6px 0 8px;letter-spacing:-.3px;line-height:1.35;
   }
   /* 차량번호/차량위치 헤더 — 팝업과 동일 스타일 */
   .car-header{
     display:none;
     font-size:18px;font-weight:900;color:#E8590C;text-align:center;
     background:#fff;border:2.5px solid #E03131;border-radius:12px;
-    padding:14px 14px;margin-bottom:12px;letter-spacing:-.3px;line-height:1.5;
+    padding:9px 14px;margin-bottom:8px;letter-spacing:-.3px;line-height:1.4;
   }
   /* ★ 차량이 더 이상 존재하지 않을 때(출고됨 등) 안내 스타일 */
   .car-header.gone{
@@ -30,7 +30,7 @@
   /* ★ 슬롯 메모 (실시간) */
   .slot-memo{
     display:none;font-size:13px;font-weight:700;color:#FDE68A;
-    background:#3A2E1A;border-radius:10px;padding:9px 12px;margin-bottom:12px;line-height:1.6;
+    background:#3A2E1A;border-radius:10px;padding:6px 12px;margin-bottom:8px;line-height:1.5;
   }
   /* ★ 담당차주 줄 — 팝업과 동일 (남색 칩 + 연두 글씨 + 전화걸기) */
   .owner-line{
@@ -38,7 +38,7 @@
     align-items:center;gap:8px;flex-wrap:nowrap;
     font-size:14px;font-weight:900;color:#7CE38B;
     background:#16305A;border-radius:12px;
-    padding:10px 12px;margin-bottom:12px;letter-spacing:-.3px;
+    padding:7px 12px;margin-bottom:8px;letter-spacing:-.3px;
   }
   .owner-line #ownerTxt{ flex:1;min-width:0;line-height:1.3; }
   .owner-call{
@@ -47,9 +47,9 @@
     padding:7px 11px;border-radius:9px;font-size:13px;font-weight:900;
   }
   .panel{
-    background:#1E3A5F;border-radius:14px;padding:16px 16px;margin-bottom:12px;
+    background:#1E3A5F;border-radius:14px;padding:10px 14px;margin-bottom:8px;
   }
-  .panel-title{font-size:16px;font-weight:900;color:#FEE500;margin-bottom:12px;}
+  .panel-title{font-size:16px;font-weight:900;color:#FEE500;margin-bottom:7px;}
   .step-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
   .step-num{
     flex-shrink:0;width:30px;height:30px;border-radius:50%;
@@ -58,7 +58,7 @@
   }
   .step-txt{flex:1;font-size:17px;font-weight:800;line-height:1.6;padding-top:2px;color:#F1F5F9;letter-spacing:-.2px;}
   .map-box{
-    background:#fff;border-radius:14px;padding:8px;margin-bottom:12px;
+    background:#fff;border-radius:14px;padding:6px;margin-bottom:8px;
     display:none;
   }
   .map-box img{width:100%;height:auto;display:block;border-radius:8px;}
@@ -81,10 +81,10 @@
     animation:docCarNoBlink 1s ease-in-out infinite;
   }
   .foot{
-    text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:18px;
+    text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:10px;
   }
   .foot.foot-sub{
-    display:block;margin:18px auto 0;
+    display:block;margin:10px auto 0;
     color:#FEE500;font-size:19px;font-weight:900;
     text-align:center;letter-spacing:.3px;
   }
@@ -94,7 +94,7 @@
     50%    { box-shadow:0 6px 22px rgba(245,158,11,.85); transform:scale(1.025); }
   }
   #parkLocToggle{
-    width:100%;margin:4px 0 12px;padding:11px 12px;border:none;border-radius:14px;
+    width:100%;margin:2px 0 8px;padding:9px 12px;border:none;border-radius:14px;
     font-size:19px;font-weight:900;cursor:pointer;font-family:inherit;letter-spacing:-.3px;
     transition:background .2s, box-shadow .2s;
   }
@@ -143,16 +143,16 @@
 <div class="wrap" id="wrap">
   <div class="top-title" id="topTitle">🚗 차량 위치 안내</div>
   <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
-  <div id="bizInfo" style="display:none;text-align:center;font-size:14px;font-weight:800;color:#BFDBFE;line-height:1.7;margin:-5px 0 14px;padding:0 8px;white-space:pre-line;"></div>
+  <div id="bizInfo" style="display:none;text-align:center;font-size:14px;font-weight:800;color:#BFDBFE;line-height:1.5;margin:-3px 0 8px;padding:0 8px;white-space:pre-line;"></div>
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
-  <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:12px 14px;margin:0 0 14px;">
-    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:12px;line-height:1.5;min-height:24px;">📄 출고서류<span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span></div>
+  <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:9px 14px;margin:0 0 8px;">
+    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:8px;line-height:1.4;min-height:22px;">📄 출고서류<span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span><span id="safe6Badge" style="display:none;position:absolute;right:0;top:50%;transform:translateY(-50%);background:#0D9488;color:#fff;font-size:13px;font-weight:900;padding:3px 8px;border-radius:8px;pointer-events:none;animation:docCarNoBlink 1s ease-in-out infinite;">🛡️세이프6</span></div>
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
-      <button onclick="docAction('download')" style="flex:1;min-width:0;padding:13px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
-      <button onclick="docAction('share')" style="flex:1;min-width:0;padding:13px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
-      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:13px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
+      <button onclick="docAction('download')" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
+      <button onclick="docAction('share')" style="flex:1;min-width:0;padding:9px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
+      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
     </div>
     <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
     <div id="docPickList" style="display:none;margin-top:10px;background:#0B1F38;border-radius:10px;padding:10px;"></div>
@@ -177,7 +177,7 @@
     </div>
 
     <!-- ★ 자동 약도 (실시간 정확한 위치 — 항상 먼저 표시) -->
-    <div id="autoMapBox" onclick="zoomAutoMap()" style="display:none;background:#fff;border-radius:14px;padding:12px 10px;margin-bottom:12px;cursor:zoom-in;"></div>
+    <div id="autoMapBox" onclick="zoomAutoMap()" style="display:none;background:#fff;border-radius:14px;padding:8px 10px;margin-bottom:8px;cursor:zoom-in;"></div>
 
     <!-- ★ 관리자가 등록한 사진/약도 (자동 약도 아래에 표시) -->
     <div class="map-box" id="mapBox">
@@ -188,10 +188,10 @@
     <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
 
     <!-- ★ 다운로드 / 공유 버튼 -->
-    <div id="actionBtns" style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
-      <button onclick="dlMap()" style="flex:1;min-width:100px;padding:13px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 현재화면다운</button>
-      <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:13px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
-      <button onclick="sharePage()" style="flex:1;min-width:80px;padding:13px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+    <div id="actionBtns" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button onclick="dlMap()" style="flex:1;min-width:100px;padding:10px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 현재화면다운</button>
+      <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:10px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
+      <button onclick="sharePage()" style="flex:1;min-width:80px;padding:10px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
     </div>
   </div>
 
@@ -430,6 +430,7 @@ function sharePage(){
   var code = qs('code') || qs('c');
   var part = qs('part');
   var car  = qs('car');
+  var isSafe6 = false; /* ★ 세이프6 상태 (payload.sf) */
   var loc  = qs('loc');
   var db   = qs('db') || ''; /* ★ (OEM) 기본 Firebase 폴백 제거 — db는 링크에서만 받음 */
   var eid  = qs('eid') || '';  /* ★ 불출건 ID — 건별 스캔/다운로드 집계용 */
@@ -631,6 +632,7 @@ function sharePage(){
     if(box) box.style.display = 'block'; /* 서류 없어도 영역 표시 */
     var cn = document.getElementById('docCarNo');
     if(cn && car) cn.textContent = '차량번호:' + car;
+    try{ var _s6=document.getElementById('safe6Badge'); if(_s6) _s6.style.display = isSafe6 ? 'inline-block' : 'none'; }catch(e){}
     if(v && typeof v==='object' && Object.keys(v).length){
       _carDocs = v;
       var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
@@ -1307,6 +1309,7 @@ function sharePage(){
         if(_okU){
           part = String(_up.part||part||'');
           car = String(_up.car||car||'');
+          if(_up.sf) isSafe6 = true;
           loc = String(_up.loc||loc||'');
           oName = String(_up.on||oName||'');
           oPhone = String(_up.op||oPhone||'').replace(/[^0-9]/g,'');
@@ -1354,6 +1357,7 @@ function sharePage(){
       if(d && typeof d === 'object'){
         part = String(d.part||part||'');
         car = String(d.car||car||'');
+        if(d.sf) isSafe6 = true;
         loc = String(d.loc||loc||'');
         oName = String(d.on||oName||'');
         oPhone = String(d.op||oPhone||'').replace(/[^0-9]/g,'');
