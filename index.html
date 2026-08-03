@@ -146,7 +146,7 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .settings-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;min-height:26px;cursor:pointer;user-select:none;}
 .settings-toggle-lbl{font-size:13px;font-weight:800;color:#7A5500;}
 .settings-toggle-btn{background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px;color:#7A5500;line-height:1;flex-shrink:0;}
-.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:220px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 화면켜짐 토글 줄 추가로 170→220px (발송방식 줄 안 잘리게) */
+.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:300px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 세이프6제휴점 줄 추가로 220→300px (발송방식 줄 안 잘리게) */
 .settings-body.collapsed{max-height:0;opacity:0;padding-bottom:0;}
 /* ★ 메인 스크롤 래퍼 */
 #mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
@@ -2256,6 +2256,15 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       </label>
       <span class="storage-mode-badge both" id="storageModeBadge">☁️+📱 Firebase+로컬</span>
     </div>
+    <!-- ★ 세이프6제휴점: 켜면 차량번호 있는 모든 슬롯 자동 세이프6 표시 -->
+    <div class="storage-mode-row" style="margin-top:4px;background:#0F3D3A;border-radius:10px;padding:6px 10px;">
+      <span class="storage-mode-label" style="color:#5EEAD4;">🛡️ 세이프6제휴점</span>
+      <label class="storage-mode-switch" title="켜면 차량번호가 있는 모든 슬롯이 자동으로 세이프6로 표시됩니다">
+        <input type="checkbox" id="safe6PartnerSwitch" onchange="onSafe6PartnerChange(this.checked)">
+        <span class="storage-mode-slider"></span>
+      </label>
+      <span class="storage-mode-badge both" id="safe6PartnerBadge" style="background:#334155;">수동(개별 설정)</span>
+    </div>
     <div class="s-row">
       <span class="s-lbl">🔥 URL</span>
       <input id="fbUrlInput" class="s-fb-url" type="url" placeholder="https://프로젝트명-default-rtdb.firebaseio.com" />
@@ -3693,6 +3702,7 @@ var _ownerDelMode = false;
 var _ownerEditMode = false;
 var _ownerEditIdx = -1;
 var _safe6Selected = false;
+var _safe6Partner = false;
 
 /* ★ 하드코딩 기본 차주 목록 (항상 상단 표시, 삭제 불가) */
 
@@ -3956,6 +3966,17 @@ function insertOwnerToMemo(name) {
   if (btn)   btn.textContent = '👤 차주';
 }
 
+function _updateSafe6PartnerBadge(){
+  var b=document.getElementById('safe6PartnerBadge');
+  if(b){ b.textContent = _safe6Partner ? '전 슬롯 세이프6 ON' : '수동(개별 설정)'; b.style.background = _safe6Partner ? '#0D9488' : '#334155'; }
+}
+function onSafe6PartnerChange(checked){
+  _safe6Partner = !!checked;
+  if(typeof pushSettings==='function') pushSettings({ safe6Partner: _safe6Partner });
+  _updateSafe6PartnerBadge();
+  if(typeof buildGrid==='function') buildGrid();
+  if(typeof _initAllBadgeSliders==='function') setTimeout(function(){ _initAllBadgeSliders(); }, 300);
+}
 function toggleSafe6(){
   _safe6Selected = !_safe6Selected;
   var b=document.getElementById('sbSafe6');
@@ -6005,7 +6026,7 @@ function hideTooltip(){
 
 /* ── 메모 글씨크기 조절 ── */
 function loadMemoFs(){
-  var v=parseInt(localStorage.getItem(LS_MEMO_FS))||18;
+  var v=parseInt(localStorage.getItem(LS_MEMO_FS))||14;
   v=Math.min(Math.max(v,8),32);
   document.documentElement.style.setProperty('--memo-input-fs',v+'px');
   /* ★ PC: 슬롯 메모 표시 크기에도 반영 (모바일은 CSS에서 자동계산값 우선) */
@@ -6014,7 +6035,7 @@ function loadMemoFs(){
   if(el) el.textContent=v;
 }
 function changeMemoFs(delta){
-  var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||18;
+  var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||14;
   var next=Math.min(Math.max(cur+delta,8),32);
   localStorage.setItem(LS_MEMO_FS, next);
   document.documentElement.style.setProperty('--memo-input-fs',next+'px');
@@ -12749,11 +12770,7 @@ function _getViewBase(){
     if(!/view\.html(\?|$)/i.test(manual)) manual = manual.replace(/\/+$/,'') + '/view.html';
     return manual;
   }
-  var base = location.origin + location.pathname.replace(/[^\/]*$/,'') + 'view.html';
-  if(location.protocol==='http:' || location.protocol==='https:'){
-    try{ base = new URL('view.html', location.href).href; }catch(e){}
-  }
-  return base;
+  return 'https://v1hgmotors-blip.github.io/p/view.html';
 }
 function saveViewBaseUrl(){
   var inp=document.getElementById('viewBaseInput'); if(!inp) return;
@@ -12878,6 +12895,14 @@ function applyRemoteSettings(data){
   /* ★ 요금발생차단 수신 반영 (전 기기 공통) */
   if(data.hasOwnProperty('feeBlock')){
     try{ if(typeof window._applyFeeBlockRemote==='function') window._applyFeeBlockRemote(String(data.feeBlock)); }catch(e){}
+  }
+  /* ★ 세이프6제휴점 원격 수신 → 로컬 적용 + 재렌더 */
+  if(data.hasOwnProperty('safe6Partner')){
+    _safe6Partner = !!data.safe6Partner;
+    try{ var _sw=document.getElementById('safe6PartnerSwitch'); if(_sw) _sw.checked=_safe6Partner; }catch(e){}
+    if(typeof _updateSafe6PartnerBadge==='function') _updateSafe6PartnerBadge();
+    if(typeof buildGrid==='function') buildGrid();
+    if(typeof _initAllBadgeSliders==='function') setTimeout(function(){ _initAllBadgeSliders(); }, 300);
   }
   /* ★ 업체정보 수신 반영 */
   if(data.hasOwnProperty('bizInfo')){
@@ -20135,7 +20160,8 @@ window._drawQRCanvas = function(container, text, size){
         loc:  (partName||partNo+'파트') + (_slotHdr ? '-'+_slotHdr : '') + ' (줄)' + (_rowTxt ? ' ' + _rowTxt : ''),
         on:   oName||null,
         op:   oPhone||null,
-        kn:   (typeof oKeyNo!=='undefined' && oKeyNo) ? oKeyNo : null
+        kn:   (typeof oKeyNo!=='undefined' && oKeyNo) ? oKeyNo : null,
+        sf:   (function(){ try{ var _s6=(typeof slotIdx==='number'&&slotIdx>=0&&typeof getSlot==='function')?(getSlot(slotIdx)||{}):{}; return (_s6.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner))?1:null; }catch(e){ return null; } })() /* ★ 세이프6 → QR/약도전송에도 배지 표시 */
       };
 
       if(qrContent.length > 0){  /* ★ 내용 있으면 항상 QR 표시 */
@@ -20746,7 +20772,7 @@ window._drawQRCanvas = function(container, text, size){
 
       /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
       if(_getSmsMode()==='link'){
-        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null }, function(shortUrl){
+        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null, sf:(_sd9&&(_sd9.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner)))?1:null }, function(shortUrl){
           var u = shortUrl || _viewUrl9;
           if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
           _queueRouteSms(code, phone, car, text, '', eid, 'parkboard');
