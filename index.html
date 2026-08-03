@@ -862,8 +862,11 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     background:#10B981;color:#fff;overflow:visible;
   }
 }
-.slot-safe6-icon{ position:absolute;bottom:3px;left:3px;z-index:4;pointer-events:none;background:#0D9488;border-radius:50%;width:9px;height:9px;font-size:0;line-height:1;padding:0;overflow:hidden; }
+.slot-safe6-icon{ position:absolute;top:3px;right:3px;z-index:4;pointer-events:none;background:#0D9488;border-radius:50%;width:9px;height:9px;font-size:0;line-height:1;padding:0;overflow:hidden; }
 @media(min-width:600px){ .slot-safe6-icon{ width:auto;height:auto;border-radius:4px;padding:1px 4px;font-size:10px;font-weight:900;background:#0D9488;color:#fff;overflow:visible; } }
+/* ★ 세이프6가 오른쪽 위 코너에 오면, 엔카 카메라를 그 아래로 (모바일 !important 규칙을 이기도록 !important + 넉넉한 간격) */
+.slot-cam-icon.below-safe6{ top:calc(var(--slot-num-sz,22px) * 0.28 + 11px) !important; }
+@media(min-width:600px){ .slot-cam-icon.below-safe6{ top:23px !important; } }
 @keyframes encarCountBlink{
   0%,100%{opacity:1;}
   50%{opacity:0.35;}
@@ -3559,10 +3562,14 @@ function _fbLocalFirstMerge(localData, localIds, localTs){
 var LS_PART_ORDER='pb_part_order'; /* ★ 파트 표시 순서 */
 var LS_PART_VIEW ='pb_part_view';  /* ★ 파트 배치 모드: 'single'|'grid' — 기기별 독립 저장 */
 
-function isPartGridMode(){ return localStorage.getItem(LS_PART_VIEW)==='grid'; }
+function isPartGridMode(){ var v=localStorage.getItem(LS_PART_VIEW)||''; return v.indexOf('grid')===0; }
+function _gridColCount(){ return localStorage.getItem(LS_PART_VIEW)==='grid3' ? 3 : 2; }  /* ★ 격자 컬럼 수 */
 
 function togglePartGridMode(){
-  var next = isPartGridMode() ? 'single' : 'grid';
+  var next;
+  if(!isPartGridMode()) next='grid2';        /* 세로 → 격자2열 */
+  else if(_gridColCount()===2) next='grid3'; /* 격자2열 → 격자3열 */
+  else next='single';                        /* 격자3열 → 세로 */
   localStorage.setItem(LS_PART_VIEW, next);  /* ★ localStorage만 — Firebase 동기화 없음 (기기별 독립) */
   _cleanColArrows();
   _rebuildGridDOM();
@@ -3582,7 +3589,7 @@ function _applyPartViewMode(){
   if(!wrap) return;
   if(isPartGridMode()){
     wrap.classList.add('part-grid-mode');
-    if(btn){ btn.textContent='⊞ 격자'; btn.classList.add('active'); }
+    if(btn){ btn.textContent=(_gridColCount()===3?'⊞ 격자3열':'⊞ 격자2열'); btn.classList.add('active'); }
   } else {
     wrap.classList.remove('part-grid-mode');
     if(btn){ btn.textContent='⬛ 세로'; btn.classList.remove('active'); }
@@ -6613,20 +6620,19 @@ function _appendPartDOM(p){
     큰 빈 공간이 생기는 문제가 있었음 — 특히 화면이 넓은 PC에서 두드러짐) */
 function _appendGridCellsBalanced(wrap, cells){
   if(!cells || !cells.length) return;
-  var col1 = document.createElement('div'); col1.className = 'grid-col';
-  var col2 = document.createElement('div'); col2.className = 'grid-col';
-  wrap.appendChild(col1);
-  wrap.appendChild(col2);
-  /* 1) 일단 전부 col1에 넣어 실제 렌더 높이를 잴 수 있게 함 */
-  cells.forEach(function(cell){ col1.appendChild(cell); });
-  /* 2) 높이 읽기를 한 번에 모아서(batch) 강제 리플로우 최소화 */
+  var NCOL = (typeof _gridColCount==='function') ? _gridColCount() : 2;  /* ★ 격자 컬럼 수: 격자2열/격자3열 */
+  var cols = [];
+  for(var c=0;c<NCOL;c++){ var _cc=document.createElement('div'); _cc.className='grid-col'; wrap.appendChild(_cc); cols.push(_cc); }
+  /* 1) 전부 첫 컴럼에 넣어 실제 렌더 높이 측정 */
+  cells.forEach(function(cell){ cols[0].appendChild(cell); });
   var heights = cells.map(function(cell){ return cell.getBoundingClientRect().height; });
-  /* 3) 누적 높이가 더 작은 컬럼 쪽으로 순서대로 배분(그리디 균형) */
-  var h1 = 0, h2 = 0;
+  /* 2) 누적 높이가 가장 작은 컴럼으로 순서대로 배분(그리디 균형) */
+  var hsum = []; for(var k=0;k<NCOL;k++) hsum.push(0);
   cells.forEach(function(cell, i){
     var h = heights[i] || 0;
-    if(h1 <= h2){ h1 += h; /* col1에 유지 */ }
-    else       { h2 += h; col2.appendChild(cell); }
+    var mi = 0; for(var k=1;k<NCOL;k++){ if(hsum[k] < hsum[mi]) mi = k; }
+    hsum[mi] += h;
+    if(mi !== 0) cols[mi].appendChild(cell);  /* 0번은 이미 들어있음 */
   });
 }
 
@@ -9418,6 +9424,7 @@ function renderSlot(el,idx){
   if(d.car && (d.safe6 || (typeof _safe6Partner!=='undefined' && _safe6Partner))){
     var _s6i=document.createElement('div');
     _s6i.className='slot-safe6-icon'; _s6i.textContent='🛡️';
+    if(ec.done && typeof _cam!=='undefined' && _cam) _cam.classList.add('below-safe6');  /* ★ 세이프6 아래에 엔카 */
     el.appendChild(_s6i);
   }
 }
