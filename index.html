@@ -2638,7 +2638,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div class="m-dup-error" id="mDupError"></div>
     <div class="m-owner-error" id="mOwnerError">🙋 차주입력이 안되었습니다<br><span style="font-size:11px;font-weight:700;opacity:.8;">차주를 입력한 후 저장해 주세요</span></div>
     <div class="m-btns">
-      <button class="mbtn mbtn-cancel" onclick="closeModal()">취소</button>
+      <button class="mbtn mbtn-cancel" onclick="closeModal()">닫기</button>
       <button class="mbtn mbtn-delete" onclick="confirmClear()">🗑️ 초기화</button>
       <button class="mbtn mbtn-save"   onclick="saveSlot()" style="grid-column:auto;">✅ 저장</button>
     </div>
@@ -4082,6 +4082,11 @@ function _fbV7Update(updObj){
   if(!fbSlotsRef)return;
   var fbUpd={};
   var needIdsSync=false;
+  /* ★ BUG FIX(타임스탬프 역전 방지): saveSlots()가 이미 방금 기록한 로컬 타임스탬프를
+     그대로 재사용 — 새로 _tsNow()를 찍으면 Firebase로 보내는 시각이 로컬 기록 시각보다
+     항상 (같거나) 늦어져서, Firebase가 이 값을 그대로 되돌려줄 때(echo) 리스너가
+     "Firebase가 더 최신"으로 오판 → 방금 저장한 로컬 변경을 되돌리는 원인이 됐음 */
+  var _tsToSend = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0') || _tsNow();
   for(var k in updObj){
     var gi=parseInt(k);
     if(!isNaN(gi)){
@@ -4100,16 +4105,16 @@ function _fbV7Update(updObj){
   }
   if(needIdsSync){
     /* 새로 생성된 _ids를 Firebase에 먼저 push한 뒤 데이터 저장 */
-    var _idsUpd = {_ids:_getIds(), _localTs: _tsNow()};
+    var _idsUpd = {_ids:_getIds(), _localTs: _tsToSend};
     fbSlotsRef.update(_idsUpd).then(function(){
       if(Object.keys(fbUpd).length){
-        fbUpd._localTs = _tsNow();
+        fbUpd._localTs = _tsToSend;
         _fbSafeUpdate(fbUpd, 'v7-ids-sync');
       }
     }).catch(function(e){ console.warn('[FB _ids sync]',e); });
   } else {
     if(Object.keys(fbUpd).length){
-      fbUpd._localTs = _tsNow();
+      fbUpd._localTs = _tsToSend;
       _fbSafeUpdate(fbUpd, 'v7-update');
     }
   }
@@ -7931,6 +7936,11 @@ var NUM_PARTS=3;
    ══════════════════════════════════════════ */
 var _encarSlot = null;   /* 현재 예약 대상 슬롯 인덱스 */
 var _encarTimer = null;  /* 2시간 전 체크 타이머 */
+/* ★ FIX: 앤카예약알람/예약취소/사진완료 버튼을 눌러도 즉시 저장하지 않고
+   여기에 "대기" 상태로만 담아둠 → 모달의 메인 '저장' 버튼을 눌러야 최종 반영됨.
+   activeSlot이 바뀌면(openModal) 반드시 null로 초기화해야 함. */
+var _pendingEncarUpdate = null;  /* {date,time,done,doneDate} 또는 null(대기 없음) */
+var _pendingEncarLogInfo = null; /* 완료 처리 시 저장 시점에 addEncarLog에 넘길 정보 */
 
 /* ── 시간 선택 셀렉트 초기화 ── */
 function initEncarSelects(){
@@ -7989,7 +7999,8 @@ function initEncarSelects(){
 function openEncarModal(){
   _encarSlot = activeSlot;
   var d = getSlot(_encarSlot);
-  var ec = d.encar || {date:'',time:'',done:false,doneDate:''};
+  /* ★ FIX: 아직 메인 저장 전이라도, 방금 이 모달에서 대기시켜둔 값이 있으면 그걸 우선 표시 */
+  var ec = (_pendingEncarUpdate !== null) ? _pendingEncarUpdate : (d.encar || {date:'',time:'',done:false,doneDate:''});
   /* 슬롯 정보 표시 */
   var kn = d.num||String(_encarSlot+1);
   document.getElementById('encarSlotInfo').textContent = '🔑 키번호 : '+kn+(d.car?' | 🚗 '+d.car:'');
@@ -8030,18 +8041,13 @@ function saveEncarReserve(){
   var m  = document.getElementById('encarMin').value;
   var dateStr = y2+'-'+mo2+'-'+d3;
   var timeStr = h+':'+m;
-  var s = getSlots();
-  if(!s[_encarSlot]) s[_encarSlot]={car:'',status:'none',memo:'',disabled:false,num:'0',encar:{date:'',time:'',done:false,doneDate:''}};
-  s[_encarSlot].encar={date:dateStr, time:timeStr, done:false, doneDate:''};
-  saveSlots(s);
-  if(fbSlotsRef){var upd={};upd[_encarSlot]=s[_encarSlot];_fbV7Update(upd);}
-  refreshSlot(_encarSlot);
+  /* ★ FIX: 즉시 저장/Firebase 전송하지 않고 대기 상태로만 담아둠.
+     실제 저장은 모달의 메인 '저장' 버튼(saveSlot())을 눌러야 반영됨. */
+  _pendingEncarUpdate = {date:dateStr, time:timeStr, done:false, doneDate:''};
   _encarUpdateBtn(_encarSlot);
   closeEncarModal();
-  showAlert('📸 엔카사진 예약완료! ' + timeStr + ' — 2시간 전부터 빨간 깜박임 알림');
+  showAlert('📸 엔카사진 예약 설정됨: ' + timeStr + ' — 저장 버튼을 눌러야 최종 반영됩니다');
   setTimeout(hideAlert, 4000);
-  _encarStartTimer();
-  _encarUpdateCount();
 }
 
 /* ── 팝업 안 완료 버튼 (주차칸 팝업에서 직접 완료 처리) ── */
@@ -8054,45 +8060,36 @@ function doneEncarFromModal(){
   }
   var _dn2=new Date();
   var _dd2=_dn2.getFullYear()+'-'+String(_dn2.getMonth()+1).padStart(2,'0')+'-'+String(_dn2.getDate()).padStart(2,'0');
-  var _ec2=s[activeSlot].encar||{};
-  s[activeSlot].encar=Object.assign({},_ec2,{done:true,doneDate:_dd2});
-  addEncarLog(activeSlot, s[activeSlot].car, s[activeSlot].num, _ec2.date||'', _ec2.time||'', _dd2);
-  saveSlots(s);
-  if(fbSlotsRef){var upd={};upd[activeSlot]=s[activeSlot];_fbV7Update(upd);}
-  refreshSlot(activeSlot);
+  var _ec2=(_pendingEncarUpdate!==null) ? _pendingEncarUpdate : (s[activeSlot].encar||{});
+  /* ★ FIX: 즉시 저장/로그기록/Firebase 전송하지 않고 대기 상태로만 표시.
+     실제 저장·로그기록은 모달의 메인 '저장' 버튼(saveSlot())을 눌러야 반영됨. */
+  _pendingEncarUpdate = Object.assign({}, _ec2, {done:true, doneDate:_dd2});
+  _pendingEncarLogInfo = {car:s[activeSlot].car, num:s[activeSlot].num, date:_ec2.date||'', time:_ec2.time||'', doneDate:_dd2};
   _encarUpdateBtn(activeSlot);
-  _encarApplyBlinks();
-  _encarUpdateCount();
-  showAlert('✅ 엔카사진 완료!');
+  showAlert('✅ 완료로 표시했습니다 (저장 버튼을 눌러야 최종 반영됩니다)');
+  setTimeout(hideAlert,3000);
 }
 
 /* ── 예약취소 (팝업 없이 직접 리셋, 주차칸 팝업 안에서 호출) ── */
 function resetEncarFromModal(){
   if(activeSlot===null) return;
-  var s=getSlots();
-  if(s[activeSlot]) s[activeSlot].encar={time:'',done:false};
-  saveSlots(s);
-  if(fbSlotsRef){var upd={};upd[activeSlot]=s[activeSlot];_fbV7Update(upd);}
-  refreshSlot(activeSlot);
+  /* ★ FIX: 즉시 저장하지 않고 대기 상태로만 표시 — 메인 '저장' 버튼을 눌러야 실제 반영됨 */
+  _pendingEncarUpdate = {time:'', done:false};
+  _pendingEncarLogInfo = null; /* 취소는 완료 로그를 남기지 않음 */
   _encarUpdateBtn(activeSlot);
-  _encarApplyBlinks();
-  showAlert('🗑️ 엔카사진 예약이 취소되었습니다');
-  _encarUpdateCount();
+  showAlert('🗑️ 예약취소로 표시했습니다 (저장 버튼을 눌러야 최종 반영됩니다)');
+  setTimeout(hideAlert,3000);
 }
 
 /* ── 엔카 예약 취소 (완전 리셋) ── */
 function resetEncarReserve(){
   if(_encarSlot===null) return;
-  var s=getSlots();
-  if(s[_encarSlot]) s[_encarSlot].encar={time:'',done:false};
-  saveSlots(s);
-  if(fbSlotsRef){var upd={};upd[_encarSlot]=s[_encarSlot];_fbV7Update(upd);}
-  refreshSlot(_encarSlot);
+  /* ★ FIX: 즉시 저장하지 않고 대기 상태로만 표시 — 메인 '저장' 버튼을 눌러야 실제 반영됨 */
+  _pendingEncarUpdate = {time:'', done:false};
+  _pendingEncarLogInfo = null;
   _encarUpdateBtn(_encarSlot);
   closeEncarModal();
-  showAlert('🗑️ 엔카사진 예약이 취소되었습니다');
-  _encarApplyBlinks();
-  _encarUpdateCount();
+  showAlert('🗑️ 예약취소로 표시했습니다 (저장 버튼을 눌러야 최종 반영됩니다)');
 }
 
 /* ── 엔카 완료 처리 ── */
@@ -8122,7 +8119,9 @@ function _encarUpdateBtn(idx){
   var doneBtn   = document.getElementById('encarDoneInlineBtn');
   if(!btn) return;
   var d  = getSlot(idx);
-  var ec = d.encar || {time:'', done:false};
+  /* ★ FIX: 저장 대기 중인 값(_pendingEncarUpdate)이 있으면 그걸 미리보기로 표시,
+     아직 메인 저장 버튼을 안 눌렀으므로 실제 storage(d.encar)는 그대로 둔 채 버튼만 갱신 */
+  var ec = (idx===activeSlot && _pendingEncarUpdate!==null) ? _pendingEncarUpdate : (d.encar || {time:'', done:false});
   /* 예약 버튼 */
   btn.className = 'encar-reserve-btn';
   btn.style.marginBottom='0'; btn.style.flex='1';
@@ -8562,6 +8561,8 @@ openModal = function(i){
   /* ★ BUG FIX: 드래그 후 spurious click 차단 */
   if(window._lastDragEndTs && Date.now() - window._lastDragEndTs < 400) return;
   _origOpenModal(i);
+  /* ★ FIX: 새 칸을 열 때마다 이전 칸에서 남아있을 수 있는 저장 대기 상태 초기화 */
+  _pendingEncarUpdate = null; _pendingEncarLogInfo = null;
   _encarUpdateBtn(i);
   _inspectUpdateModal(i);
   var d  = getSlot(i);
@@ -10836,6 +10837,9 @@ function closeModal(){
   document.getElementById('modalOv').scrollTop = 0;
   var mb=document.getElementById('modalAlertBar');
   if(mb) mb.style.display='none';
+  /* ★ FIX: 저장(saveSlot) 없이 닫히는 경우 — 사진완료/예약취소/앤카예약알람으로
+     대기 중이던 미저장 변경을 폐기 (실제 storage는 애초에 안 바꿨으므로 값만 비움) */
+  _pendingEncarUpdate = null; _pendingEncarLogInfo = null;
   activeSlot=null;
   if(_fbPendingBuildGrid){ _fbPendingBuildGrid=false; buildGrid(); _initAllBadgeSliders(); }
 }
@@ -11935,22 +11939,20 @@ function saveSlot(){
   if(activeSlot===null)return;
   if(window._pbUploadLock){ _uploadLockToast(); return; } /* ★ 업로드 중 저장 잠금 */
   var car=document.getElementById('mCarInput').value.trim();
-  /* ★ 모달 내 키번호 입력값 저장 */
-  (function(){
+  /* ★ 모달 내 키번호 입력값 읽기
+     (★ FIX: 예전엔 여기서 즉시 localStorage+Firebase에 키번호만 먼저 저장했었음 →
+      아래 saveSlot() 본문의 getSlots()가 이미 바뀐 값을 다시 읽어버려서 "_prevNum"이
+      실제로는 "이전 값"이 아니라 "방금 입력한 새 값"이 되는 오염 발생 + 저장/Firebase
+      전송이 저장 1회당 2번씩 일어남(중간에 return으로 저장이 막히면 키번호만 저장되고
+      나머지는 저장 안 되는 반쪽 상태도 가능했음). 지금은 값만 미리 읽어서 변수에 담아두고,
+      실제 저장은 아래 최종 저장 지점에서 한 번만 수행함) */
+  var _newNumInput = (function(){
     var _ni=document.getElementById('mNumInput');
-    if(!_ni||_ni.value.trim()==='') return;
+    if(!_ni||_ni.value.trim()==='') return null;
     var _nv=String(parseInt(_ni.value.trim())||0);
-    if(activeSlot===null) return;
-    var _sd=_getData(); var _si=_getIds();
-    var _pl=_gidxToPartLocal(activeSlot);
-    if(!_pl) return;
-    var _id=(_si[_pl.part]||[])[_pl.local];
-    if(!_id) return;
-    if(!_sd[_id]) _sd[_id]={};
-    _sd[_id].num=_nv; _saveData(_sd);
-    if(fbSlotsRef){var _u={};_u[activeSlot]=_sd[_id];_fbV7Update(_u);}
     var _bn=document.getElementById('mBadgeNum');
-    if(_bn) _bn.textContent='🔑 키번호 : '+_nv;
+    if(_bn) _bn.textContent='🔑 키번호 : '+_nv; /* 화면 표시만 즉시 갱신, 저장은 아직 안 함 */
+    return _nv;
   })();
   var memo=document.getElementById('mMemoInput').value.trim();
   var dis=(selectedStatus==='disabled');
@@ -12032,8 +12034,14 @@ function saveSlot(){
   }
 
   var s=getSlots();
-  var _prevNum   = (s[activeSlot] && s[activeSlot].num   !== undefined) ? s[activeSlot].num   : '0';
-  var _prevEncar = (s[activeSlot] && s[activeSlot].encar)               ? s[activeSlot].encar : {time:'',done:false};
+  /* ★ FIX: 새로 입력한 키번호(_newNumInput)가 있으면 그 값을, 없으면 기존 저장값을 사용.
+     이제 이 값은 아래 최종 s[activeSlot]=... 저장 시 한 번만 기록됨 (이중 저장 제거) */
+  var _prevNum   = (_newNumInput !== null) ? _newNumInput
+                   : ((s[activeSlot] && s[activeSlot].num !== undefined) ? s[activeSlot].num : '0');
+  /* ★ FIX: 앤카예약알람/예약취소/사진완료 버튼으로 대기 중이던 값이 있으면 그걸 최종 반영,
+     없으면 기존 저장값 유지 — 이제 이 세 버튼도 메인 저장 버튼을 눌러야 실제 저장됨 */
+  var _prevEncar = (_pendingEncarUpdate !== null) ? _pendingEncarUpdate
+                   : ((s[activeSlot] && s[activeSlot].encar) ? s[activeSlot].encar : {time:'',done:false});
   var _prevInspect = (s[activeSlot] && s[activeSlot].inspect)           ? s[activeSlot].inspect : {date:'',done:false};
   /* ★ 서류 첨부 이전(migration)용 — 같은 칸의 차량번호가 "수정"된 것인지 확인하기 위해
      덮어쓰기 전 원래 차량번호를 기억해둔다 (예: "5640" → "경기50가5640") */
@@ -12087,6 +12095,17 @@ function saveSlot(){
     var fbVal={}; fbVal[activeSlot]=s[activeSlot];
     _fbV7Update(fbVal);
   }
+  /* ★ FIX: 앤카예약알람/예약취소/사진완료 버튼으로 대기 중이던 변경이 실제로 저장됐으므로,
+     "사진완료" 대기가 있었다면 이 시점에 완료 이력을 기록하고 대기 상태를 정리함
+     (판매완료/사용안함으로 초기화되는 경우는 완료 이력을 남기지 않음) */
+  if(!isClear && _pendingEncarLogInfo){
+    addEncarLog(activeSlot, s[activeSlot].car, s[activeSlot].num,
+      _pendingEncarLogInfo.date, _pendingEncarLogInfo.time, _pendingEncarLogInfo.doneDate);
+  }
+  _pendingEncarUpdate = null; _pendingEncarLogInfo = null;
+  _encarUpdateBtn(activeSlot);
+  _encarApplyBlinks();
+  _encarUpdateCount();
   _inspectApplyBlinks();
   refreshSlot(activeSlot);
   /* ★ 서류 정리
