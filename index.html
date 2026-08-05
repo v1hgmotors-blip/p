@@ -14,6 +14,20 @@
     }
   }catch(e){}
 })();
+
+/* ★ 핀치(두 손가락) 화면 확대/축소 차단
+   일부 모바일 웹뷰(카카오톡 인앱브라우저 등)는 <meta viewport user-scalable=no>를
+   무시하고 핀치줌을 허용함 → 줌 아웃 시 화면 우측/하단에 흰 여백이 생기는 버그 발생.
+   여기서 두 손가락 터치는 항상 preventDefault로 막아 브라우저 자체 확대/축소를 차단한다.
+   단, 메모의 사진 크기조절(핀치)은 자체 로직으로 별도 처리되므로 그대로 정상 동작한다. */
+(function(){
+  document.addEventListener('touchmove', function(e){
+    if(e.touches && e.touches.length > 1){ e.preventDefault(); }
+  }, {passive:false});
+  ['gesturestart','gesturechange','gestureend'].forEach(function(evt){
+    document.addEventListener(evt, function(e){ e.preventDefault(); }, {passive:false});
+  });
+})();
 </script>
 <meta charset="UTF-8">
   <!-- PWA: 앱처럼 실행 (주소줄 숨기기) -->
@@ -39,8 +53,8 @@
   --product-bg:#FFF7ED;  --product-bd:#F97316;  --product-tx:#C2410C;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html{height:100%;height:100dvh;}
-body{background:var(--bg);color:var(--text-main);font-family:'Apple SD Gothic Neo','Nanum Gothic','Malgun Gothic',sans-serif;height:100%;height:100dvh;display:flex;flex-direction:column;overflow:hidden;overflow-x:hidden;padding-top:env(safe-area-inset-top);padding-top:constant(safe-area-inset-top);}
+html{height:100%;height:100dvh;width:100%;background:var(--bg);overflow:hidden;touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y;}
+body{background:var(--bg);color:var(--text-main);font-family:'Apple SD Gothic Neo','Nanum Gothic','Malgun Gothic',sans-serif;height:100%;height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;overflow-x:hidden;padding-top:env(safe-area-inset-top);padding-top:constant(safe-area-inset-top);touch-action:pan-x pan-y;-ms-touch-action:pan-x pan-y;}
 
 /* ══ 버전/빌드 뱃지 ══ */
 #buildBadge{
@@ -96,9 +110,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .h-memo-text:hover{background:rgba(255,255,255,.8);}
 .h-title{font-size:20px;font-weight:900;color:var(--kakao-deep);letter-spacing:-.3px;}
 /* 편집 모달 공통 */
-.memo-edit-ov,.promo-edit-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8000;align-items:center;justify-content:center;}
-.memo-edit-ov.show,.promo-edit-ov.show{display:flex;}
-.memo-edit-box{background:#FFF;border-radius:16px;padding:22px 20px 18px;width:min(320px,90vw);box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px;}
+.memo-edit-ov,.promo-edit-ov{display:flex;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8000;align-items:center;justify-content:center;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s linear .2s;}
+.memo-edit-ov.show,.promo-edit-ov.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .2s ease,visibility 0s linear;}
+.memo-edit-box{background:#FFF;border-radius:16px;padding:22px 20px 18px;width:min(320px,90vw);box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px;transform:scale(.85);opacity:0;transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s ease;}
+.memo-edit-ov.show .memo-edit-box,.promo-edit-ov.show .memo-edit-box{transform:scale(1);opacity:1;}
 .memo-edit-title{font-size:16px;font-weight:900;color:var(--kakao-deep);text-align:center;}
 .memo-edit-label{font-size:12px;font-weight:700;color:#666;margin-bottom:3px;}
 .memo-edit-input{width:100%;border:2px solid var(--border);border-radius:9px;padding:9px 12px;font-size:15px;font-weight:800;outline:none;font-family:inherit;color:var(--kakao-deep);}
@@ -501,9 +516,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   100%{transform:scale(1);opacity:1;}
 }
 /* 키반납 팝업 */
-.key-return-popup-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);}
-.key-return-popup-ov.show{display:flex;}
-.key-return-popup-card{background:#fff;border-radius:18px;padding:24px 20px 18px;width:min(320px,92vw);box-shadow:0 8px 40px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px;border:3px solid #16A34A;}
+.key-return-popup-ov{display:flex;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s linear .2s;}
+.key-return-popup-ov.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .2s ease,visibility 0s linear;}
+.key-return-popup-card{background:#fff;border-radius:18px;padding:24px 20px 18px;width:min(320px,92vw);box-shadow:0 8px 40px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:12px;border:3px solid #16A34A;transform:scale(.85);opacity:0;transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s ease;}
+.key-return-popup-ov.show .key-return-popup-card{transform:scale(1);opacity:1;}
 .key-return-popup-icon{font-size:32px;text-align:center;}
 .key-return-popup-title{font-size:16px;font-weight:900;color:#16A34A;text-align:center;}
 .key-return-popup-body{font-size:13px;color:#333;line-height:1.8;background:#F0FDF4;border-radius:10px;padding:10px 12px;border:1.5px solid #BBF7D0;}
@@ -1264,17 +1280,19 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 
 /* ══ 편집 모달 ══ */
-.modal-ov{display:none;position:fixed;inset:0;background:rgba(58,29,29,.6);z-index:200;align-items:flex-start;justify-content:center;backdrop-filter:blur(2px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:0;padding-bottom:60vh;}
-.modal-ov.show{display:flex;}
+.modal-ov{display:flex;position:fixed;inset:0;background:rgba(58,29,29,.6);z-index:200;align-items:flex-start;justify-content:center;backdrop-filter:blur(2px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:0;padding-bottom:60vh;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .22s ease,visibility 0s linear .22s;}
+.modal-ov.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .22s ease,visibility 0s linear;}
 /* ══ 판매완료/초기화 미니 확인 팝업 ══ */
-.mini-confirm-ov{display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;background:rgba(0,0,0,.45);}
-.mini-confirm-ov.show{display:flex;}
-.mini-confirm-box{background:#fff;border-radius:18px;padding:20px 20px 16px;width:min(280px,88vw);box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:center;gap:10px;animation:mcPop .2s cubic-bezier(.34,1.56,.64,1);}
+.mini-confirm-ov{display:flex;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;background:rgba(0,0,0,.45);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s linear .2s;}
+.mini-confirm-ov.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .2s ease,visibility 0s linear;}
+.mini-confirm-box{background:#fff;border-radius:18px;padding:20px 20px 16px;width:min(280px,88vw);box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:center;gap:10px;transform:scale(.85);opacity:0;transition:transform .2s cubic-bezier(.34,1.56,.64,1),opacity .16s ease;}
+.mini-confirm-ov.show .mini-confirm-box{transform:scale(1);opacity:1;}
 @keyframes mcPop{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}
 /* ══ FB 저장값 적용 확인 팝업 ══ */
-.fb-restore-ov{display:none;position:fixed;inset:0;z-index:600;align-items:center;justify-content:center;background:rgba(0,0,0,.55);}
-.fb-restore-ov.show{display:flex;}
-.fb-restore-box{background:#fff;border-radius:20px;padding:20px 16px 16px;width:min(340px,94vw);box-shadow:0 12px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:0;animation:mcPop .25s cubic-bezier(.34,1.56,.64,1);}
+.fb-restore-ov{display:flex;position:fixed;inset:0;z-index:600;align-items:center;justify-content:center;background:rgba(0,0,0,.55);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility 0s linear .2s;}
+.fb-restore-ov.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .2s ease,visibility 0s linear;}
+.fb-restore-box{background:#fff;border-radius:20px;padding:20px 16px 16px;width:min(340px,94vw);box-shadow:0 12px 40px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:0;transform:scale(.85);opacity:0;transition:transform .25s cubic-bezier(.34,1.56,.64,1),opacity .18s ease;}
+.fb-restore-ov.show .fb-restore-box{transform:scale(1);opacity:1;}
 .fb-restore-title{font-size:15px;font-weight:900;color:#1E293B;text-align:center;margin-bottom:8px;}
 .fb-restore-desc{font-size:11px;color:#64748B;text-align:center;line-height:1.6;margin-bottom:12px;}
 .fb-restore-card{border-radius:10px;padding:9px 12px;margin-bottom:6px;}
@@ -1298,7 +1316,8 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .mini-confirm-ok{border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;color:#fff;}
 .mini-confirm-ok.sale{background:#1D4ED8;}
 .mini-confirm-ok.clear{background:#EF4444;}
-.modal{background:#FFFDE7;border:3px solid var(--kakao);border-radius:0 0 22px 22px;padding:14px 14px 20px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(58,29,29,.3);animation:mSlide .25s cubic-bezier(.34,1.56,.64,1);max-height:none;overflow-y:visible;overflow-x:hidden;position:relative;box-sizing:border-box;margin-top:0;flex-shrink:0;align-self:flex-start;}
+.modal{background:#FFFDE7;border:3px solid var(--kakao);border-radius:0 0 22px 22px;padding:14px 14px 20px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(58,29,29,.3);max-height:none;overflow-y:visible;overflow-x:hidden;position:relative;box-sizing:border-box;margin-top:0;flex-shrink:0;align-self:flex-start;transform:translateY(60px);opacity:0;transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .22s ease;}
+.modal-ov.show .modal{transform:translateY(0);opacity:1;}
 /* ★ 모달 상단 닫기 버튼 */
 .m-close-btn{position:absolute;top:12px;right:12px;background:rgba(58,29,29,.13);border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#3A1D1D;cursor:pointer;touch-action:manipulation;z-index:20;flex-shrink:0;line-height:1;}
 .m-close-btn:active{background:rgba(58,29,29,.28);}
@@ -1386,12 +1405,14 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 
 /* ══ 🔔 키불출 팝업 ══ */
 .dispatch-popup{
-  display:none;position:fixed;inset:0;z-index:500;
+  display:flex;position:fixed;inset:0;z-index:500;
   background:rgba(0,0,0,.75);
   align-items:center;justify-content:center;padding:20px;
   backdrop-filter:blur(4px);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .2s ease,visibility 0s linear .2s;
 }
-.dispatch-popup.show{display:flex;}
+.dispatch-popup.show{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .2s ease,visibility 0s linear;}
 .dp-card{
   background:#1A2A1A;
   border:4px solid #2DB400;
@@ -1399,10 +1420,12 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   padding:30px 24px 24px;
   width:100%;max-width:400px;
   box-shadow:0 0 60px rgba(45,180,0,.5),0 20px 60px rgba(0,0,0,.6);
-  animation:dpPop .3s cubic-bezier(.34,1.56,.64,1);
+  transform:scale(.7);opacity:0;
+  transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .2s ease;
   text-align:center;
   position:relative;
 }
+.dispatch-popup.show .dp-card{transform:scale(1);opacity:1;}
 @keyframes dpPop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 .dp-title{font-size:13px;font-weight:900;color:#AAF0AA;letter-spacing:1px;margin-bottom:12px;text-transform:uppercase;}
 .dp-badge{
@@ -2241,32 +2264,35 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   </div>
   <!-- ★ 접히는 본문 -->
   <div class="settings-body" id="settingsBody">
-    <!-- ★ 화면 켜짐 유지(WakeLock) 토글 -->
-    <div class="storage-mode-row" style="margin-top:4px;">
-      <span class="storage-mode-label">📱 화면 켜짐</span>
-      <label class="storage-mode-switch" title="켜면 화면이 자동으로 꺼지지 않습니다">
-        <input type="checkbox" id="wakeLockSwitch" onchange="_toggleWakeLock(this.checked)">
-        <span class="storage-mode-slider"></span>
-      </label>
-      <span class="storage-mode-badge both" id="wakeLockBadge">화면 켜짐 유지중</span>
-    </div>
-    <!-- ★ 저장소 모드 토글 -->
-    <div class="storage-mode-row">
-      <span class="storage-mode-label">💾 저장방식</span>
-      <label class="storage-mode-switch" title="저장방식 전환">
-        <input type="checkbox" id="storageModeSwitch" onchange="onStorageModeSwitchChange(this.checked)">
-        <span class="storage-mode-slider"></span>
-      </label>
-      <span class="storage-mode-badge both" id="storageModeBadge">☁️+📱 Firebase+로컬</span>
-    </div>
-    <!-- ★ 세이프6제휴점: 켜면 차량번호 있는 모든 슬롯 자동 세이프6 표시 -->
-    <div class="storage-mode-row" style="margin-top:4px;background:#0F3D3A;border-radius:10px;padding:6px 10px;">
-      <span class="storage-mode-label" style="color:#5EEAD4;">🛡️ 세이프6제휴점</span>
-      <label class="storage-mode-switch" title="켜면 차량번호가 있는 모든 슬롯이 자동으로 세이프6로 표시됩니다">
-        <input type="checkbox" id="safe6PartnerSwitch" onchange="onSafe6PartnerChange(this.checked)">
-        <span class="storage-mode-slider"></span>
-      </label>
-      <span class="storage-mode-badge both" id="safe6PartnerBadge" style="background:#334155;">수동(개별 설정)</span>
+    <!-- ★ 화면 켜짐 / 저장방식 / 세이프6제휴점 → 한 줄로 통합 (공간 부족 시 자동 줄바꿈, 다른 요소 영향 없음) -->
+    <div class="settings-multirow" style="display:flex;flex-wrap:wrap;align-items:center;row-gap:6px;column-gap:16px;margin-top:4px;background:#0F3D3A;border-radius:10px;padding:6px 10px;">
+      <!-- ★ 화면 켜짐 유지(WakeLock) 토글 -->
+      <div class="storage-mode-row" style="padding:0;flex:0 0 auto;">
+        <span class="storage-mode-label">📱 화면 켜짐</span>
+        <label class="storage-mode-switch" title="켜면 화면이 자동으로 꺼지지 않습니다">
+          <input type="checkbox" id="wakeLockSwitch" onchange="_toggleWakeLock(this.checked)">
+          <span class="storage-mode-slider"></span>
+        </label>
+        <span class="storage-mode-badge both" id="wakeLockBadge">화면 켜짐 유지중</span>
+      </div>
+      <!-- ★ 저장소 모드 토글 -->
+      <div class="storage-mode-row" style="padding:0;flex:0 0 auto;">
+        <span class="storage-mode-label">💾 저장방식</span>
+        <label class="storage-mode-switch" title="저장방식 전환">
+          <input type="checkbox" id="storageModeSwitch" onchange="onStorageModeSwitchChange(this.checked)">
+          <span class="storage-mode-slider"></span>
+        </label>
+        <span class="storage-mode-badge both" id="storageModeBadge">☁️+📱 Firebase+로컬</span>
+      </div>
+      <!-- ★ 세이프6제휴점: 켜면 차량번호 있는 모든 슬롯 자동 세이프6 표시 -->
+      <div class="storage-mode-row" style="padding:0;flex:0 0 auto;">
+        <span class="storage-mode-label" style="color:#5EEAD4;">🛡️ 세이프6제휴점</span>
+        <label class="storage-mode-switch" title="켜면 차량번호가 있는 모든 슬롯이 자동으로 세이프6로 표시됩니다">
+          <input type="checkbox" id="safe6PartnerSwitch" onchange="onSafe6PartnerChange(this.checked)">
+          <span class="storage-mode-slider"></span>
+        </label>
+        <span class="storage-mode-badge both" id="safe6PartnerBadge" style="background:#334155;">수동(개별 설정)</span>
+      </div>
     </div>
     <div class="s-row">
       <span class="s-lbl">🔥 URL</span>
@@ -2638,7 +2664,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div class="m-dup-error" id="mDupError"></div>
     <div class="m-owner-error" id="mOwnerError">🙋 차주입력이 안되었습니다<br><span style="font-size:11px;font-weight:700;opacity:.8;">차주를 입력한 후 저장해 주세요</span></div>
     <div class="m-btns">
-      <button class="mbtn mbtn-cancel" onclick="closeModal()">취소</button>
+      <button class="mbtn mbtn-cancel" onclick="closeModal()">닫기</button>
       <button class="mbtn mbtn-delete" onclick="confirmClear()">🗑️ 초기화</button>
       <button class="mbtn mbtn-save"   onclick="saveSlot()" style="grid-column:auto;">✅ 저장</button>
     </div>
@@ -10844,13 +10870,17 @@ function openModal(i){
   if(window.innerWidth >= 601 && typeof _syncCarFsSlider === 'function') _syncCarFsSlider();
 }
 function closeModal(){
-  document.getElementById('modalOv').classList.remove('show');
-  /* ★ 스크롤 위치 초기화 — 다음 열기 시 깜빡임 방지 */
-  document.getElementById('modalOv').scrollTop = 0;
+  var ov = document.getElementById('modalOv');
+  ov.classList.remove('show');
   var mb=document.getElementById('modalAlertBar');
   if(mb) mb.style.display='none';
   activeSlot=null;
-  if(_fbPendingBuildGrid){ _fbPendingBuildGrid=false; buildGrid(); _initAllBadgeSliders(); }
+  /* ★ FIX: 스크롤 초기화/그리드 재빌드는 닫힘 트랜지션(.22s)이 끝난 뒤 실행
+     → 닫히는 애니메이션 도중 무거운 재계산이 끼어들어 끊기는 현상 방지 */
+  setTimeout(function(){
+    ov.scrollTop = 0;
+    if(_fbPendingBuildGrid){ _fbPendingBuildGrid=false; buildGrid(); _initAllBadgeSliders(); }
+  }, 220);
 }
 /* ══ 엔카 완료 로그 (슬롯과 분리된 영구 이력) ══ */
 function getEncarLog(){
@@ -14208,8 +14238,20 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   /* ★ FIX: resize 디바운스 처리 — 연속 호출 방지 (모바일 성능)
      orientationchange 이벤트 추가 — iOS Safari에서 화면 회전 시 정확한 재계산 */
   var _fitLayoutTimer = null;
+  /* ★ FIX: 키보드가 올라오거나 내려갈 때도 window 'resize'가 발생하는데,
+     이때 fitLayout()/열접기 재계산이 돌면서 화면이 깜박임.
+     기존엔 '키번호 편집중(window._editingSlotNum)'만 예외처리 했었는데,
+     상단 차량번호 검색창처럼 다른 입력창에 포커스된 경우도 동일하게 막아야
+     깜박임이 없어진다 → 포커스된 요소가 input/textarea/편집가능요소이면
+     전부 건너뛰도록 일반화. */
+  function _isTypingFocused(){
+    var ae = document.activeElement;
+    if(!ae) return false;
+    var tag = ae.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || ae.isContentEditable === true;
+  }
   function _debouncedFitLayout(){
-    if(window._editingSlotNum) return;  /* ★ 키번호 편집 중엔 키보드 resize 무시(깜박임 방지) */
+    if(window._editingSlotNum || _isTypingFocused()) return;  /* ★ 키번호 편집/입력창 포커스 중엔 키보드 resize 무시(깜박임 방지) */
     if(_fitLayoutTimer) clearTimeout(_fitLayoutTimer);
     _fitLayoutTimer = setTimeout(function(){
       _fitLayoutTimer = null;
@@ -14220,7 +14262,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   window.addEventListener('resize', _debouncedFitLayout);
   /* ★ 리사이즈 시 열 스크롤 뷰포트도 재계산 */
   window.addEventListener('resize', function(){
-    if(window._editingSlotNum) return;  /* ★ 편집 중 스킵 */
+    if(window._editingSlotNum || _isTypingFocused()) return;  /* ★ 편집/입력 중 스킵 */
     setTimeout(function(){
       _cleanColArrows();
       if(typeof _applyAllColFolds==='function') _applyAllColFolds();
