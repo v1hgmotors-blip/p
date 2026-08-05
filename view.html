@@ -152,7 +152,12 @@
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
       <button onclick="docAction('share')" style="flex:1;min-width:0;padding:9px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
-      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
+    </div>
+    <!-- ★ 종류별 서류 바로 다운로드: 차량등록증 / 성능점검표 / 판매확인서 — 첨부된 종류만 표시 -->
+    <div id="docCatBtnRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+      <button id="regDocBtn" onclick="downloadCatDocs('reg')" style="display:none;flex:1;min-width:88px;padding:9px 4px;background:#DC2626;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">🚗 차량등록증</button>
+      <button id="inspDocBtn" onclick="downloadCatDocs('insp')" style="display:none;flex:1;min-width:88px;padding:9px 4px;background:#0EA5E9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">🔍 성능점검표</button>
+      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:88px;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
     </div>
     <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
     <div id="docPickList" style="display:none;margin-top:10px;background:#0B1F38;border-radius:10px;padding:10px;"></div>
@@ -431,6 +436,7 @@ function sharePage(){
   var part = qs('part');
   var car  = qs('car');
   var isSafe6 = false; /* ★ 세이프6 상태 (payload.sf) */
+  try{ if(typeof qs==='function' && qs('sf')==='1') isSafe6 = true; }catch(e){}  /* ★ 직접 URL ?sf=1 대응 */
   var loc  = qs('loc');
   var db   = qs('db') || ''; /* ★ (OEM) 기본 Firebase 폴백 제거 — db는 링크에서만 받음 */
   var eid  = qs('eid') || '';  /* ★ 불출건 ID — 건별 스캔/다운로드 집계용 */
@@ -641,12 +647,19 @@ function sharePage(){
         var _dl=row&&row.querySelector('button[onclick*="download"]'); if(_dl) _dl.style.display='';
         var _sh=row&&row.querySelector('button[onclick*="share"]'); if(_sh) _sh.style.display='';
       }catch(e){}
+      /* ★ 종류별(차량등록증/성능점검표) 버튼 — 해당 종류 서류가 있을 때만 표시 */
+      var hasReg=false, hasInsp=false;
+      Object.keys(v).forEach(function(id){ var d=v[id]; if(d&&d.cat==='reg') hasReg=true; if(d&&d.cat==='insp') hasInsp=true; });
+      var rb=document.getElementById('regDocBtn'); if(rb) rb.style.display = hasReg ? 'block' : 'none';
+      var ib=document.getElementById('inspDocBtn'); if(ib) ib.style.display = hasInsp ? 'block' : 'none';
     } else {
       var row2=document.getElementById('docBtnRow');
       if(row2){
         var dl=row2.querySelector('button[onclick*="download"]'); if(dl) dl.style.display='none';
         var sh=row2.querySelector('button[onclick*="share"]'); if(sh) sh.style.display='none';
       }
+      var rb2=document.getElementById('regDocBtn'); if(rb2) rb2.style.display='none';
+      var ib2=document.getElementById('inspDocBtn'); if(ib2) ib2.style.display='none';
       var none2=document.getElementById('docNoneMsg'); if(none2) none2.style.display='block';
     }
   }
@@ -784,6 +797,19 @@ function sharePage(){
     if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
     _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
+  };
+  /* ★ 종류별 서류(차량등록증/성능점검표) 바로 다운로드 */
+  window.downloadCatDocs = function(cat){
+    if(!_docDataLoaded && _docKeyCur && _carDocs){
+      _setDocStatus('⏳ 서류 불러오는 중...');
+      _ensureDocData(function(){ _setDocStatus(''); window.downloadCatDocs(cat); });
+      return;
+    }
+    var label = cat==='reg' ? '차량등록증' : '성능점검표';
+    var docs = _docsArray().filter(function(d){ return d.cat===cat; });
+    if(!docs.length){ _setDocStatus(label+' 서류가 없습니다.'); return; }
+    docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d, label+(docs.length>1?(i+1):'')); },i*300); });
+    _setDocStatus('📄 '+label+' '+docs.length+'개 다운로드됨');
   };
   window.docAction = function docAction(mode){
     /* ★ 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 진행 */
