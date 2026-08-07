@@ -4644,8 +4644,8 @@ function renderColHeaders(){
       div.addEventListener('click', onColHcClick);
       container.appendChild(div);
     }
-    _applyAllPartColors(); /* ★ 파트별 색상 적용 */
 }
+  _applyAllPartColors(); /* ★ FIX: for문 안이 아니라 전체 헤더 생성이 끝난 뒤 딱 한 번, 확실하게 적용 */
   _applyAllColGaps(); /* ★ 열 띄우기(간격) 적용 */
 }
 
@@ -6877,6 +6877,10 @@ function _rebuildGridDOM(){
       _rgMw.scrollTop = _rgTop;
     }); }); });
   }
+  /* ★ FIX: 그리드 DOM이 재생성될 때마다(다른 기기의 실시간 열개수 변경 포함)
+     열헤더 색상이 지워지지 않도록, 재생성 직후 안전하게 색상 재적용 */
+  try{ if(typeof _applyAllColOneColors==='function') _applyAllColOneColors(); }catch(e){}
+  setTimeout(function(){ try{ if(typeof _applyAllColOneColors==='function') _applyAllColOneColors(); }catch(e){} }, 200);
 }
 
 /* ★ 파트 추가 */
