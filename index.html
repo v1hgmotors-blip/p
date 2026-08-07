@@ -3142,10 +3142,17 @@ function _doFbSafeSet(dataObj,label){
       var _rescued = 0;
       for(var _rk in _cache){
         var _rv = _cache[_rk];
-        /* 차량이 실제로 있는 슬롯인데 이번 쓰기 객체에 키 자체가 없음 → 사고로 간주하고 복구 */
-        if(_rv && _rv.car && !(_rk in dataObj)){ dataObj[_rk] = _rv; _rescued++; }
+        if(!_rv || !_rv.car) continue; /* 이전에 차량이 없던 슬롯은 대상 아님 */
+        var _incoming = dataObj[_rk];
+        /* ① 키 자체가 통째로 빠짐(기존 로직) */
+        var _missingKey = !(_rk in dataObj);
+        /* ★ FIX(2단계): 키는 있지만 값이 빈 슬롯(차량 없음)으로 바뀐 경우도 사고로 간주해 복구
+           — 예: 손상되거나 오래된 로컬 데이터가 '내가 최신'으로 병합 업로드될 때, 정상 차량이
+           있던 슬롯이 빈 값으로 대체되어 조용히 지워지는 사고를 여기서 차단 */
+        var _becameEmpty = !_missingKey && _incoming && !_incoming.car;
+        if(_missingKey || _becameEmpty){ dataObj[_rk] = _rv; _rescued++; }
       }
-      if(_rescued > 0) console.warn('[유실방지] '+(label||'')+' — 빠진 차량슬롯 '+_rescued+'건 자동 복구 후 저장');
+      if(_rescued > 0) console.warn('[유실방지] '+(label||'')+' — 차량슬롯 '+_rescued+'건 자동 복구 후 저장(빈값 덮어쓰기 차단)');
     }catch(e){ console.warn('[유실방지 가드 예외]', e); }
   }
   fbSlotsRef.set(dataObj)
@@ -3565,6 +3572,33 @@ function _fbLocalFirstMerge(localData, localIds, localTs){
         _gridConfig: _structCfg, /* ★ 조건부: 로컬이 최신일 때만 로컬, 아니면 Firebase 구조 유지 */
         _localTs: localTs
       });
+      /* ★ FIX(이상 데이터 감지): 병합 업로드 직전, 차량 수가 Firebase보다 비정상적으로
+         급감했으면(손상/오래된 로컬 데이터일 가능성) 자동 업로드를 막고 사용자 확인을 받음.
+         정상적인 소량 변경(차량 몇 대 출차 등)은 통과시키고, 명백한 대량 유실만 차단. */
+      var _fbCarCnt = Object.keys(fbSlotData).filter(function(k){ return fbSlotData[k] && fbSlotData[k].car; }).length;
+      var _localCarCnt = Object.keys(localData).filter(function(k){ return localData[k] && localData[k].car; }).length;
+      var _suspicious = (_fbCarCnt >= 5) && (_localCarCnt < _fbCarCnt * 0.5);
+      if(_suspicious){
+        console.warn('[이상감지] 로컬 차량 '+_localCarCnt+'대 vs Firebase '+_fbCarCnt+'대 — 절반 이하로 급감, 자동업로드 보류');
+        var _confirmMsg = '⚠️ 데이터 이상 감지\n\n'
+          + 'Firebase(서버)에는 차량 '+_fbCarCnt+'대가 있는데,\n'
+          + '이 기기의 로컬 데이터에는 '+_localCarCnt+'대만 있습니다.\n\n'
+          + '이 기기 데이터가 손상되었거나 오래된 상태일 수 있습니다.\n'
+          + '그래도 이 기기 데이터로 서버를 덮어쓰시겠습니까?\n\n'
+          + '(취소를 누르면 서버 데이터를 그대로 유지하고, 이 기기는 서버 데이터로 새로고침됩니다 — 권장)';
+        if(!confirm(_confirmMsg)){
+          console.log('[이상감지] 업로드 취소 — 서버 데이터로 이 기기를 갱신');
+          try{
+            _safeSaveSlots(fbSlotData);
+            localStorage.setItem(LS_LOCAL_TS, String(fbData._localTs||_tsNow()));
+            if(typeof buildGrid==='function') buildGrid();
+            if(typeof showAlert==='function') showAlert('✅ 서버 데이터로 복원되었습니다 (이 기기 데이터는 업로드되지 않음)');
+          }catch(e){ console.warn('[이상감지] 서버데이터 적용 실패', e); }
+          _fbSyncMarkReady('local-master-declined');
+          return;
+        }
+        console.log('[이상감지] 사용자가 업로드를 확인함 — 진행');
+      }
       _fbSafeSet(uploadObj, '로컬우선merge업로드');
       console.log('[로컬우선merge] 로컬'+Object.keys(localData).length+'개 + FB'+Object.keys(fbSlotData).length+'개 병합');
     }
@@ -15070,7 +15104,10 @@ function _doBackup(slotAM, onComplete) {
     if(bar){ bar.textContent = localMsg; bar.classList.add('show'); setTimeout(function(){ bar.classList.remove('show'); }, 3000); }
     console.log('[BACKUP ' + label + '] ✅ 로컬 전용 완료', today);
     /* ★ PC 전용 자동 JSON 파일 저장 */
-    setTimeout(function(){ _autoDownloadBackupFile(data, label, today, timeStr); }, 800);
+    var _isFreshDevice_local = false;
+    try { var _code0_local = localStorage.getItem(LS_CODE) || ''; _isFreshDevice_local = !!_code0_local && !localStorage.getItem('pb_room_visited_' + _code0_local); } catch(e){}
+    if (!_isFreshDevice_local) { setTimeout(function(){ _autoDownloadBackupFile(data, label, today, timeStr); }, 800); }
+    else { console.log('[BACKUP ' + label + '] 새 기기(방문 기록 없음) — 자동 파일 다운로드 건너뜀'); }
     if(onComplete) onComplete(false, lsOk);
     return;
   }
@@ -15090,7 +15127,10 @@ function _doBackup(slotAM, onComplete) {
     }
     console.log('[BACKUP ' + label + ']', fbOk ? '✅ 완료' : '⚠️ Firebase 실패', today);
     /* ★ PC 전용 자동 JSON 파일 저장 (모바일은 브라우저 정책상 제외) */
-    setTimeout(function(){ _autoDownloadBackupFile(data, label, today, timeStr); }, 800);
+    var _isFreshDevice_fb = false;
+    try { var _code0_fb = localStorage.getItem(LS_CODE) || ''; _isFreshDevice_fb = !!_code0_fb && !localStorage.getItem('pb_room_visited_' + _code0_fb); } catch(e){}
+    if (!_isFreshDevice_fb) { setTimeout(function(){ _autoDownloadBackupFile(data, label, today, timeStr); }, 800); }
+    else { console.log('[BACKUP ' + label + '] 새 기기(방문 기록 없음) — 자동 파일 다운로드 건너뜀'); }
     if (onComplete) onComplete(fbOk, lsOk);
   });
 }
