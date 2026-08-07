@@ -8193,6 +8193,25 @@ function _encarUpdateBtn(idx){
 }
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
+/* ★ 엔카사진 예약 알림음 (Web Audio API, 외부 파일 불필요) */
+function _encarPlayAlertBeep(){
+  try{
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    var ctx = new Ctx();
+    [0, 220].forEach(function(delayMs, idx){
+      setTimeout(function(){
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.3);
+      }, delayMs);
+    });
+  }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
+}
 function _encarApplyBlinks(){
   var s=getSlots();
   for(var i=0;i<TOTAL;i++){
@@ -8207,6 +8226,79 @@ function _encarApplyBlinks(){
     }
   }
 }
+/* ★ 엔카사진 예약 알림음: 예약시간(±10분 이내)이면 '사진완료' 누를 때까지 10초마다 반복 재생 */
+var _encarSoundTimer = null;
+function _encarApplySounds(){
+  var s=getSlots();
+  var now = Date.now();
+  var anyDue = false;
+  for(var i=0;i<TOTAL;i++){
+    var ec=(s[i]&&s[i].encar)||{time:'',done:false};
+    if(!ec.time || ec.done) continue;
+    /* ★ FIX: encar.date("YYYY-MM-DD") + encar.time("HH:MM")을 합쳐서 파싱 (time만으로는 무효한 날짜) */
+    var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
+    if(isNaN(resTs)) continue;
+    var diffMin = (resTs - now) / 60000;
+    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
+  }
+  if(anyDue) _encarPlayAlertBeep();
+}
+function _encarStartSoundTimer(){
+  if(_encarSoundTimer) clearInterval(_encarSoundTimer);
+  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격 */
+}
+_encarStartSoundTimer();
+
+/* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 10분 전부터 '사진완료' 누를 때까지 2분 간격으로 전송 */
+function _postEncarReserveNtfy(topic, car, timeStr){
+  if(!topic) return;
+  try {
+    var body = '\uD83D\uDCF8 \uC5D4\uCE74\uC0AC\uC9C4 \uC608\uC57D \uC54C\uB9BC\n'
+      + '\uD83D\uDE97 \uCC28\uB7C9\uBC88\uD638: ' + (car||'') + '\n'
+      + '\u23F0 \uC608\uC57D\uC2DC\uAC01: ' + (timeStr||'') + '\n'
+      + '\u2757 \uC0AC\uC9C4\uC644\uB8CC \uCC98\uB9AC \uC804\uAE4C\uC9C0 \uACC4\uC18D \uC804\uC1A1\uB429\uB2C8\uB2E4';
+    fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body });
+  } catch(e){ console.warn('[엔카예약 ntfy] 실패', e); }
+}
+var _encarNtfyLastSent = {}; /* ★ 슬롯별 마지막 전송 시각(ms) — 2분 간격 제어 */
+function _sendEncarReserveNtfy(slotIdx, car, timeStr, slotTopic){
+  var sendFn = function(topic){
+    if(!topic) return;
+    _postEncarReserveNtfy(topic, car, timeStr);
+  };
+  if(slotTopic){ sendFn(slotTopic); return; }
+  var code = localStorage.getItem(LS_CODE) || '';
+  if(typeof fbDb!=='undefined' && fbDb && code){
+    fbDb.ref('kd_rooms/'+code+'/kd_ntfy_topic').once('value').then(function(sn){
+      var g = (sn && sn.val()) ? String(sn.val()) : '';
+      sendFn(g);
+    }).catch(function(){});
+  }
+}
+function _encarApplyNtfy(){
+  var s=getSlots();
+  var now = Date.now();
+  for(var i=0;i<TOTAL;i++){
+    var ec=(s[i]&&s[i].encar)||{time:'',done:false};
+    if(!ec.time || ec.done) continue;
+    var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
+    if(isNaN(resTs)) continue;
+    var diffMin = (resTs - now) / 60000;
+    if(diffMin > 10 || diffMin <= -60) continue; /* ★ 예약 10분 전 ~ 예약시각 1시간 후까지만 */
+    var last = _encarNtfyLastSent[i] || 0;
+    if(now - last < 2*60*1000) continue; /* ★ 2분 간격 제어 */
+    _encarNtfyLastSent[i] = now;
+    var slotTopic = String((s[i]&&s[i].topic)||'').trim();
+    var timeStr = (ec.date||'') + ' ' + (ec.time||'');
+    _sendEncarReserveNtfy(i, s[i].car||'', timeStr, slotTopic);
+  }
+}
+var _encarNtfyTimer = null;
+function _encarStartNtfyTimer(){
+  if(_encarNtfyTimer) clearInterval(_encarNtfyTimer);
+  _encarNtfyTimer = setInterval(_encarApplyNtfy, 30*1000); /* ★ 30초마다 조건 확인(전송 자체는 슬롯별 2분 간격 유지) */
+}
+_encarStartNtfyTimer();
 
 /* ── 1분마다 체크 타이머 ── */
 function _encarStartTimer(){
