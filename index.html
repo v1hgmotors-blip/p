@@ -4741,7 +4741,10 @@ function _showColShiftMenu(part, col, anchorEl){
     +'<label style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;background:#7C3AED;color:#fff;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;position:relative;">🎨 이 열 색상<input type="color" id="_colOneColorInp" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;"></label>'
     +'<button type="button" id="_colColorResetBtn" style="flex:0 0 auto;padding:10px 12px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">색 초기화</button>'
     +'</div>'
-    +'<button type="button" id="_colCancelBtn" style="width:100%;margin-top:8px;padding:8px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">취소</button>';
+    +'<div style="display:flex;gap:8px;margin-top:8px;">'
+    +'<button type="button" id="_colCancelBtn" style="flex:1;padding:8px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">취소</button>'
+    +'<button type="button" id="_colFullResetBtn" style="flex:1;padding:8px;background:#7F1D1D;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">🗑️ 열초기화</button>'
+    +'</div>';
   document.body.appendChild(m);
   /* 위치 — 라벨 근처, 화면 벗어나지 않게 */
   try{
@@ -4776,6 +4779,7 @@ function _showColShiftMenu(part, col, anchorEl){
   var _rBtn=document.getElementById('_colColorResetBtn');
   if(_rBtn) _rBtn.onclick=function(){ removeColOneColor(part,col); _closeColShiftMenu(); };
   document.getElementById('_colCancelBtn').onclick=_closeColShiftMenu;
+  document.getElementById('_colFullResetBtn').onclick=function(){ _colFullReset(part,col); };
   setTimeout(function(){ document.addEventListener('click', _colShiftOutside, true); }, 50);
 }
 function _escHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -4792,6 +4796,25 @@ function _rebuildColIds(part, cols, rows){
     ids[part]=newIds;
     _saveIds(ids);
   }catch(e){ console.warn('[colIds 재생성 오류]',e); }
+}
+/* ★ 열초기화: 열 구조(개수·순서)는 그대로 두고, 해당 열의 모든 주차칸 데이터만 완전 초기화
+   (차량번호·상태·메모·차주·엔카예약·성능검사 등 전부) — 열 자체를 지우는 열삭제와는 다름 */
+function _colFullReset(part, col){
+  var rows=PART_ROW_COUNTS[part-1]||ROWS_PER_PART;
+  if(!confirm('🗑️ 「'+getColName(part,col)+'」열의 모든 주차칸 데이터를 완전 초기화할까요?\n(차량번호·상태·메모·차주·예약 등 전부 삭제, 열 구조는 유지됩니다)')) return;
+  _closeColShiftMenu();
+  _saveUndoSnapshot('colFullReset p'+part+'c'+col); /* ★ 실행취소 대비 스냅샷 */
+  var data=_getData(); var upd={};
+  for(var r=1; r<=rows; r++){
+    var key=_coordId(part,col,r);
+    var empty=_emptySlotObj();
+    data[key]=empty;
+    upd[key]=empty;
+  }
+  _saveData(data);
+  if(fbSlotsRef){ upd._localTs=_tsNow(); _fbSafeUpdate(upd,'col-full-reset'); }
+  if(typeof buildGrid==='function') buildGrid();
+  if(typeof showAlert==='function') showAlert('🗑️ '+getColName(part,col)+'열 데이터가 초기화되었습니다');
 }
 function _colPush(part, col){
   var cols=PART_COL_COUNTS[part-1]||COLS_PER_PART;
@@ -8112,7 +8135,7 @@ function doneEncarFromModal(){
 function resetEncarFromModal(){
   if(activeSlot===null) return;
   var s=getSlots();
-  if(s[activeSlot]) s[activeSlot].encar={time:'',done:false};
+  if(s[activeSlot]) s[activeSlot].encar={date:'',time:'',done:false,doneDate:''}; /* ★ FIX: date/doneDate 누락 보완 */
   saveSlots(s);
   if(fbSlotsRef){var upd={};upd[activeSlot]=s[activeSlot];_fbV7Update(upd);}
   refreshSlot(activeSlot);
@@ -8126,7 +8149,7 @@ function resetEncarFromModal(){
 function resetEncarReserve(){
   if(_encarSlot===null) return;
   var s=getSlots();
-  if(s[_encarSlot]) s[_encarSlot].encar={time:'',done:false};
+  if(s[_encarSlot]) s[_encarSlot].encar={date:'',time:'',done:false,doneDate:''}; /* ★ FIX: date/doneDate 누락 보완 */
   saveSlots(s);
   if(fbSlotsRef){var upd={};upd[_encarSlot]=s[_encarSlot];_fbV7Update(upd);}
   refreshSlot(_encarSlot);
