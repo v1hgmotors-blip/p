@@ -959,6 +959,83 @@ function sharePage(){
   /* ★ 자동 약도 상태 */
   var _autoMapData = null;   /* 현재 차량의 격자 위치 정보 */
   var _partHasPhoto = null;  /* null=미확인, true=사진있음, false=사진없음 */
+
+  /* ═══════════════════════════════════════════════════════════════
+     ★ 오프라인(로컬) 최대 표시 — Firebase 없이 스캔한 QR/링크의 값만으로
+       약도 도식 + 출고서류 목록 + 오프라인 안내까지 표시.
+       (인터넷 연결되면 이후 실데이터로 자동 보강됨) — 값 없으면 조용히 건너뜀
+     ═══════════════════════════════════════════════════════════════ */
+  (function _offlineMaxRender(){
+    try{
+      /* (1) 위치 도식 약도: URL에 열/칸/격자 정보가 있으면 Firebase 없이도 그린다
+         cols=파트 열수, rows=파트 칸수, col=열번호(1~), row=행(0~,위에서부터), pl=파트라벨, cn=열이름(|구분) */
+      var _oCols=parseInt(qs('cols'),10), _oRows=parseInt(qs('rows'),10);
+      var _oCol =parseInt(qs('col'),10),  _oRow =parseInt(qs('row'),10);
+      if(_oCols>0 && _oRows>0 && _oCol>=1 && _oRow>=0 && _oCol<=_oCols && _oRow<_oRows && _autoMapData===null){
+        var _oPl=qs('pl')||(part?part+'파트':'');
+        var _oCn=null; try{ var _r=qs('cn'); if(_r) _oCn=decodeURIComponent(_r).split('|'); }catch(e){}
+        _autoMapData={ partLabel:_oPl, cols:_oCols, rows:_oRows, col:_oCol, row:_oRow,
+                       fb:(_oRows-_oRow), colNames:_oCn, colColors:null,
+                       hdrBg:'#F2D900', hdrTx:'#FFFFFF', colGaps:[], cellCars:{}, cellDisabled:{} };
+        try{ drawAutoMap(); }catch(e){}
+      }
+      /* (2) 출고서류 목록: dm=base64url(JSON 배열 [{name,cat}]) 있으면 이름만 표시 */
+      try{
+        var _dmRaw=qs('dm');
+        if(_dmRaw){
+          var _dm=JSON.parse(_b64urlDecode(_dmRaw));
+          if(Array.isArray(_dm) && _dm.length){
+            var _dbox=document.getElementById('docBox');
+            if(_dbox){
+              var _nm=_dm.map(function(x){
+                return (x&&x.cat==='reg')?'차량등록증':(x&&x.cat==='insp')?'성능점검표':((x&&x.name)||'서류'); });
+              var _uq=_nm.filter(function(v,i){return _nm.indexOf(v)===i;});
+              _dbox.innerHTML='<div style="font-size:12px;font-weight:800;color:#0369A1;background:#E0F2FE;border-radius:8px;padding:8px 10px;line-height:1.5;">'
+                + '📄 등록된 출고서류: '+_uq.join(', ')
+                + '<br><span style="font-size:11px;color:#64748B;font-weight:700;">※ 오프라인 상태 — 원본 다운로드는 인터넷 연결 후 가능합니다.</span></div>';
+              _dbox.style.display='block';
+            }
+          }
+        }
+      }catch(e){}
+      /* (4) 길찾기 버튼 — 좌표(glat/glng)만 있으면 Firebase/주소 없이도 오프라인 표시 */
+      try{
+        var _gy=qs('glat'), _gx=qs('glng');
+        if(_gy && _gx && !isNaN(parseFloat(_gy)) && !isNaN(parseFloat(_gx))){
+          var _rs=document.getElementById('routeSteps'), _rp=document.getElementById('routePanel');
+          if(_rs && _rp && !document.getElementById('offlineNav')){
+            var _nm=encodeURIComponent((typeof bz!=='undefined'&&bz)?bz:(car?car+' 차량 위치':'목적지'));
+            var _apn=encodeURIComponent(location.hostname||'parkview');
+            var _opts=[
+              ['\uD83D\uDDFA\uFE0F \uCE74\uCE74\uC624\uB9F5','https://map.kakao.com/link/to/'+_nm+','+_gy+','+_gx,'#16A34A'],
+              ['\uD83D\uDFE2 \uB124\uC774\uBC84\uC9C0\uB3C4','nmap://route/car?dlat='+_gy+'&dlng='+_gx+'&dname='+_nm+'&appname='+_apn,'#03C75A'],
+              ['\uD83E\uDDED \uD2F0\uB9F5','tmap://route?goalname='+_nm+'&goalx='+_gx+'&goaly='+_gy,'#8B5CF6'],
+              ['\uD83C\uDF10 \uAD6C\uAE00\uC9C0\uB3C4','https://www.google.com/maps/dir/?api=1&destination='+_gy+','+_gx,'#2563EB']
+            ];
+            var _wrap=document.createElement('div'); _wrap.id='offlineNav'; _wrap.style.cssText='margin:6px 0;';
+            var _lab=document.createElement('div'); _lab.style.cssText='font-size:12px;font-weight:800;color:#0369A1;margin-bottom:6px;'; _lab.textContent='\uD83D\uDCCD \uC8FC\uCC28\uC7A5 \uAE38\uCC3E\uAE30';
+            var _tg=document.createElement('button'); _tg.type='button'; _tg.textContent='\uD83E\uDDED \uAE38\uCC3E\uAE30 \uC571 \uC120\uD0DD \u25BE';
+            _tg.style.cssText='display:inline-block;background:#0EA5E9;color:#fff;border:none;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;';
+            var _mn=document.createElement('div'); _mn.style.cssText='display:none;margin-top:7px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:7px;max-width:220px;';
+            _opts.forEach(function(o){ var a=document.createElement('a'); a.href=o[1]; a.target='_blank'; a.rel='noopener'; a.textContent=o[0];
+              a.style.cssText='display:block;margin:4px 0;background:'+o[2]+';color:#fff;text-decoration:none;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:900;text-align:center;'; _mn.appendChild(a); });
+            _tg.addEventListener('click',function(e){ e.stopPropagation(); var open=(_mn.style.display!=='none'&&_mn.style.display!==''); _mn.style.display=open?'none':'block'; _tg.textContent=open?'\uD83E\uDDED \uAE38\uCC3E\uAE30 \uC571 \uC120\uD0DD \u25BE':'\uD83E\uDDED \uAE38\uCC3E\uAE30 \uC571 \uC120\uD0DD \u25B4'; });
+            _wrap.appendChild(_lab); _wrap.appendChild(_tg); _wrap.appendChild(_mn); _rs.appendChild(_wrap); _rp.style.display='block';
+          }
+        }
+      }catch(e){}
+      /* (3) 오프라인 안내 배지 — 기본정보는 있는데 인터넷이 끊긴 경우 */
+      if((car||loc) && typeof navigator!=='undefined' && navigator.onLine===false){
+        var _hh=document.getElementById('carHeader');
+        if(_hh && _hh.parentNode && !document.getElementById('offlineTag')){
+          var _tg=document.createElement('div'); _tg.id='offlineTag';
+          _tg.style.cssText='margin:6px 0;text-align:center;font-size:11px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:8px;padding:5px 9px;';
+          _tg.textContent='📴 오프라인 — 스캔한 QR에 저장된 정보로 표시 중입니다';
+          _hh.parentNode.insertBefore(_tg, _hh.nextSibling);
+        }
+      }
+    }catch(e){}
+  })();
   var _autoMapShown = false;
   var fdb = null;
   /* ★ FIX(요청): 카카오 승인 템플릿 버튼 URL엔 변수 1개(k)만 허용돼 db=가 아예
@@ -1098,8 +1175,8 @@ function sharePage(){
       drawAutoMap(); /* ★ 사진 유무와 상관없이 항상 자동 약도 갱신 */
       if(newPart) _maybeReloadPart(newPart);
     }
-    fdb.ref('kd_rooms/'+code+'/pb_slots').on('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
-    fdb.ref('kd_rooms/'+code+'/pb_settings').on('value', function(snap){ _liveSettings = snap.val()||{}; try{ if(window._applyPromoFromSettings) window._applyPromoFromSettings(_liveSettings); }catch(e){} recompute(); });
+    fdb.ref('kd_rooms/'+code+'/pb_slots').once('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
+    fdb.ref('kd_rooms/'+code+'/pb_settings').once('value', function(snap){ _liveSettings = snap.val()||{}; try{ if(window._applyPromoFromSettings) window._applyPromoFromSettings(_liveSettings); }catch(e){} recompute(); });
   }
 
   /* 파트의 경로 안내 + 약도 사진 로드
@@ -1309,19 +1386,19 @@ function sharePage(){
     var _recvS=false, _recvP=false;
     _stepsRef = fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part);
     _photoRef = fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part);
-    _stepsRef.on('value', function(s){
+    _stepsRef.once('value', function(s){
       _liveStepsRaw = s.val();
       if(!_recvS){ _recvS=true; _partRecv++; }
       _renderPartData();
     }, function(){ if(!_recvS){ _recvS=true; _partRecv++; } _renderPartData(); });
-    _photoRef.on('value', function(s){
+    _photoRef.once('value', function(s){
       _livePhoto = s.val();
       if(!_recvP){ _recvP=true; _partRecv++; }
       _renderPartData();
     }, function(){ if(!_recvP){ _recvP=true; _partRecv++; } _renderPartData(); });
     /* 네트워크 문제로 아무것도 못 받는 경우 안내 (8초) */
     setTimeout(function(){
-      if(_partRecv<2 && !loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
+      if(_partRecv<2 && !loadedAny && !car && !loc) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
     }, 8000);
   }
 
@@ -1412,7 +1489,7 @@ function sharePage(){
 
   /* 12초 안전장치 */
   setTimeout(function(){
-    if(!loadedAny) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인 후 다시 스캔해 주세요.');
+    if(!loadedAny && !car && !loc) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인 후 다시 스캔해 주세요.');
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
