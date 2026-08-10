@@ -881,8 +881,8 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .slot-safe6-icon{ position:absolute;top:3px;right:3px;z-index:4;pointer-events:none;background:#0D9488;border-radius:50%;width:9px;height:9px;font-size:0;line-height:1;padding:0;overflow:hidden; }
 @media(min-width:600px){ .slot-safe6-icon{ width:auto;height:auto;border-radius:4px;padding:1px 4px;font-size:10px;font-weight:900;background:#0D9488;color:#fff;overflow:visible; } }
 /* ★ 세이프6가 오른쪽 위 코너에 오면, 엔카 카메라를 그 아래로 (모바일 !important 규칙을 이기도록 !important + 넉넉한 간격) */
-.slot-cam-icon.below-safe6{ top:calc(var(--slot-num-sz,22px) * 0.28 + 11px) !important; }
-@media(min-width:600px){ .slot-cam-icon.below-safe6{ top:23px !important; } }
+.slot-cam-icon.below-safe6{ top:12px !important; } /* ★ 세이프6 바로 아래(공백 0) */
+@media(min-width:600px){ .slot-cam-icon.below-safe6{ top:15px !important; } } /* ★ 세이프6 바로 아래(공백 0) */
 @keyframes encarCountBlink{
   0%,100%{opacity:1;}
   50%{opacity:0.35;}
@@ -2219,7 +2219,6 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <button id="partPhotoBtn" onclick="_openPartPhotoSetting()">📸 파트위치사진</button>
     <button class="btn-reset-all" onclick="openChangeDragPw()" style="background:#1D4ED8;border-color:#1D4ED8;">🔒 드래그 잠금 비밀번호 설정</button>
     <button class="btn-reset-all" onclick="openLocalResetConfirm()" style="background:#1D4ED8;color:#fff;border-color:#1D4ED8;">📱 이기기만</button>
-    <button class="btn-reset-all" id="bulkDocsBtn" onclick="openBulkDocs()" style="background:#7C3AED;color:#fff;border-color:#7C3AED;">📑 서류 일괄등록</button>
     <div class="ctrl-btn-group" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
       <div class="ctrl-section">
         <span class="ctrl-section-lbl">PART</span>
@@ -4136,51 +4135,6 @@ function resetOwnerPanel() {
 
 var LS_PARTS=['pb_part1_extra','pb_part2_extra','pb_part3_extra'];
 var fbApp=null, fbDb=null, fbRef=null, fbSlotsRef=null, fbSettingsRef=null, fbEncarLogRef=null, fbDocFlagsRef=null;
-
-/* ★★★ 비용 절감 패치 ─────────────────────────────────────────────
-   기존 fbRef.on('value', ...)는 kd_rooms/{code} 최상위 경로 전체를
-   구독하기 때문에, 그 아래 kd_docs_data(서류 이미지/PDF base64)처럼
-   무거운 하위 데이터까지 "무엇이든 하나만 바뀌어도" 통째로 재전송받음.
-   → 실제 handleData()가 쓰는 필드는 updatedAt/hist/returned/action/
-     pb_search_return 5개뿐이므로, 이 5개 경로만 개별 구독해서
-     불필요한 다운로드(서류 이미지 등)를 원천 차단한다.
-   ─────────────────────────────────────────────────────────────── */
-var _fbLightFields = ['updatedAt','hist','returned','action','pb_search_return'];
-var _fbLightData = {};
-var _fbLightRefs = [];
-var _fbLightLoadedCount = 0;
-var _fbLightInitialized = false;
-
-function _fbLightOff(){
-  _fbLightRefs.forEach(function(r){ try{ r.off('value'); }catch(e){} });
-  _fbLightRefs = [];
-  _fbLightData = {};
-  _fbLightLoadedCount = 0;
-  _fbLightInitialized = false;
-}
-
-function _fbLightOn(errCb){
-  _fbLightOff();
-  if(!fbRef) return;
-  _fbLightFields.forEach(function(f){
-    var cRef = fbRef.child(f);
-    _fbLightRefs.push(cRef);
-    var _first = true;
-    cRef.on('value', function(snap){
-      _fbLightData[f] = snap.val();
-      if(_first){
-        _first = false;
-        _fbLightLoadedCount++;
-        if(_fbLightLoadedCount >= _fbLightFields.length){
-          _fbLightInitialized = true;
-          handleData(_fbLightData);
-        }
-      } else if(_fbLightInitialized){
-        handleData(_fbLightData);
-      }
-    }, errCb);
-  });
-}
 
 /* ── Firebase v7 업데이트 헬퍼 ──
    전역인덱스 키({0:data}) 또는 파트키({p1_0:data}) 모두 처리 → v7 파트키로 변환 */
@@ -8574,7 +8528,9 @@ function onStorageModeSwitchChange(isLocalOnly){
   _setStorageMode(newMode);
   if(newMode === 'local'){
     /* Firebase 리스너 해제 */
-    try{ if(fbRef)         fbRef.off('value'); }catch(e){} _fbLightOff();
+    try{ if(fbRef)         fbRef.off('value'); }catch(e){}
+  try{ _stopLiteListeners(); }catch(e){}
+    try{ _stopLiteListeners(); }catch(e){}
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
@@ -9040,6 +8996,90 @@ var _drag = {
 };
 
 /* ── 슬롯 데이터 교환 + 저장 ── */
+/* ═══════════════════════════════════════════════════════════════
+   ★ 중복 차량 감지 · 강조 · 원클릭 정리 (동기화/병합/복원 유입 중복까지 포착)
+   - saveSlot()의 모달 저장은 이미 중복을 막지만, _fbLocalFirstMerge 등 동기화
+     경로는 검사를 건너뛰므로 여러 기기가 겹치면 중복이 들어올 수 있음.
+   - 같은 차량번호(extract4 끝4자리 기준)가 2칸 이상이면 빨간 강조 + 하단 배너.
+   - 정리: 슬롯별 _ts(최근 저장 시각)가 가장 최신인 1칸만 남기고 나머지 비움.
+   ═══════════════════════════════════════════════════════════════ */
+var _dupLastKey='';
+window._dupGroups=[];
+function _dupCarKey(carStr){
+  try{ if(typeof extract4==='function'){ var a=extract4(carStr); if(a&&a.length) return a[a.length-1]; } }catch(e){}
+  return (carStr||'').replace(/\s/g,'').toLowerCase();
+}
+function _scanDuplicates(){
+  try{
+    if(typeof getSlots!=='function' || typeof TOTAL==='undefined') return;
+    var s=getSlots(), map={};
+    for(var i=0;i<TOTAL;i++){
+      var d=s[i]; if(!d||d.disabled) continue;
+      var car=(d.car||'').trim(); if(!car) continue;
+      if(typeof extract4==='function' && !extract4(car).length) continue;
+      var k=_dupCarKey(car); (map[k]=map[k]||[]).push(i);
+    }
+    var groups=[], dupSet={};
+    Object.keys(map).forEach(function(k){ if(map[k].length>=2){ groups.push(map[k]); map[k].forEach(function(x){dupSet[x]=1;}); } });
+    window._dupGroups=groups;
+    var key=Object.keys(dupSet).sort(function(a,b){return a-b;}).join(',');
+    if(key===_dupLastKey){ return; }
+    _dupLastKey=key;
+    for(var j=0;j<TOTAL;j++){
+      var el=document.getElementById('slot_'+j); if(!el) continue;
+      if(dupSet[j]) el.classList.add('slot-dup'); else el.classList.remove('slot-dup');
+    }
+    _renderDupBanner(groups);
+  }catch(e){}
+}
+function _renderDupBanner(groups){
+  var b=document.getElementById('dupBanner');
+  if(!b){
+    b=document.createElement('div'); b.id='dupBanner';
+    b.style.cssText='display:none;position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#DC2626;color:#fff;border-radius:12px;padding:9px 12px;box-shadow:0 4px 16px rgba(0,0,0,.35);font-weight:900;font-size:13px;font-family:inherit;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center;';
+    if(document.body) document.body.appendChild(b);
+  }
+  if(!b) return;
+  if(!groups||!groups.length){ b.style.display='none'; return; }
+  var n=groups.reduce(function(a,g){return a+g.length;},0);
+  b.innerHTML='\u26A0\uFE0F \uC911\uBCF5 \uCC28\uB7C9 '+groups.length+'\uAC74('+n+'\uCE78) \u2014 \uAC19\uC740 \uCC28\uB7C9\uBC88\uD638\uAC00 \uC5EC\uB7EC \uCE78\uC5D0 \uC788\uC2B5\uB2C8\uB2E4'
+    +' <button type="button" onclick="_scrollToFirstDup()" style="background:#fff;color:#B91C1C;border:none;border-radius:8px;padding:6px 11px;font-weight:900;font-family:inherit;cursor:pointer;">\uC704\uCE58 \uBCF4\uAE30</button>'
+    +' <button type="button" onclick="_resolveDuplicates()" style="background:#111827;color:#fff;border:none;border-radius:8px;padding:6px 11px;font-weight:900;font-family:inherit;cursor:pointer;">\uD83E\uDDF9 \uC911\uBCF5 \uC815\uB9AC</button>';
+  b.style.display='flex';
+}
+function _scrollToFirstDup(){
+  try{ var g=(window._dupGroups||[])[0]; if(!g) return; var el=document.getElementById('slot_'+g[0]); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.add('slot-dup-flash'); setTimeout(function(){el.classList.remove('slot-dup-flash');},1800);} }catch(e){}
+}
+function _resolveDuplicates(){
+  try{
+    var groups=window._dupGroups||[]; if(!groups.length) return;
+    if(typeof getSlots!=='function' || typeof saveSlots!=='function') return;
+    var s=getSlots(), clearList=[];
+    groups.forEach(function(g){
+      var keep=g[0], keepTs=(s[g[0]]&&+s[g[0]]._ts)||0;
+      g.forEach(function(ix){ var t=(s[ix]&&+s[ix]._ts)||0; if(t>keepTs){ keepTs=t; keep=ix; } });
+      g.forEach(function(ix){ if(ix!==keep) clearList.push(ix); });
+    });
+    if(!clearList.length) return;
+    var msg='\uC911\uBCF5 \uCC28\uB7C9 '+groups.length+'\uAC74\uC5D0\uC11C \uC624\uB798\uB41C \uCE78 '+clearList.length+'\uAC1C\uB97C \uBE44\uC6C1\uB2C8\uB2E4.\n(\uAC01 \uADF8\uB8F9\uC5D0\uC11C \uAC00\uC7A5 \uCD5C\uADFC\uC5D0 \uC800\uC7A5\uB41C \uCE78\uB9CC \uB0A8\uAE41\uB2C8\uB2E4.)\n\n\uC9C4\uD589\uD560\uAE4C\uC694?';
+    if(!window.confirm(msg)) return;
+    var empty={car:'',status:'none',safe6:false,memo:'',owner:'',ownerPhone:'',topic:'',disabled:false,num:'0',encar:{date:'',time:'',done:false,doneDate:''},inspect:{date:'',done:false}};
+    var pk={};
+    clearList.forEach(function(ix){ pk[ix]=JSON.parse(JSON.stringify(empty)); });
+    saveSlots(pk);
+    clearList.forEach(function(ix){ if(typeof refreshSlot==='function') refreshSlot(ix); });
+    _dupLastKey=''; _scanDuplicates();
+    if(typeof showToast==='function') showToast('\uD83E\uDDF9 \uC911\uBCF5 '+clearList.length+'\uCE78 \uC815\uB9AC \uC644\uB8CC','success');
+    else if(typeof showAlert==='function'){ showAlert('\uD83E\uDDF9 \uC911\uBCF5 '+clearList.length+'\uCE78 \uC815\uB9AC \uC644\uB8CC'); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2500); }
+  }catch(e){ console.warn('[\uC911\uBCF5\uC815\uB9AC]',e); }
+}
+try{
+  var _ds=document.createElement('style');
+  _ds.textContent='.slot-dup{outline:3px solid #DC2626 !important;outline-offset:-2px;box-shadow:0 0 0 2px rgba(220,38,38,.35) inset !important;} .slot-dup::after{content:"\u26A0\uFE0F\uC911\uBCF5";position:absolute;left:50%;bottom:2px;transform:translateX(-50%);background:#DC2626;color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;z-index:7;pointer-events:none;white-space:nowrap;} .slot-dup-flash{animation:dupFlash .45s ease-in-out 3;} @keyframes dupFlash{0%,100%{filter:none;}50%{filter:brightness(1.7);}}';
+  (document.head||document.documentElement).appendChild(_ds);
+}catch(e){}
+try{ setInterval(_scanDuplicates, 2500); }catch(e){}
+
 function swapSlotsData(a, b){
   if(a===b) return;
   /* ★ ID 위치 고정 — 데이터(값)만 이동/교환 */
@@ -9499,6 +9539,25 @@ function _setupSlotDelegation(){
    Firebase 최초 수신 시(새로고침 직후) 이미 로컬캐시로 그려둔 화면이
    한번 더 통째로 지워졌다 다시 그려지며 전체 슬롯이 깜빡이는 원인이 됨.
    → 슬롯 DOM이 이미 존재하면 요소를 지우지 않고 내용만 갱신(renderSlot)한다. */
+function _refreshDirtyOnly(dirty){
+  /* ★ 저장 시 전체 재렌더로 슬라이딩 배지가 깜빡이던 문제 수정:
+     변경(dirty)된 칸만 refreshSlot + 그 칸의 슬라이더만 재init (나머지 배지 유지) */
+  try{
+    dirty=dirty||{};
+    for(var c=0;c<TOTAL;c++){ if(!document.getElementById('slot_'+c)){ buildGrid(); if(typeof _initAllBadgeSliders==='function')_initAllBadgeSliders(); return; } }
+    var ids=Object.keys(dirty); if(!ids.length){ return; }
+    for(var i=0;i<TOTAL;i++){
+      var id=_gidx2id(i);
+      if(id && dirty.hasOwnProperty(id)){
+        refreshSlot(i);
+        var el=document.getElementById('slot_'+i);
+        if(el && typeof _initBadgeSlider==='function') _initBadgeSlider(el);
+      }
+    }
+    if(typeof updateCarCountBadge==='function') updateCarCountBadge();
+    if(typeof reapplyBlinks==='function') reapplyBlinks();
+  }catch(e){ try{ buildGridSoft(); }catch(e2){} }
+}
 function buildGridSoft(){
   try{ window._lastRenderTs = Date.now(); }catch(e){}
   for(var i=0;i<TOTAL;i++){
@@ -10889,6 +10948,42 @@ function closeDispatchPopup(){
 }
 
 /* ── Firebase ── */
+/* ═══ RTDB 비용 폭증 수정 (경량 리스너) — 방 전체 대신 작은 필드만 구독 ═══ */
+var _lite = { updatedAt:0, hist:[], returned:[] };
+var _liteRefs = [];
+var _liteTimer = null;
+function _emitLite(){
+  if(_liteTimer) return;
+  _liteTimer = setTimeout(function(){
+    _liteTimer = null;
+    try{ handleData({ updatedAt:_lite.updatedAt, hist:_lite.hist, returned:_lite.returned }); }
+    catch(e){ console.warn('[경량핸들]', e); }
+  }, 60);
+}
+function _liteErr(err){
+  setDot('off','연결 실패'); console.error('[현황판]',err);
+  try{ _fbSyncMarkReady('fb-error'); }catch(e){}
+  setTimeout(function(){
+    var u=localStorage.getItem(LS_URL)||''; var c=localStorage.getItem(LS_CODE)||'';
+    if(u&&c){ connectFb(u,c); }
+  }, 10000);
+}
+function _stopLiteListeners(){
+  _liteRefs.forEach(function(r){ try{ r.off('value'); }catch(e){} });
+  _liteRefs = [];
+}
+function _startLiteListeners(code){
+  _stopLiteListeners();
+  if(typeof fbDb==='undefined' || !fbDb || !code) return;
+  var uRef = fbDb.ref('kd_rooms/'+code+'/updatedAt');
+  var hRef = fbDb.ref('kd_rooms/'+code+'/hist');
+  var rRef = fbDb.ref('kd_rooms/'+code+'/returned');
+  uRef.on('value', function(s){ _lite.updatedAt = s.val()||0;  _emitLite(); }, _liteErr);
+  hRef.on('value', function(s){ _lite.hist     = s.val()||[];  _emitLite(); }, _liteErr);
+  rRef.on('value', function(s){ _lite.returned  = s.val()||[];  _emitLite(); }, _liteErr);
+  _liteRefs = [uRef, hRef, rRef];
+}
+
 function handleData(data){
   if(!data){setDot('on','연결됨 (데이터 없음)');isFirstLoad=false;return;}
   setDot('on','실시간 연결됨 🔥');
@@ -11404,12 +11499,6 @@ function _commonDocsRef(){
   if(!code || typeof fbDb==='undefined' || !fbDb) return null;
   return fbDb.ref('kd_rooms/'+code+'/common_docs');
 }
-/* ★ 비용 절감: 원본(base64) 저장용 경로를 메타와 분리 */
-function _commonDocsDataRef(){
-  var code=_pbCode();
-  if(!code || typeof fbDb==='undefined' || !fbDb) return null;
-  return fbDb.ref('kd_rooms/'+code+'/common_docs_data');
-}
 function loadCommonDocs(){
   var box=document.getElementById('commonDocList');
   if(!box) return;
@@ -11467,15 +11556,10 @@ function _saveCommonDoc(name,type,dataUrl,size,cb){
   var ref=_commonDocsRef();
   if(!ref){ if(cb)cb(); return; }
   var docId='c'+Date.now()+Math.floor(Math.random()*1000);
-  /* ★ 비용 절감: 목록 UI가 원본(data)을 화면에 쓰지 않으므로,
-     메타(common_docs)와 원본(common_docs_data)을 분리 저장한다.
-     kd_docs/kd_docs_data 구조와 동일한 패턴. */
-  var payload={ name:name, type:type, size:size, at:Date.now() };
+  var payload={ name:name, type:type, data:dataUrl, size:size, at:Date.now() };
   ref.child(docId).set(payload).then(function(){
     _commonDocs[docId]=payload; _renderCommonDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
-    var dataRef=_commonDocsDataRef();
-    if(dataRef) dataRef.child(docId).set(dataUrl).catch(function(){});
     if(cb)cb();
   }).catch(function(){ showAlert('⚠️ 공통서류 저장 실패: '+name); if(cb)cb(); });
 }
@@ -11487,8 +11571,6 @@ function deleteCommonDoc(id){
     delete _commonDocs[id]; _renderCommonDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
   }).catch(function(){});
-  var dataRef=_commonDocsDataRef();
-  if(dataRef) dataRef.child(id).remove().catch(function(){});
 }
 
 function _compressDocImage(file, cb){
@@ -12506,15 +12588,6 @@ function clearSlot(){
   /* ★ FIX: delete로 키를 제거하면 saveSlots의 for(k in pk) 루프가 그 키를 건너뛰어
      로컬 저장소(data[id])에서 실제 삭제가 안 됨(특히 로컬모드). null로 넘겨 확실히 삭제. */
   s[activeSlot] = null;
-  /* ★ FIX(초기화가 되살아나는 문제): 유실방지 가드([1층])는 _fbPrevSlotCache에 "차량이 있던"
-     슬롯이 남아있으면 나중에 .set 경로가 실행될 때 그 슬롯을 자동 복구한다.
-     열삭제/열초기화는 이미 캐시를 정리하는데 개별 슬롯 초기화만 빠져 있어서,
-     초기화 후 다른 기기 접속·구조변경 등으로 .set이 돌면 지운 데이터가 되살아났다.
-     → 초기화 시 캐시에서도 확실히 제거해 '의도된 삭제'임을 가드에 알린다. */
-  try{
-    var _clrId = _gidx2id(activeSlot);
-    if(_clrId && window._fbPrevSlotCache) delete window._fbPrevSlotCache[_clrId];
-  }catch(e){ console.warn('[초기화 캐시정리]', e); }
   saveSlots(s);
   if(fbSlotsRef){
     var upd={}; upd[activeSlot]=null;
@@ -12578,7 +12651,8 @@ function confirmClearAll(){
   var _rcOv = document.getElementById('resetConfirmOv');
   if(_rcOv) _rcOv.classList.remove('show');
   /* ── 1. Firebase 리스너 전부 해제 ── */
-  try{ if(fbRef)         fbRef.off('value'); }catch(e){} _fbLightOff();
+  try{ if(fbRef)         fbRef.off('value'); }catch(e){}
+  try{ _stopLiteListeners(); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
@@ -12687,7 +12761,8 @@ function confirmLocalClear() {
   closeLocalResetConfirm();
 
   /* ── 1. Firebase 리스너 해제 (재연결 전 정리) ── */
-  try{ if(fbRef)         fbRef.off('value'); }catch(e){} _fbLightOff();
+  try{ if(fbRef)         fbRef.off('value'); }catch(e){}
+  try{ _stopLiteListeners(); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
@@ -13545,7 +13620,7 @@ function _registerSlotsOnListener(){
         console.log('[로컬 우선] dirty:'+(_hasDirty?'있음':'없음')+' TS차이:'+Math.round((_localTsNow-_fbTs)/1000)+'초 → 로컬→Firebase 업로드 (gridConfig 변경 차단)');
         /* ★ 로컬 구조를 Firebase에 먼저 올리고 난 뒤 리스너가 다시 수신할 때 정상 처리됨 */
         _fbLocalFirstMerge(_localData, _getIds(), _localTsNow);
-        buildGridSoft(); /* ★ FIX: 이미 로컬 캐시로 그려진 화면 재확인일 뿐 → 깜빡임 없는 갱신 */
+        _refreshDirtyOnly(_dirty); /* ★ 저장 시 변경 칸만 갱신 (배지 깜빡임 방지) */ /* ★ FIX: 이미 로컬 캐시로 그려진 화면 재확인일 뿐 → 깜빡임 없는 갱신 */
         _fbSyncMarkReady('local-master');
         return;
       }
@@ -13642,7 +13717,7 @@ function _registerSlotsOnListener(){
       }
       _ensureIds();
     }
-    if(document.getElementById('modalOv').classList.contains('show')){_fbPendingBuildGrid=true;}
+    if(document.getElementById('modalOv').classList.contains('show') && structChanged){_fbPendingBuildGrid=true;}
     else{
       /* ★ FIX: diff 비교로 깜박임 방지
          - _fbSyncReady 전(초기 수신): buildGrid 전체
@@ -13687,7 +13762,8 @@ function _registerSlotsOnListener(){
             if(typeof updateCarCountBadge==='function') updateCarCountBadge();
             if(typeof _encarUpdateCount==='function') _encarUpdateCount();
             if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
-            _initAllBadgeSliders();
+            /* ★ 변경된 칸의 슬라이더만 재-init (전체 재-init 제거 → 다른 칸 배지 깜빡임 방지) */
+            for(var _bsi=0;_bsi<TOTAL;_bsi++){ var _bsid=_gidx2id(_bsi); if(_bsid && _diffIds.indexOf(_bsid)>=0){ var _bsel=document.getElementById('slot_'+_bsi); if(_bsel && typeof _initBadgeSlider==='function') _initBadgeSlider(_bsel); } }
           } else { buildGrid(); _initAllBadgeSliders(); }
         } else if(_diffIds.length > 8){
           /* 대량 변경 → 전체 재빌드 */
@@ -13797,7 +13873,7 @@ function connectFb(url,code){
     if(_uInp && url)  _uInp.value = url;
     if(_cInp && code) _cInp.value = code;
   }catch(e){}
-  if(fbRef){try{fbRef.off('value');}catch(e){} _fbLightOff(); fbRef=null;}
+  if(fbRef){try{fbRef.off('value');}catch(e){}fbRef=null;} try{ _stopLiteListeners(); }catch(e){}
   /* ★ 동기화 잠금 시작 — Firebase 수신 전 로컬 쓰기 차단 */
   _fbSyncReset();
   _fbLockShow(true);
@@ -13815,20 +13891,11 @@ function connectFb(url,code){
       fbApp=firebase.initializeApp({databaseURL:url},nm);
     }
     fbDb=firebase.database(fbApp);
-    fbRef=fbDb.ref('kd_rooms/'+code);
+    fbRef=fbDb.ref('kd_rooms/'+code); /* (호환용 유지 — 아래 .off 정리 코드가 참조) */
     isFirstLoad=true; prevUpdatedAt=0; dispatchSet={};
-    /* ★ 비용 절감: 무거운 kd_docs_data 등을 함께 끌어오는 fbRef.on('value')
-       대신, handleData()가 실제로 쓰는 가벼운 필드 5개만 개별 구독한다. */
-    _fbLightOn(function(err){
-      setDot('off','연결 실패'); console.error('[현황판]',err);
-      _fbSyncMarkReady('fb-error'); /* 연결 실패시에도 잠금 해제 */
-      /* ★ FIX: 네트워크 끊김 후 10초 뒤 자동 재연결 */
-      setTimeout(function(){
-        var u=localStorage.getItem(LS_URL)||'';
-        var c=localStorage.getItem(LS_CODE)||'';
-        if(u&&c){ connectFb(u,c); }
-      }, 10000);
-    });
+    /* ★★★ 방 전체 대신 작은 필드만 구독 (RTDB 다운로드 비용 폭증 수정) */
+    _lite={ updatedAt:0, hist:[], returned:[] };
+    _startLiteListeners(code);
     /* ★ 설정 실시간 동기화 리스너 — 그리드 구조를 먼저 적용해야 슬롯이 올바른 칸에 배치됨 */
     if(fbSettingsRef){try{fbSettingsRef.off('value');}catch(e){}}
     fbSettingsRef=fbDb.ref('kd_rooms/'+code+'/pb_settings');
@@ -15552,7 +15619,8 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
   localStorage.setItem('pb_restore_pending', String(Date.now()));
 
   /* 5. Firebase 리스너 차단 */
-  try{ if(typeof fbRef!=='undefined'&&fbRef)           fbRef.off('value'); }catch(e){} _fbLightOff();
+  try{ if(typeof fbRef!=='undefined'&&fbRef)           fbRef.off('value'); }catch(e){}
+  try{ if(typeof _stopLiteListeners==='function')_stopLiteListeners(); }catch(e){}
   try{ if(typeof fbSlotsRef!=='undefined'&&fbSlotsRef) fbSlotsRef.off('value'); }catch(e){}
   try{ if(typeof fbSettingsRef!=='undefined'&&fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(typeof fbConnected!=='undefined') fbConnected=false; }catch(e){}
@@ -16012,7 +16080,9 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
     if(!data) throw new Error('백업 데이터 없음 ('+dateKey+')');
 
     /* Firebase 리스너 차단 */
-    try{ if(fbRef)         fbRef.off('value'); }catch(e){} _fbLightOff();
+    try{ if(fbRef)         fbRef.off('value'); }catch(e){}
+  try{ _stopLiteListeners(); }catch(e){}
+    try{ _stopLiteListeners(); }catch(e){}
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
@@ -20486,6 +20556,20 @@ window._drawQRCanvas = function(container, text, size){
             + (localStorage.getItem('pb_biz_info') ? '&bi=' + encodeURIComponent(localStorage.getItem('pb_biz_info')) : '')
             + (_dbu9 ? '&db=' + encodeURIComponent(_dbu9) : '')
             + (function(){ try{ var _g=(localStorage.getItem('pb_part_geo_'+partNo)||'').split(','); if(_g.length===2){ var _a=parseFloat(_g[0]),_b=parseFloat(_g[1]); if(!isNaN(_a)&&!isNaN(_b)) return '&glat='+encodeURIComponent(_a)+'&glng='+encodeURIComponent(_b); } }catch(e){} return ''; })() /* ★ 주차장 좌표 → view 정밀 길찾기 */
+            + (function(){ try{
+                if(typeof slotIdx!=='number') return '';
+                var _pl=_gidxToPartLocal(slotIdx); if(!_pl) return '';
+                var _c=PART_COL_COUNTS[_pl.part-1]||COLS_PER_PART, _r=PART_ROW_COUNTS[_pl.part-1]||ROWS_PER_PART;
+                if(!(_c>0&&_r>0)) return '';
+                var _rw=Math.floor(_pl.local/_c), _cl=(_pl.local%_c)+1;
+                if(!(_cl>=1&&_rw>=0&&_cl<=_c&&_rw<_r)) return '';
+                var _s='&cols='+_c+'&rows='+_r+'&col='+_cl+'&row='+_rw;
+                if(partName) _s+='&pl='+encodeURIComponent(partName);
+                try{ var _cn=(getColNames()||{})['p'+_pl.part+'c'+_cl]; if(_cn) _s+='&cn='+encodeURIComponent(_cn); }catch(e){}
+                return _s;
+              }catch(e){ return ''; } })() /* ★ 오프라인 약도용 위치(열/칸/격자) */
+            + (function(){ try{ var _sl=_getData()[_gidx2id(slotIdx)]; return (_sl&&_sl.safe6)?'&sf=1':''; }catch(e){ return ''; } })() /* ★ 세이프6 */
+            + (function(){ try{ var _pt=(localStorage.getItem('pb_promo_detail')||localStorage.getItem('pb_promo_text')||'').trim(); return _pt?('&pt='+encodeURIComponent(_pt)):''; }catch(e){ return ''; } })() /* ★ 제휴점 */
             + (window._lastDispatchEid ? '&eid=' + encodeURIComponent(window._lastDispatchEid) : ''); /* ★ 불출건 ID */
         }
       }catch(e){ _qrUrl=''; }
@@ -20960,11 +21044,7 @@ window._drawQRCanvas = function(container, text, size){
 
   /* ★ 단축링크 생성 — 상세정보를 Firebase에 저장하고 6글자 키만 담긴 짧은 링크 반환
      (문자에 긴 URL 대신 view.html?c=코드&k=Ab3xYz 형태로 발송) */
-  /* ★ URL-safe base64 인코더 (view.html의 _b64urlDecode와 짝) */
-  function _b64urlEncode(str){
-    try{ return btoa(unescape(encodeURIComponent(str))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }catch(e){ return ''; }
-  }
-  function _makeShortLink(code, payload, cb, opts){
+  function _makeShortLink(code, payload, cb){
     try{
       if(typeof fbDb==='undefined' || !fbDb){ cb(''); return; }
       var chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -20992,17 +21072,8 @@ window._drawQRCanvas = function(container, text, size){
       try{ if(window._lastDispatchEid && !payload.eid) payload.eid = String(window._lastDispatchEid); }catch(e){}
       fbDb.ref('kd_rooms/'+code+'/links/'+key).set(payload).then(function(){
         var _dbSL = localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||'';
-        /* ★★★ opts.snapshot === true 일 때만 오프라인 대비 스냅샷(d=)을 동봉한다.
-           기본값(false)은 원래대로 짧은 URL — 이 함수 결과가 그대로 SMS/알림톡
-           문자 본문(요금 구간)에 들어가거나, 화면 QR코드(스캔 밀도)로 그려지기
-           때문에 무조건 길게 만들면 안 됨. QR 전용 등 별도 용도에서만 opts로 요청. */
-        var _dParam='';
-        if(opts && opts.snapshot){
-          try{ _dParam = _b64urlEncode(JSON.stringify(payload)); }catch(e){}
-        }
         cb(base + '?c=' + encodeURIComponent(code) + '&k=' + key
            + (_dbSL ? '&db=' + encodeURIComponent(_dbSL) : '')
-           + (_dParam ? '&d=' + _dParam : '')
            + (function(){ try{ if(payload && payload.part!==undefined){ var _g=(localStorage.getItem('pb_part_geo_'+payload.part)||'').split(','); if(_g.length===2){ var _a=parseFloat(_g[0]),_b=parseFloat(_g[1]); if(!isNaN(_a)&&!isNaN(_b)) return '&glat='+encodeURIComponent(_a)+'&glng='+encodeURIComponent(_b); } } }catch(e){} return ''; })() /* ★ 주차장 좌표 */
            + (window._lastDispatchEid ? '&eid=' + encodeURIComponent(window._lastDispatchEid) : ''));
       }).catch(function(){ cb(''); });
@@ -21122,7 +21193,7 @@ window._drawQRCanvas = function(container, text, size){
 
       /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
       if(_getSmsMode()==='link'){
-        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null, sf:(_sd9&&(_sd9.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner)))?1:null, mm:(_sd9&&_sd9.memo)?String(_sd9.memo):null }, function(shortUrl){
+        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null, sf:(_sd9&&(_sd9.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner)))?1:null }, function(shortUrl){
           var u = shortUrl || _viewUrl9;
           if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
           _queueRouteSms(code, phone, car, text, '', eid, 'parkboard');
@@ -22918,118 +22989,6 @@ function _saveAllOnClose(){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _injectMemo);
   else _injectMemo();
 })();
-</script>
-
-<!-- ★ 서류 일괄등록 모달 — 차량번호별로 차량등록증/성능점검표를 한 화면에서 첨부 -->
-<div id="bulkDocsOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99993;overflow-y:auto;padding:14px;box-sizing:border-box;">
-  <div style="max-width:820px;margin:0 auto;background:#FFFDE7;border:3px solid var(--kakao);border-radius:18px;padding:14px;box-sizing:border-box;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-size:17px;font-weight:900;color:var(--kakao-deep);">📑 서류 일괄등록</div>
-      <button onclick="closeBulkDocs()" style="background:#475569;color:#fff;border:none;border-radius:9px;padding:7px 13px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">닫기</button>
-    </div>
-    <div style="background:#EDE9FE;border:2px solid #A78BFA;border-radius:12px;padding:10px;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:900;color:#5B21B6;margin-bottom:7px;">📋 공통서류 (전 차량 공통 · 판매확인서 등)</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button onclick="document.getElementById('bulkCommonFile').click()" style="background:#7C3AED;color:#fff;border:none;border-radius:9px;padding:8px 13px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">➕ 공통서류 첨부</button>
-        <input type="file" id="bulkCommonFile" accept="image/*,application/pdf" multiple style="display:none;" onchange="_bulkCommonUpload(this.files)">
-        <span style="font-size:11px;font-weight:700;color:#6D28D9;">모든 차량에서 함께 보이는 서류입니다</span>
-      </div>
-    </div>
-    <div id="bulkDocsStatus" style="font-size:12px;font-weight:800;color:#7C3AED;margin-bottom:8px;min-height:16px;"></div>
-    <div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:6px;background:#3A1D1D;color:#FEE500;border-radius:9px 9px 0 0;padding:8px 6px;font-size:13px;font-weight:900;text-align:center;">
-      <div>차량번호</div><div>차량등록증</div><div>성능점검표</div>
-    </div>
-    <div id="bulkDocsList" style="border:2px solid #3A1D1D;border-top:none;border-radius:0 0 9px 9px;max-height:60vh;overflow-y:auto;"></div>
-    <input type="file" id="bulkDocFile" accept="image/*,application/pdf" multiple style="display:none;" onchange="_bulkDocUpload(this.files)">
-  </div>
-</div>
-<script>
-/* ★ 서류 일괄등록 — 기존 _saveDoc/_docKeyFromCar를 그대로 사용하므로
-   슬롯 모달에서 첨부한 것과 100% 동일하게 저장·동기화된다. */
-var _bulkTargetCar = '', _bulkTargetCat = '';
-function openBulkDocs(){
-  var ov=document.getElementById('bulkDocsOv'); if(!ov) return;
-  ov.style.display='block';
-  _bulkRenderList();
-}
-function closeBulkDocs(){
-  var ov=document.getElementById('bulkDocsOv'); if(ov) ov.style.display='none';
-  var st=document.getElementById('bulkDocsStatus'); if(st) st.textContent='';
-}
-function _bulkRenderList(){
-  var box=document.getElementById('bulkDocsList'); if(!box) return;
-  var slots=getSlots();
-  var rows=[];
-  for(var i=0;i<TOTAL;i++){
-    var d=slots[i]||{};
-    if(d.disabled) continue;
-    var car=String(d.car||'').trim();
-    if(!car) continue;
-    rows.push({idx:i, car:car, owner:String(d.owner||'').trim()});
-  }
-  if(!rows.length){ box.innerHTML='<div style="padding:16px;text-align:center;font-size:13px;font-weight:800;color:#94A3B8;">등록된 차량이 없습니다.</div>'; return; }
-  var flags = (typeof _docFlags!=='undefined' && _docFlags) ? _docFlags : {};
-  var html='';
-  rows.forEach(function(r, n){
-    var key=_docKeyFromCar(r.car);
-    var has = flags[key] ? '📄' : '';
-    var bg = (n%2===0) ? '#FFFDE7' : '#FFF9C4';
-    var carAttr = r.car.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    html += '<div style="display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:6px;align-items:center;padding:7px 6px;background:'+bg+';border-bottom:1px solid #E5D5A0;">'
-      + '<div style="font-size:14px;font-weight:900;color:var(--kakao-deep);text-align:center;">'+has+' '+_escHtml(r.car)
-      + (r.owner ? '<div style="font-size:11px;font-weight:700;color:#78716C;">'+_escHtml(r.owner)+'</div>' : '')
-      + '</div>'
-      + '<div style="text-align:center;"><button data-car="'+carAttr+'" data-cat="reg" onclick="_bulkPick(this.dataset.car,this.dataset.cat)" style="background:#DBEAFE;color:#1D4ED8;border:2px solid #93C5FD;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;">➕ 등록증</button></div>'
-      + '<div style="text-align:center;"><button data-car="'+carAttr+'" data-cat="insp" onclick="_bulkPick(this.dataset.car,this.dataset.cat)" style="background:#F3E8FF;color:#7C3AED;border:2px solid #D8B4FE;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;">➕ 점검표</button></div>'
-      + '</div>';
-  });
-  box.innerHTML=html;
-}
-function _bulkPick(car, cat){
-  _bulkTargetCar=car; _bulkTargetCat=cat;
-  var fi=document.getElementById('bulkDocFile'); if(fi){ fi.value=''; fi.click(); }
-}
-function _bulkDocUpload(files){
-  if(!files||!files.length) return;
-  var key=_docKeyFromCar(_bulkTargetCar);
-  if(!key){ showAlert('⚠️ 차량번호를 확인할 수 없습니다.'); return; }
-  var cat=(_bulkTargetCat==='reg'||_bulkTargetCat==='insp')?_bulkTargetCat:'';
-  var st=document.getElementById('bulkDocsStatus');
-  var arr=Array.prototype.slice.call(files), i=0;
-  var carName=_bulkTargetCar;
-  function next(){
-    if(i>=arr.length){
-      if(st) st.textContent='✅ '+carName+' 서류 등록 완료';
-      setTimeout(function(){ if(st) st.textContent=''; _bulkRenderList(); }, 1600);
-      var fi=document.getElementById('bulkDocFile'); if(fi) fi.value='';
-      return;
-    }
-    var f=arr[i++];
-    if(st) st.textContent='⏳ '+carName+' 업로드 중... ('+i+'/'+arr.length+') '+f.name;
-    var isPdf=/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name);
-    if(isPdf){
-      if(f.size>4*1024*1024){ showAlert('⚠️ PDF는 4MB 이하만 첨부 가능합니다: '+f.name); next(); return; }
-      var r=new FileReader();
-      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,next,cat); };
-      r.onerror=function(){ next(); };
-      r.readAsDataURL(f);
-    } else if(/^image\//.test(f.type)){
-      _compressDocImage(f, function(dataUrl,size){ _saveDoc(key,f.name,'image',dataUrl,size,next,cat); });
-    } else { showAlert('⚠️ 지원하지 않는 파일 형식입니다: '+f.name); next(); }
-  }
-  next();
-}
-function _bulkCommonUpload(files){
-  if(!files||!files.length) return;
-  var st=document.getElementById('bulkDocsStatus');
-  if(typeof handleCommonDocFiles==='function'){
-    handleCommonDocFiles(files);
-    if(st){ st.textContent='⏳ 공통서류 업로드 중...'; setTimeout(function(){ st.textContent='✅ 공통서류 처리 완료'; setTimeout(function(){ st.textContent=''; },1600); },1200); }
-  } else {
-    showAlert('⚠️ 공통서류 첨부 기능을 찾을 수 없습니다.');
-  }
-  var fi=document.getElementById('bulkCommonFile'); if(fi) fi.value='';
-}
 </script>
 </body>
 </html>
