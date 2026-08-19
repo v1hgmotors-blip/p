@@ -23295,7 +23295,15 @@ function _saveAllOnClose(){
   function init(){
     var gw = document.getElementById('gridWrap');
     if(!gw){ setTimeout(init, 500); return; }
+    /* ★ 마지막 입력이 터치인지 마우스인지 추적 (모바일 롱프레스 = 터치 → 메뉴 안 띄움) */
+    var _qsLastTouch = false;
+    document.addEventListener('pointerdown', function(pe){
+      _qsLastTouch = (pe.pointerType === 'touch');
+    }, true);
     gw.addEventListener('contextmenu', function(e){
+      /* ★ 터치(모바일/태블릿 롱프레스)면 빠른 메뉴를 띄우지 않음
+         → 슬롯 드래그(길게 눌러 이동)와 간섭하지 않는다. PC 우클릭에서만 동작. */
+      if(_qsLastTouch || (e.pointerType && e.pointerType === 'touch')) return;
       var s = e.target.closest ? e.target.closest('.slot') : null;
       if(!s) return;
       var idx = (typeof _slotIdxOf === 'function') ? _slotIdxOf(s) : -1;
