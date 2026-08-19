@@ -2635,7 +2635,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 
     <!-- ★ PC 전용: 차량번호 크기 슬라이더 -->
     <div class="m-car-fs-ctrl" id="mCarFsCtrl">
-      <span class="m-car-fs-label">🔡 차량번호 크기</span>
+      <span class="m-car-fs-label" id="mCarFsLabel">🔡 차량번호 크기</span>
       <input type="range" class="m-car-fs-slider" id="mCarFsSlider"
              min="8" max="28" step="1" value="13"
              oninput="onCarFsSlider(this.value)" />
@@ -3860,7 +3860,8 @@ function initSettingsBarState(){
 }
 /* ★ 기본 설정값 (최초 실행 시 자동 적용) */
 var LS_MEMO_FS='pb_memo_fs';
-var LS_CAR_FS='pb_car_fs'; /* ★ PC 차량번호 크기 사용자 설정 */
+var LS_CAR_FS='pb_car_fs'; /* ★ (구버전) PC 차량번호 크기 전역 설정 — 마이그레이션 전용, 더 이상 직접 사용 안 함 */
+var LS_CAR_FS_MAP='pb_car_fs_map'; /* ★ PC 차량번호 크기 파트별 설정 { "1":"16", "2":"auto", ... } */
 
 /* ════════════════════════════════════════
    차주 입력 패널 (Firebase 동기화 포함)
@@ -5795,9 +5796,12 @@ function fitLayout(){
         /* settings toggle-row (항상 표시) */
         var _stRow = document.querySelector('.settings-toggle-row');
         if(_stRow) _fH += _stRow.offsetHeight;
-        /* settings-body: collapsed면 0, 펼쳐지면 scrollHeight */
-        var _sbEl = document.getElementById('settingsBody');
-        if(_sbEl) _fH += _sbEl.classList.contains('collapsed') ? 0 : _sbEl.scrollHeight;
+        /* ★ FIX: 설정바(Firebase 설정)를 펼쳐도 주차칸 크기가 작아지지 않도록,
+           settings-body 펼침 높이는 가용높이 계산에서 항상 제외한다.
+           (이전에는 펼쳐진 상태의 scrollHeight를 더해서, 설정바를 열면
+           가용 높이가 줄어들어 전체 주차칸이 함께 작아지는 버그가 있었음.
+           mainWrap은 overflow-y:auto라 설정바가 펼쳐진 만큼은 스크롤로
+           처리되면 되고, 주차칸 크기 계산에는 영향을 주지 않아야 함.) */
         var _srchEl = document.getElementById('searchBar') || document.querySelector('.search-bar');
         if(_srchEl) _fH += _srchEl.offsetHeight;
         ['pwaBanner','legendBar'].forEach(function(id){
@@ -5942,13 +5946,27 @@ function fitLayout(){
         _applyColScrollViewport(p, pc, visCols_calc);
       }
     }
+    /* ★ fitLayout(세로모드) 계산 완료 후 파트별 사용자 차량번호 크기 재적용 (덮어쓰기 방지) */
+    if(typeof _applyCarFsAllParts === 'function'){
+      _applyCarFsAllParts();
+      setTimeout(_syncCarFsSlider, 30);
+    }
     return;
   }
 
   /* ══ 격자 모드 ══
      규칙1: 열이 다른 두 파트 → 슬롯 가로를 동일하게 (더 많은 열 기준)
      규칙2: 행이 다른 두 파트 → 슬롯 세로를 늘려서 행이 많은 파트와 높이 맞춤
-     처리 단위: grid 행 (파트 2개씩 페어링) */
+     처리 단위: grid 행 (파트 2개씩 페어링)
+     ★ FIX(파트별 차량번호 자동 크기): 예전에는 글꼴 크기(차량번호/메모/키번호 등)를
+       보드 전체에서 열이 가장 많은 파트 기준(maxCols2)으로 딱 한 번만 계산해
+       document.documentElement(전역)에 적용했음. 그래서 실제로는 슬롯 폭이 넓은
+       파트(열 적음)도, 좁은 파트(열 많음)도 전부 같은 글꼴 크기를 썼고, 특히
+       열이 많아 슬롯이 좁아진 파트는 차량번호가 잘리거나 안 보이는 문제가 있었음.
+       → 이제 글꼴 크기를 "페어(같은 줄에 나란한 두 파트)"별 실제 슬롯 폭(pairSlotW)
+       기준으로 매번 계산해서, 그 페어에 속한 partWrap 요소에만 적용한다.
+       (규칙1에 따라 같은 페어의 두 파트는 이미 슬롯 폭이 통일되므로, 글꼴 크기도
+       페어 단위로 같이 통일하는 것이 자연스러움) */
 
   var cellW = Math.floor((vw - 12) / 2);   /* 셀 한 칸 너비 */
   var hPad2 = 8;
@@ -5981,7 +5999,9 @@ function fitLayout(){
     })();
   }
 
-  /* 공통 폰트 (가장 많은 열 기준 slotW로 계산) */
+  /* ★ FIX: 전역(root) 폰트값은 더 이상 실제 표시에 쓰지 않고,
+     아직 페어 계산이 안 된 요소를 위한 안전한 기본값(fallback)으로만 둔다.
+     (가장 열이 많은 파트 기준 — 가장 보수적인/작은 값) */
   var maxCols2 = Math.max.apply(null, PART_COL_COUNTS.length ? PART_COL_COUNTS : [COLS_PER_PART]);
   var baseSlotW = Math.floor((cellW - hPad2 - 2*(maxCols2-1)) / maxCols2);
   var carFsG   = isMob ? Math.min(Math.max(Math.floor(baseSlotW*0.42),11),16) : Math.min(Math.max(Math.floor(baseSlotW*0.57),11),22);
@@ -6025,6 +6045,15 @@ function fitLayout(){
     /* 자연 slotH (slotW 비례) */
     var baseSlotH = Math.min(Math.max(Math.floor(pairSlotW * 1.15), 40), 100);
 
+    /* ★ FIX(파트별 차량번호 자동 크기): 이 페어의 실제 슬롯 폭(pairSlotW) 기준으로
+       차량번호/메모/키번호/열헤더 폰트를 매 페어마다 새로 계산. 열이 많아 슬롯이
+       좁은 페어는 자동으로 작게, 열이 적어 슬롯이 넓은 페어는 자동으로 크게 맞춰짐. */
+    var carFsPair   = isMob ? Math.min(Math.max(Math.floor(pairSlotW*0.42),11),16) : Math.min(Math.max(Math.floor(pairSlotW*0.57),11),22);
+    var memoFsPair  = Math.min(Math.max(Math.floor(pairSlotW*0.20),5),25);
+    var numSzPair   = Math.min(Math.max(Math.floor(pairSlotW*0.60),15),26);
+    var numFsPair   = Math.min(Math.max(Math.floor(numSzPair*0.55),9),15);
+    var colHcFsPair = Math.min(Math.max(Math.floor(pairSlotW*0.40),8),12);
+
     /* ★ FIX: PC는 mainWrap이 overflow-y:auto(스크롤 가능)이므로
          슬롯 높이를 화면 기준으로 제한하면 오히려 슬롯이 너무 작아지고
          아래에 빈 공간이 크게 생기는 버그 발생 → PC에서는 상한 계산 제거.
@@ -6040,7 +6069,7 @@ function fitLayout(){
         _availHforPair = Math.max(window.innerHeight - _mobFixedH - 20, 120);
       }
       if(_availHforPair > 0 && maxRowsPair > 0){
-        var _slotNumSzG = numSzG || 22;
+        var _slotNumSzG = numSzPair || 22;
         var _rowGapG = Math.ceil(_slotNumSzG * 0.29) + 5;
         var _slotMgG  = Math.ceil(_slotNumSzG * 0.28);
         var _pairOvhd = 102 + (maxRowsPair - 1) * _rowGapG + maxRowsPair * _slotMgG;
@@ -6050,16 +6079,30 @@ function fitLayout(){
         var _fitHG = Math.floor((_availHforPair - _pairOvhd4G) / _baseRowsG);
         _fitHG = Math.min(Math.max(_fitHG, 58), 100);
         baseSlotH = Math.min(baseSlotH, _fitHG);
-        root2.style.setProperty('--slot-car-fs', Math.min(carFsG, Math.floor(baseSlotH*0.38))+'px');
-        root2.style.setProperty('--slot-memo-fs', Math.min(memoFsG, Math.floor(baseSlotH*0.17))+'px');
-        root2.style.setProperty('--slot-num-sz', Math.min(numSzG, Math.floor(baseSlotH*0.46))+'px');
+        carFsPair  = Math.min(carFsPair,  Math.floor(baseSlotH*0.38));
+        memoFsPair = Math.min(memoFsPair, Math.floor(baseSlotH*0.17));
+        numSzPair  = Math.min(numSzPair,  Math.floor(baseSlotH*0.46));
       }
     }
+
+    /* ★ 이 페어(pA, pB)에 속한 partWrap에 폰트 변수 적용
+       — parkingGrid와 colHeader가 같은 partWrap 아래에 있으므로, 여기 적용하면
+       두 요소 모두에 자연스럽게 상속됨 */
+    [pA, pB].forEach(function(_p){
+      if(!_p) return;
+      var _pw = document.getElementById('partWrap'+_p);
+      if(!_pw) return;
+      _pw.style.setProperty('--slot-car-fs',  carFsPair  + 'px');
+      _pw.style.setProperty('--slot-memo-fs', memoFsPair + 'px');
+      _pw.style.setProperty('--slot-num-sz',  numSzPair  + 'px');
+      _pw.style.setProperty('--slot-num-fs',  numFsPair  + 'px');
+      _pw.style.setProperty('--col-hc-fs',    colHcFsPair+ 'px');
+    });
 
     /* 행이 많은 쪽 총 그리드 높이 */
     var totalGridH = baseSlotH * maxRowsPair + 5 * (maxRowsPair - 1); /* row-gap=5px */
 
-    /* emptyFs는 슬롯W 기반 */
+    /* emptyFs는 슬롯W 기반 (페어 단위) */
     var emptyFsP = Math.min(Math.max(Math.floor(pairSlotW*0.38),7),18);
     root2.style.setProperty('--slot-empty-fs', emptyFsP+'px');
 
@@ -6087,10 +6130,9 @@ function fitLayout(){
       pgA.style.setProperty('--slot-h', slotHA+'px');
       pgA.style.setProperty('--slot-badge-fs', badgeFsP+'px');
       pgA.style.setProperty('--slot-badge-show', slotHA > 58 ? '1' : '0'); /* ★ 58px 이하 배지 숨김 */
-      var _numSzA = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
-      var _carFsA = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
-      pgA.style.setProperty('--slot-car-h', (Math.ceil(_carFsA*2.2)+4) + 'px');
-      pgA.style.setProperty('--slot-memo-max-h-no-car', Math.max(Math.floor(slotHA - _numSzA - 6), 0) + 'px');
+      pgA.style.setProperty('--slot-car-h', (Math.ceil(carFsPair*2.2)+4) + 'px');
+      pgA.style.setProperty('--slot-memo-max-h-no-car', Math.max(Math.floor(slotHA - numSzPair - 6), 0) + 'px');
+      pgA.style.setProperty('--slot-memo-max-h', Math.max(Math.floor(slotHA - numSzPair - Math.ceil(carFsPair*2.2) - 6), 0) + 'px');
     }
     if(chA) chA.style.gridTemplateColumns='repeat('+colsA+',minmax(0,1fr))';
 
@@ -6108,14 +6150,10 @@ function fitLayout(){
         pgB.style.setProperty('--slot-h', slotHB+'px');
         pgB.style.setProperty('--slot-badge-fs', badgeFsP+'px');
         pgB.style.setProperty('--slot-badge-show', slotHB > 58 ? '1' : '0'); /* ★ 58px 이하 배지 숨김 */
-        var _numSzB = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
-        var _carFsB = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
-        pgB.style.setProperty('--slot-car-h', (Math.ceil(_carFsB*2.2)+4) + 'px');
-        pgB.style.setProperty('--slot-memo-max-h-no-car', Math.max(Math.floor(slotHB - _numSzB - 6), 0) + 'px');
+        pgB.style.setProperty('--slot-car-h', (Math.ceil(carFsPair*2.2)+4) + 'px');
+        pgB.style.setProperty('--slot-memo-max-h-no-car', Math.max(Math.floor(slotHB - numSzPair - 6), 0) + 'px');
         /* ★ PC 격자모드: 메모 max-height 계산 */
-        var numSzGB = parseFloat(root2.style.getPropertyValue('--slot-num-sz'))||22;
-        var carFsGB = parseFloat(root2.style.getPropertyValue('--slot-car-fs'))||14;
-        var memoMaxHB = Math.max(Math.floor(slotHB - numSzGB - Math.ceil(carFsGB*2.2) - 6), 0);
+        var memoMaxHB = Math.max(Math.floor(slotHB - numSzPair - Math.ceil(carFsPair*2.2) - 6), 0);
         pgB.style.setProperty('--slot-memo-max-h', memoMaxHB+'px');
       }
       if(chB) chB.style.gridTemplateColumns='repeat('+colsB+',minmax(0,1fr))';
@@ -6128,17 +6166,9 @@ function fitLayout(){
 
   /* 전역 --slot-h는 세로 모드에서만 사용; 격자모드는 parkingGrid별 인라인으로 처리됨 */
 
-  /* ★ fitLayout 계산 완료 후 사용자 차량번호 크기 재적용 (덮어쓰기 방지) */
-  if(typeof _CAR_FS_AUTO !== 'undefined'){
-    if(_CAR_FS_AUTO){
-      document.documentElement.style.removeProperty('--slot-car-fs-user');
-    } else {
-      var _savedCFs = localStorage.getItem(LS_CAR_FS);
-      if(_savedCFs && _savedCFs !== 'auto'){
-        var _v = Math.min(Math.max(parseInt(_savedCFs)||13, 8), 28);
-        document.documentElement.style.setProperty('--slot-car-fs-user', _v+'px');
-      }
-    }
+  /* ★ fitLayout 계산 완료 후 파트별 사용자 차량번호 크기 재적용 (덮어쓰기 방지) */
+  if(typeof _applyCarFsAllParts === 'function'){
+    _applyCarFsAllParts();
     /* 슬라이더 동기화 (자동 모드일 때 현재 계산값 반영) */
     setTimeout(_syncCarFsSlider, 30);
   }
@@ -6148,6 +6178,13 @@ function fitLayout(){
   if(typeof _applyAllColGaps === 'function'){
     _applyAllColGaps();
     setTimeout(_applyAllColGaps, 90);   /* ★ setTimeout(_setPcScrollPadding,80) 등 이후 폭이 한 번 더 바뀌는 경우 대비 */
+  }
+  /* ★ FIX: 격자/열·행 변경으로 슬롯이 작아지면 차량번호가 잘리던 문제
+     — 레이아웃 확정 후 전체 슬롯에 축소(fit) 적용. 열폭이 90ms 뒤 최종
+       확정되므로 그 이후에도 한 번 더 실행해 최종 폭 기준으로 맞춤. */
+  if(typeof _fitSlotCarTexts === 'function'){
+    _fitSlotCarTexts();
+    setTimeout(function(){ _fitSlotCarTexts(); }, 130);
   }
 }
 
@@ -6257,62 +6294,108 @@ function changeMemoFs(delta){
   if(el) el.textContent=next;
 }
 
-/* ══ PC 차량번호 크기 슬라이더 ══ */
-var _CAR_FS_AUTO = false; /* true = 자동(fitLayout 값 사용) */
+/* ══ PC 차량번호 크기 슬라이더 (파트별 개별 설정) ══ */
+var _modalCarFsPart = 1; /* ★ 현재 모달이 열려있는 슬롯이 속한 파트 번호 */
+
+function _loadCarFsMap(){
+  try{
+    var raw = localStorage.getItem(LS_CAR_FS_MAP);
+    if(raw) return JSON.parse(raw) || {};
+  }catch(e){}
+  return {};
+}
+function _saveCarFsMap(map){
+  try{ localStorage.setItem(LS_CAR_FS_MAP, JSON.stringify(map||{})); }catch(e){}
+}
+function _carFsMapGet(part){
+  var map = _loadCarFsMap();
+  var v = map[String(part)];
+  return (v===undefined || v===null || v==='') ? 'auto' : String(v);
+}
+function _carFsMapSet(part, val){
+  var map = _loadCarFsMap();
+  map[String(part)] = val;
+  _saveCarFsMap(map);
+}
+
+/* ★ (구버전 → 파트별) 1회 마이그레이션: 예전에는 전역 값 하나(pb_car_fs)만 있었음.
+   새 파트별 맵(pb_car_fs_map)이 아직 없으면, 예전 전역값을 모든 파트의 초기값으로
+   복사해 자연스럽게 이어지도록 한다. 이후로는 파트별로 서로 다르게 저장/적용됨. */
+function _migrateCarFsToPerPart(){
+  try{
+    var existing = localStorage.getItem(LS_CAR_FS_MAP);
+    if(existing) return; /* 이미 파트별 설정 있음 → 마이그레이션 불필요 */
+    var oldVal = localStorage.getItem(LS_CAR_FS);
+    var map = {};
+    if(oldVal !== null && oldVal !== 'auto'){
+      var n = Math.min(Math.max(parseInt(oldVal)||13, 8), 28);
+      for(var p=1; p<=NUM_PARTS; p++){ map[String(p)] = String(n); }
+    }
+    _saveCarFsMap(map);
+  }catch(e){}
+  /* ★ 예전에 document.documentElement(전체 루트)에 남아있을 수 있는 전역 오버라이드 제거
+     — 남아있으면 파트별 설정보다 우선 적용될 위험이 있어 반드시 정리해야 함 */
+  try{ document.documentElement.style.removeProperty('--slot-car-fs-user'); }catch(e){}
+}
+
+function _applyCarFsForPart(part){
+  var pg = document.getElementById('parkingGrid'+part);
+  if(!pg) return;
+  var v = _carFsMapGet(part);
+  if(v === 'auto'){
+    pg.style.removeProperty('--slot-car-fs-user');
+  } else {
+    var n = Math.min(Math.max(parseInt(v)||13, 8), 28);
+    pg.style.setProperty('--slot-car-fs-user', n+'px');
+  }
+}
+function _applyCarFsAllParts(){
+  for(var p=1; p<=NUM_PARTS; p++){ _applyCarFsForPart(p); }
+}
 
 function loadCarFs(){
   if(window.innerWidth < 601) return;
-  var saved = localStorage.getItem(LS_CAR_FS);
-  if(saved === null || saved === 'auto'){
-    _CAR_FS_AUTO = true;
-    _applyCarFsAuto();
-  } else {
-    _CAR_FS_AUTO = false;
-    var v = Math.min(Math.max(parseInt(saved)||13, 8), 28);
-    _applyCarFsValue(v);
-  }
+  _migrateCarFsToPerPart();
+  _applyCarFsAllParts();
   _syncCarFsSlider();
 }
 
-function _applyCarFsValue(v){
-  document.documentElement.style.setProperty('--slot-car-fs-user', v+'px');
-}
-function _applyCarFsAuto(){
-  document.documentElement.style.removeProperty('--slot-car-fs-user');
-}
-
-function _syncCarFsSlider(){
-  var slider = document.getElementById('mCarFsSlider');
-  var valEl  = document.getElementById('mCarFsVal');
-  if(!slider) return;
-  if(_CAR_FS_AUTO){
-    /* 자동 모드: 슬라이더를 현재 fitLayout 계산값으로 표시 */
-    var computed = _getComputedCarFs();
-    slider.value = computed;
-    if(valEl) valEl.textContent = '자동(' + computed + 'px)';
-    slider.style.opacity = '0.55';
-  } else {
-    var v = Math.min(Math.max(parseInt(localStorage.getItem(LS_CAR_FS))||13, 8), 28);
-    slider.value = v;
-    if(valEl) valEl.textContent = v + 'px';
-    slider.style.opacity = '1';
-  }
-}
-
-function _getComputedCarFs(){
-  /* getComputedStyle로 실제 적용된 --slot-car-fs 읽기 */
-  var pg = document.getElementById('parkingGrid1');
+function _getComputedCarFs(part){
+  /* getComputedStyle로 해당 파트에 실제 적용된 --slot-car-fs 읽기 */
+  var pg = document.getElementById('parkingGrid'+(part||_modalCarFsPart||1));
   var src = pg || document.documentElement;
   var raw = getComputedStyle(src).getPropertyValue('--slot-car-fs').trim();
   var n = parseInt(raw);
   return (n && n > 0) ? n : 13;
 }
 
+function _syncCarFsSlider(){
+  var slider = document.getElementById('mCarFsSlider');
+  var valEl  = document.getElementById('mCarFsVal');
+  var lblEl  = document.getElementById('mCarFsLabel');
+  if(!slider) return;
+  var part = _modalCarFsPart || 1;
+  if(lblEl) lblEl.textContent = '🔡 차량번호 크기 (' + part + '.PART)';
+  var stored = _carFsMapGet(part);
+  if(stored === 'auto'){
+    /* 자동 모드: 슬라이더를 현재 fitLayout 계산값(이 파트 기준)으로 표시 */
+    var computed = _getComputedCarFs(part);
+    slider.value = computed;
+    if(valEl) valEl.textContent = '자동(' + computed + 'px)';
+    slider.style.opacity = '0.55';
+  } else {
+    var v = Math.min(Math.max(parseInt(stored)||13, 8), 28);
+    slider.value = v;
+    if(valEl) valEl.textContent = v + 'px';
+    slider.style.opacity = '1';
+  }
+}
+
 function onCarFsSlider(val){
-  _CAR_FS_AUTO = false;
+  var part = _modalCarFsPart || 1;
   var v = Math.min(Math.max(parseInt(val)||13, 8), 28);
-  localStorage.setItem(LS_CAR_FS, v);
-  _applyCarFsValue(v);
+  _carFsMapSet(part, String(v));
+  _applyCarFsForPart(part);
   var valEl = document.getElementById('mCarFsVal');
   if(valEl) valEl.textContent = v + 'px';
   var slider = document.getElementById('mCarFsSlider');
@@ -6320,9 +6403,9 @@ function onCarFsSlider(val){
 }
 
 function resetCarFs(){
-  _CAR_FS_AUTO = true;
-  localStorage.setItem(LS_CAR_FS, 'auto');
-  _applyCarFsAuto();
+  var part = _modalCarFsPart || 1;
+  _carFsMapSet(part, 'auto');
+  _applyCarFsForPart(part);
   _syncCarFsSlider();
 }
 
@@ -9135,20 +9218,22 @@ function _saveDupIgnored(obj){
 function _scanDuplicates(){
   try{
     if(typeof getSlots!=='function' || typeof TOTAL==='undefined') return;
-    var s=getSlots(), map={};
+    var s=getSlots(), map={}, carDisp={};
     for(var i=0;i<TOTAL;i++){
       var d=s[i]; if(!d||d.disabled) continue;
       var car=(d.car||'').trim(); if(!car) continue;
       var k=_dupCarKey(car); if(!k) continue;
       (map[k]=map[k]||[]).push(i);
+      if(!carDisp[k]) carDisp[k]=car;
     }
     var ignored=_loadDupIgnored();
-    var allGroups=[], activeGroups=[], dupSet={};
+    var allGroups=[], activeGroups=[], activeCarNums=[], dupSet={};
     Object.keys(map).forEach(function(k){
       if(map[k].length>=2){
-        allGroups.push({key:k, idx:map[k]});
+        allGroups.push({key:k, idx:map[k], car:carDisp[k]});
         if(!ignored[k]){
           activeGroups.push(map[k]);
+          activeCarNums.push(carDisp[k]);
           map[k].forEach(function(x){dupSet[x]=1;});
         }
       }
@@ -9162,10 +9247,10 @@ function _scanDuplicates(){
       var el=document.getElementById('slot_'+j); if(!el) continue;
       if(dupSet[j]) el.classList.add('slot-dup'); else el.classList.remove('slot-dup');
     }
-    _renderDupBanner(activeGroups);
+    _renderDupBanner(activeGroups, activeCarNums);
   }catch(e){}
 }
-function _renderDupBanner(groups){
+function _renderDupBanner(groups, carNums){
   var b=document.getElementById('dupBanner');
   if(!b){
     b=document.createElement('div'); b.id='dupBanner';
@@ -9175,9 +9260,13 @@ function _renderDupBanner(groups){
   if(!b) return;
   if(!groups||!groups.length){ b.style.display='none'; return; }
   var n=groups.reduce(function(a,g){return a+g.length;},0);
-  b.innerHTML='\u26A0\uFE0F \uC911\uBCF5 \uCC28\uB7C9 '+groups.length+'\uAC74('+n+'\uCE78) \u2014 \uAC19\uC740 \uCC28\uB7C9\uBC88\uD638\uAC00 \uC5EC\uB7EC \uCE78\uC5D0 \uC788\uC2B5\uB2C8\uB2E4'
-    +' <button type="button" onclick="_scrollToFirstDup()" style="background:#fff;color:#B91C1C;border:none;border-radius:8px;padding:6px 11px;font-weight:900;font-family:inherit;cursor:pointer;">\uC704\uCE58 \uBCF4\uAE30</button>'
-    +' <button type="button" onclick="_ignoreDuplicates()" style="background:#111827;color:#fff;border:none;border-radius:8px;padding:6px 11px;font-weight:900;font-family:inherit;cursor:pointer;">\uD83D\uDD15 \uC911\uBCF5 \uBB34\uC2DC</button>';
+  var carsText=(carNums||[]).filter(Boolean).join(', ');
+  var msgCore = (groups.length<=1)
+    ? ('같은 차량번호'+(carsText||'')+'가 여러 칸에 있습니다')
+    : ('같은 차량번호 '+carsText+'가 각각 여러 칸에 있습니다');
+  b.innerHTML='⚠️ 중복 차량 '+groups.length+'건('+n+'칸) — '+msgCore
+    +' <button type="button" onclick="_scrollToFirstDup()" style="background:#fff;color:#B91C1C;border:none;border-radius:8px;padding:6px 11px;font-weight:900;font-family:inherit;cursor:pointer;">위치 보기</button>'
+    +' <button type="button" onclick="_ignoreDuplicates()" style="background:#111827;color:#fff;border:none;border-radius:8px;padding:6px 11px;font-weight:900;font-family:inherit;cursor:pointer;">🔕 중복 무시</button>';
   b.style.display='flex';
 }
 function _scrollToFirstDup(){
@@ -9747,6 +9836,12 @@ function buildGrid(){
       else { searchActive = false; }
     }
   }catch(e){ console.warn('[검색복원]', e); }
+  /* ★ FIX: buildGrid 후(뒤에 fitLayout이 안 오는 복원/초기화 경로 포함)에도
+     작은 슬롯에서 차량번호가 잘리지 않도록 전체 축소 적용 */
+  if(typeof _fitSlotCarTexts === 'function'){
+    _fitSlotCarTexts();
+    setTimeout(function(){ _fitSlotCarTexts(); }, 130);
+  }
 }
 /* ★ 검색 하이라이트만 조용히 재적용 (자동 스크롤·파트 강제펼침 없음)
    → 그리드 재생성 후에도 검색 표시가 유지되며, 사용자의 현재 화면 위치를 방해하지 않음 */
@@ -9797,6 +9892,7 @@ function renderSlot(el,idx){
   /* ★ 변경 감지: 슬롯 내용이 이전과 동일하면 다시 그리지 않음 (이벤트 있는 칸만 갱신, 전체 재렌더·깜빡임 방지) */
   try {
     var _sig = [d.car||'', d.status||'', d.memo||'', d.num||'', d.disabled?1:0, d.owner||'',
+      (d.safe6?1:0), ((typeof _safe6Partner!=='undefined' && _safe6Partner)?1:0),
       (d.encar?((d.encar.date||'')+'~'+(d.encar.time||'')+'~'+(d.encar.done?1:0)+'~'+(d.encar.doneDate||'')):''),
       (d.inspect?((d.inspect.date||'')+'~'+(d.inspect.done?1:0)):''),
       ((d.car && typeof _docFlags!=='undefined' && typeof _docKeyFromCar==='function' && _docFlags[_docKeyFromCar(d.car)])?1:0)
@@ -11287,6 +11383,8 @@ function openModal(i){
      의도치 않게 모달이 열리는 현상 방지 */
   if(window._lastDragEndTs && Date.now() - window._lastDragEndTs < 400) return;
   activeSlot=i;
+  /* ★ 파트별 차량번호 크기 슬라이더용: 이 슬롯이 속한 파트 기억 */
+  if(typeof slotToPart === 'function') _modalCarFsPart = slotToPart(i);
   /* ★ FIX(체감 개선): 열림 애니메이션을 먼저 시작 — 아래 데이터 채우기(서류목록 등)가
      끝날 때까지 기다리면 탭 직후 200ms가량 멈춘 뒤 갑자기 나타나 부드러움이 사라짐.
      show를 선행시켜 트랜지션이 즉시 시작되게 하고, 내용 채우기는 그 뒤 그대로 진행. */
@@ -12460,8 +12558,19 @@ function saveSlot(){
     showAlert('⚠️ 차량번호를 먼저 입력해주세요'); setTimeout(hideAlert,2500); return;
   }
 
-  /* ★ 중복 차량번호 체크 (사용안함·빈칸·같은칸 제외) */
-  if(car&&!dis){
+  /* ★ FIX: 차량번호에 한글 2자 이상이면 → 차주입력 없이 저장 허용 + 중복저장 체크도 무시 */
+  var _carHasKorean2 = (function(){
+    var _kor = (car||'').match(/[가-힣]/g);
+    return _kor && _kor.length >= 2;
+  })();
+
+  /* ★ FIX: 차량번호 첫 3글자가 연속으로 한글 또는 영문이면 → 차주입력 없이 저장 허용 + 중복저장 체크도 무시 */
+  var _carStartsWithLetters3 = /^[가-힣a-zA-Z]{3}/.test(car||'');
+
+  var _skipOwnerAndDupCheck = _carHasKorean2 || _carStartsWithLetters3;
+
+  /* ★ 중복 차량번호 체크 (사용안함·빈칸·같은칸 제외, 예외조건 해당시 스킵) */
+  if(car&&!dis&&!_skipOwnerAndDupCheck){
     var cn=norm(car);
     var s=getSlots();
     var dupIdx=-1;
@@ -12500,13 +12609,7 @@ function saveSlot(){
     var _chkOwnerSlot = (s0[activeSlot] && s0[activeSlot].owner) ? s0[activeSlot].owner : '';
     var _finalOwner = _chkOwnerMemo || _chkOwnerSlot;
 
-    /* ★ FIX: 차량번호에 한글 2자 이상이면 차주 없어도 저장 허용 */
-    var _carHasKorean2 = (function(){
-      var _kor = (car||'').match(/[가-힣]/g);
-      return _kor && _kor.length >= 2;
-    })();
-
-    if(!_finalOwner && !_carHasKorean2){
+    if(!_finalOwner && !_skipOwnerAndDupCheck){
       /* 차주 없음 → 에러 표시, 저장 차단 */
       var ownerErrEl = document.getElementById('mOwnerError');
       if(ownerErrEl){
@@ -23105,6 +23208,110 @@ function _saveAllOnClose(){
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _injectMemo);
   else _injectMemo();
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════
+ *  ★ 슬롯 우클릭(PC) → 차량상태 배지 빠른 선택 (모달 없이)
+ *    기존 저장/동기화/렌더(getSlots·saveSlots·_fbV7Update·refreshSlot) 재사용.
+ * ══════════════════════════════════════════════════════════ */
+(function(){
+  var _qsIdx = -1, menu = null;
+  var ITEMS = [
+    {v:'none',     label:'🅿️ 일반'},
+    {v:'contract', label:'📝 계약중'},
+    {v:'product',  label:'🔧 상품화중'},
+    {v:'waiting',  label:'🚗 출고대기'},
+    {v:'disabled', label:'✖ 사용안함'},
+    {v:'safe6',    label:'🛡️ 세이프6 (켜기/끄기)'},
+    {v:'sale',     label:'💰 판매완료'}
+  ];
+  function build(){
+    menu = document.createElement('div');
+    menu.id = 'quickStatusMenu';
+    menu.style.cssText = 'position:fixed;z-index:100000;display:none;background:#fff;border:2px solid #E2E8F0;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.20);padding:6px;min-width:170px;font-family:inherit;';
+    /* ★ 맨 위: 키불출 버튼 (검색 키불출과 동일 동작) */
+    var kiBtn = document.createElement('button');
+    kiBtn.type = 'button';
+    kiBtn.textContent = '🔑 키불출';
+    kiBtn.style.cssText = 'display:block;width:100%;text-align:center;padding:11px 12px;border:none;background:#FEE500;color:#1E293B;font-size:15px;font-weight:900;cursor:pointer;border-radius:9px;font-family:inherit;white-space:nowrap;margin-bottom:6px;';
+    kiBtn.addEventListener('mouseenter', function(){ kiBtn.style.background='#FDD835'; });
+    kiBtn.addEventListener('mouseleave', function(){ kiBtn.style.background='#FEE500'; });
+    kiBtn.addEventListener('click', function(e){ e.stopPropagation(); apply('keyissue'); });
+    menu.appendChild(kiBtn);
+    var head = document.createElement('div');
+    head.textContent = '📌 차량상태 선택';
+    head.style.cssText = 'font-size:12px;font-weight:900;color:#64748B;padding:4px 10px 6px;border-bottom:1px solid #F1F5F9;margin-bottom:4px;';
+    menu.appendChild(head);
+    ITEMS.forEach(function(it){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = it.label;
+      b.style.cssText = 'display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;font-size:14px;font-weight:800;color:#1E293B;cursor:pointer;border-radius:8px;font-family:inherit;white-space:nowrap;';
+      b.addEventListener('mouseenter', function(){ b.style.background='#F1F5F9'; });
+      b.addEventListener('mouseleave', function(){ b.style.background='transparent'; });
+      b.addEventListener('click', function(e){ e.stopPropagation(); apply(it.v); });
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+  }
+  function show(x, y, idx){
+    _qsIdx = idx;
+    if(!menu) build();
+    menu.style.display = 'block';
+    var mw = menu.offsetWidth || 180, mh = menu.offsetHeight || 340;
+    var px = Math.min(x, window.innerWidth  - mw - 8);
+    var py = Math.min(y, window.innerHeight - mh - 8);
+    menu.style.left = Math.max(8, px) + 'px';
+    menu.style.top  = Math.max(8, py) + 'px';
+  }
+  function hide(){ if(menu) menu.style.display = 'none'; _qsIdx = -1; }
+  function apply(v){
+    var idx = _qsIdx; hide();
+    if(idx < 0) return;
+    /* 키불출: 검색 키불출과 동일한 딜러정보 팝업 열기 */
+    if(v === 'keyissue'){
+      if(typeof _doSearchIssue === 'function'){ _doSearchIssue(idx); }
+      return;
+    }
+    if(v === 'sale'){
+      try{ window.activeSlot = idx; }catch(e){}
+      if(typeof confirmSale === 'function'){ confirmSale(); }
+      return;
+    }
+    try{
+      var s = getSlots();
+      var d = s[idx] || {};
+      if(v === 'safe6'){ d.safe6 = !d.safe6; }
+      else if(v === 'disabled'){ d.disabled = true; }
+      else { d.disabled = false; d.status = v; }
+      s[idx] = d;
+      saveSlots(s);
+      try{ if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){ var fv = {}; fv[idx] = s[idx]; if(typeof _fbV7Update === 'function') _fbV7Update(fv); } }catch(e){}
+      if(typeof refreshSlot === 'function') refreshSlot(idx);
+      if(typeof updateCarCountBadge === 'function') updateCarCountBadge();
+    }catch(err){ try{ console.warn('[quickStatus]', err); }catch(e){} }
+  }
+  function init(){
+    var gw = document.getElementById('gridWrap');
+    if(!gw){ setTimeout(init, 500); return; }
+    gw.addEventListener('contextmenu', function(e){
+      var s = e.target.closest ? e.target.closest('.slot') : null;
+      if(!s) return;
+      var idx = (typeof _slotIdxOf === 'function') ? _slotIdxOf(s) : -1;
+      if(idx < 0) return;
+      e.preventDefault();
+      show(e.clientX, e.clientY, idx);
+    });
+    document.addEventListener('click', function(e){
+      if(menu && menu.style.display === 'block' && !menu.contains(e.target)) hide();
+    });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') hide(); });
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
 </script>
 </body>
