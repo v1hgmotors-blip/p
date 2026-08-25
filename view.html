@@ -1041,7 +1041,7 @@ function sharePage(){
   /* ★ FIX(요청): 카카오 승인 템플릿 버튼 URL엔 변수 1개(k)만 허용돼 db=가 아예
      빠져 있음 — 이 시스템의 모든 업체가 결국 같은 Firebase 프로젝트를 쓰므로,
      db가 없으면 이 기본값으로 안전하게 접속한다(URL에 db가 있으면 그 값이 우선). */
-  if(!db){ db = 'https://hg-motors-default-rtdb.firebaseio.com'; }
+  if(!db){ db = 'https://skv1-cfacc-default-rtdb.firebaseio.com'; }
   try{
     firebase.initializeApp({ databaseURL: db });
     fdb = firebase.database();
