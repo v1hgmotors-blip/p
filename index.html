@@ -2694,10 +2694,17 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <div id="docsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
       <input type="file" id="docFileInput" accept="image/*,application/pdf" multiple
              style="display:none" onchange="handleDocFiles(this.files)">
-      <button type="button" onclick="document.getElementById('docFileInput').click()"
-              style="width:100%;padding:9px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">
-        ➕ 서류/사진 추가 (PDF·이미지)
-      </button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" onclick="pickDocCat('reg')"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #1D4ED8;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📘 등록증 추가</button>
+        <button type="button" onclick="pickDocCat('insp')"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #7C3AED;border-radius:10px;background:#F5F3FF;color:#7C3AED;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📗 점검표 추가</button>
+        <button type="button" onclick="pickDocCat('')"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📎 기타 추가</button>
+      </div>
+      <input type="file" id="docBundleInput" accept="application/pdf" style="display:none" onchange="handleBundlePdf(this.files)">
+      <button type="button" onclick="pickBundlePdf()"
+              style="width:100%;margin-top:6px;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 PDF 자동분리 (1장 등록증·나머지 점검표)</button>
       <div id="docUploadStatus" style="font-size:11px;font-weight:700;color:#7C3AED;margin-top:4px;"></div>
     </div>
 
@@ -11598,6 +11605,12 @@ function _renderDocList(){
     var row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:8px;background:#F1F5F9;border-radius:8px;padding:6px 10px;';
     var icon=(d.type==='pdf')?'📄':'🖼️';
+    /* ★ 카테고리 배지 (표시 전용) — 서류앱과 동일 규격 reg/insp/'' */
+    var _cat=(d.cat==='reg'||d.cat==='insp')?d.cat:'';
+    var catBadge=document.createElement('span');
+    catBadge.style.cssText='flex-shrink:0;font-size:10px;font-weight:900;border-radius:6px;padding:2px 6px;'
+      + (_cat==='reg' ? 'background:#EFF6FF;color:#1D4ED8;' : (_cat==='insp' ? 'background:#F5F3FF;color:#7C3AED;' : 'background:#F1F5F9;color:#64748B;'));
+    catBadge.textContent=(_cat==='reg' ? '📘등록증' : (_cat==='insp' ? '📗점검표' : '📎기타'));
     var nameSpan=document.createElement('div');
     nameSpan.style.cssText='flex:1;min-width:0;font-size:12px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     nameSpan.textContent=icon+' '+(d.name||'서류')+(d.size?' ('+Math.round(d.size/1024)+'KB)':'');
@@ -11620,7 +11633,7 @@ function _renderDocList(){
     delBtn.textContent='🗑️';
     delBtn.style.cssText='flex-shrink:0;border:none;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
     delBtn.onclick=function(){ deleteDoc(id); };
-    row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
+    row.appendChild(catBadge); row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
     box.appendChild(row);
   });
 }
@@ -11652,6 +11665,24 @@ function deleteDoc(id){
   _docDelBtn.className='mini-confirm-ok clear'; _docDelBtn.style.cssText=''; _docDelBtn.textContent='삭제';
   document.getElementById('miniConfirmOv').classList.add('show');
 }
+/* ★ 서류 개수 경로(kd_doc_counts) 동기화 — 서류앱과 동일 규격 {reg,insp,other}.
+   서류앱은 목록에서 이 경로로 서류 유무·개수를 표시하므로, 주차현황판에서 서류를
+   추가/삭제/이전할 때도 반드시 이 경로를 갱신해야 서류앱 목록에 즉시 반영된다.
+   라이브 kd_docs를 다시 읽어 계산하므로 로컬 캐시 상태와 무관하게 항상 정확하다. */
+function _pbSyncDocCounts(key, cb){
+  var code=_pbCode();
+  if(!key || !code || typeof fbDb==='undefined' || !fbDb){ if(cb) cb(); return; }
+  var roomRef=fbDb.ref('kd_rooms/'+code);
+  roomRef.child('kd_docs/'+key).once('value').then(function(sn){
+    var m=sn.val()||{}, reg=0, insp=0, other=0;
+    Object.keys(m).forEach(function(id){ var d=m[id]; if(!d) return;
+      var ct=(d.cat||''); if(ct==='reg') reg++; else if(ct==='insp') insp++; else other++; });
+    var total=reg+insp+other;
+    var cref=roomRef.child('kd_doc_counts/'+key);
+    var op = total>0 ? cref.set({reg:reg, insp:insp, other:other}) : cref.remove();
+    op.then(function(){ if(cb) cb(); }).catch(function(){ if(cb) cb(); });
+  }).catch(function(){ if(cb) cb(); });
+}
 function _doDeleteDoc(id){
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
@@ -11665,6 +11696,7 @@ function _doDeleteDoc(id){
     delete _curDocs[id];
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
+    _pbSyncDocCounts(key);   /* ★ 서류앱 목록 반영용 개수 경로 갱신 */
     /* ★ 남은 서류가 없으면 📄 플래그도 함께 제거 */
     if(!Object.keys(_curDocs||{}).length && _docFlags[key]){
       delete _docFlags[key];
@@ -11676,12 +11708,24 @@ function _doDeleteDoc(id){
   }).catch(function(){ showAlert('⚠️ 서류 삭제에 실패했습니다.'); });
 }
 
+/* ★ 서류 카테고리 선택 — 서류앱과 동일 규격(reg=차량등록증 / insp=성능점검표 / ''=기타).
+   선택한 카테고리를 기억한 뒤 파일 선택창을 연다. */
+var _pendingDocCat = '';
+function pickDocCat(cat){
+  _pendingDocCat = (cat==='reg'||cat==='insp') ? cat : '';
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  if(!_docKeyFromCar(car)){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
+  var fi=document.getElementById('docFileInput');
+  if(fi) fi.click();
+}
 function handleDocFiles(files){
   if(!files||!files.length) return;
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
   var key=_docKeyFromCar(car);
   if(!key){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); document.getElementById('docFileInput').value=''; return; }
+  var cat = (_pendingDocCat==='reg'||_pendingDocCat==='insp') ? _pendingDocCat : '';  /* ★ 이번 첨부에 적용할 카테고리 */
   var statusEl=document.getElementById('docUploadStatus');
   var arr=Array.prototype.slice.call(files);
   var idx=0;
@@ -11700,12 +11744,12 @@ function handleDocFiles(files){
         next(); return;
       }
       var r=new FileReader();
-      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,next); };
+      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,cat,next); };
       r.onerror=function(){ next(); };
       r.readAsDataURL(f);
     } else if(/^image\//.test(f.type)){
       _compressDocImage(f, function(dataUrl, size){
-        _saveDoc(key, f.name, 'image', dataUrl, size, next);
+        _saveDoc(key, f.name, 'image', dataUrl, size, cat, next);
       });
     } else {
       showAlert('⚠️ 지원하지 않는 파일 형식입니다: '+f.name);
@@ -11713,6 +11757,100 @@ function handleDocFiles(files){
     }
   }
   next();
+}
+
+/* ══ 묶음 PDF 자동분리 (1장=등록증 reg / 나머지=성능점검표 insp) — 서류앱과 동일 규격 ══
+   pdf-lib은 필요할 때만 CDN에서 로드한다. */
+function _ensurePdfLib(cb){
+  if(window.PDFLib){ cb(true); return; }
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+  s.onload=function(){ cb(!!window.PDFLib); };
+  s.onerror=function(){ cb(false); };
+  document.head.appendChild(s);
+}
+function _u8ToDataUrl(u8){
+  var bin='', chunk=0x8000;
+  for(var i=0;i<u8.length;i+=chunk){ bin+=String.fromCharCode.apply(null, u8.subarray(i, i+chunk)); }
+  return 'data:application/pdf;base64,'+btoa(bin);
+}
+function _splitBundlePdf(file, onDone){
+  _ensurePdfLib(function(ok){
+    if(!ok){ onDone('lib'); return; }
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        window.PDFLib.PDFDocument.load(r.result).then(function(src){
+          var n=src.getPageCount();
+          if(!n){ onDone('empty'); return; }
+          var base=(file.name||'서류').replace(/\.pdf$/i,'');
+          window.PDFLib.PDFDocument.create().then(function(regDoc){
+            regDoc.copyPages(src,[0]).then(function(pg){
+              regDoc.addPage(pg[0]);
+              regDoc.save().then(function(regBytes){
+                var reg={ data:_u8ToDataUrl(regBytes), size:regBytes.length, name:base+'_등록증.pdf' };
+                if(n<2){ onDone(null,{reg:reg, insp:null, pages:n}); return; }
+                var idxs=[]; for(var i=1;i<n;i++) idxs.push(i);
+                window.PDFLib.PDFDocument.create().then(function(inspDoc){
+                  inspDoc.copyPages(src, idxs).then(function(ip){
+                    ip.forEach(function(p){ inspDoc.addPage(p); });
+                    inspDoc.save().then(function(inspBytes){
+                      onDone(null,{ reg:reg, insp:{ data:_u8ToDataUrl(inspBytes), size:inspBytes.length, name:base+'_성능점검표.pdf' }, pages:n });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        }).catch(function(){ onDone('parse'); });
+      }catch(e){ onDone('parse'); }
+    };
+    r.onerror=function(){ onDone('read'); };
+    r.readAsArrayBuffer(file);
+  });
+}
+function pickBundlePdf(){
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  if(!_docKeyFromCar(car)){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); return; }
+  var fi=document.getElementById('docBundleInput'); if(fi){ fi.value=''; fi.click(); }
+}
+function handleBundlePdf(files){
+  if(!files||!files.length) return;
+  var f=files[0];
+  var fi=document.getElementById('docBundleInput'); if(fi) fi.value='';
+  function _err(m){ showAlert(m); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); }
+  var isPdf=/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name);
+  if(!isPdf){ _err('⚠️ 묶음 분리는 PDF만 가능합니다.'); return; }
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  var key=_docKeyFromCar(car);
+  if(!key){ _err('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
+  var statusEl=document.getElementById('docUploadStatus');
+  if(statusEl) statusEl.textContent='⏳ 묶음 PDF 분리 중...';
+  _splitBundlePdf(f, function(err, res){
+    if(err){
+      if(statusEl) statusEl.textContent='';
+      _err(err==='lib' ? '⚠️ 분리 도구 로드 실패 (인터넷 확인)' : '⚠️ PDF 분리 실패 — 개별 첨부를 이용하세요.');
+      return;
+    }
+    var tasks=[], skip=[];
+    if(res.reg){ (res.reg.size<=4*1024*1024) ? tasks.push({cat:'reg',d:res.reg}) : skip.push('등록증'); }
+    if(res.insp){ (res.insp.size<=4*1024*1024) ? tasks.push({cat:'insp',d:res.insp}) : skip.push('점검표'); }
+    var i=0;
+    function next(){
+      if(i>=tasks.length){
+        var msg = (res.pages<2) ? '✅ 등록증 1건 등록 (1페이지 PDF)' : ('✅ 묶음 분리 완료 — 등록증 1 · 점검표 '+(res.pages-1));
+        if(skip.length) msg+=' · ⚠️ '+skip.join('·')+' 4MB 초과 제외';
+        if(statusEl){ statusEl.textContent=msg; setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000); }
+        return;
+      }
+      var t=tasks[i++];
+      if(statusEl) statusEl.textContent='⏳ 저장 중... ('+i+'/'+tasks.length+')';
+      _saveDoc(key, t.d.name, 'pdf', t.d.data, t.d.size, t.cat, next);
+    }
+    next();
+  });
 }
 
 /* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/common_docs 에 저장, 전 차량 공통 ══ */
@@ -11817,11 +11955,13 @@ function _compressDocImage(file, cb){
   reader.readAsDataURL(file);
 }
 
-function _saveDoc(key, name, type, dataUrl, size, cb){
+function _saveDoc(key, name, type, dataUrl, size, cat, cb){
+  /* ★ 하위호환: 예전 시그니처 _saveDoc(...,size,cb)로 호출돼 cat 자리에 함수가 오면 보정 */
+  if(typeof cat==='function' && cb===undefined){ cb=cat; cat=''; }
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb){ showAlert('⚠️ Firebase 연결 후 서류를 첨부할 수 있습니다.'); if(cb) cb(); return; }
   var docId='d'+Date.now()+Math.floor(Math.random()*1000);
-  var meta={ name:name, type:type, size:size, at:Date.now() };
+  var meta={ name:name, type:type, size:size, at:Date.now(), cat:(cat==='reg'||cat==='insp')?cat:'' };  /* ★ 서류앱과 동일 규격 */
   var updates={};
   updates['kd_docs/'+key+'/'+docId]=meta;
   updates['kd_docs_data/'+key+'/'+docId]=dataUrl;
@@ -11830,6 +11970,7 @@ function _saveDoc(key, name, type, dataUrl, size, cb){
     _curDocs[docId]=Object.assign({}, meta, {data:dataUrl});
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
+    _pbSyncDocCounts(key);   /* ★ 서류앱 목록 반영용 개수 경로 갱신 */
     /* ★ 서류첨부 플래그 갱신 (📄 아이콘 표시용, 실패해도 서류 저장 자체엔 영향 없음) */
     if(!_docFlags[key]){
       _docFlags[key]=true;
@@ -11881,8 +12022,10 @@ function _migrateCarDocs(oldCarText, newCarText){
       updates['kd_docs_data/'+oldKey]=null;
       updates['kd_doc_flags/'+newKey]=true;
       updates['kd_doc_flags/'+oldKey]=null;
+      updates['kd_doc_counts/'+oldKey]=null;   /* ★ 옛 키 개수 제거 (새 키는 아래서 재계산) */
       roomRef.update(updates).then(function(){
         console.log('[서류 이전] "'+oldCarText+'" → "'+newCarText+'" ('+Object.keys(oldMeta).length+'건)');
+        _pbSyncDocCounts(newKey);   /* ★ 새 키 개수 경로 재계산 — 서류앱 목록 반영 */
         delete _docFlags[oldKey];
         _docFlags[newKey]=true;
         _saveDocFlagsCache();
@@ -11938,6 +12081,7 @@ function _deleteCarDocs(carText){
     updates['kd_docs/'+key]=null;
     updates['kd_docs_data/'+key]=null;
     updates['kd_doc_flags/'+key]=null;
+    updates['kd_doc_counts/'+key]=null;   /* ★ 개수 경로도 정리 — 서류앱 목록에 잔상 방지 */
     if(!liveMeta || !Object.keys(liveMeta).length){
       /* 실제 서류가 없으면 보관할 것도 없음 — 플래그만 정리하고 끝 */
       roomRef.update(updates).catch(function(e){ console.warn('[서류 정리 실패]', e); });

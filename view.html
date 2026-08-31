@@ -168,7 +168,7 @@
     <!-- ★ 서류 다운로드/공유 + 판매확인서 (현재 앱은 서류를 종류별로 구분 저장하지 않으므로 통합 버튼 사용) -->
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
       <button onclick="docAction('download')" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
-      <button onclick="docAction('share')" style="flex:1;min-width:0;padding:9px 4px;background:#6D28D9;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📤 서류공유</button>
+      <button id="inspDocBtn" onclick="downloadInspDocs()" style="flex:1;min-width:0;padding:9px 4px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📗 성능점검표</button>
       <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
     </div>
     <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
@@ -657,13 +657,13 @@ function sharePage(){
       var none=document.getElementById('docNoneMsg'); if(none) none.style.display='none';
       try{
         var _dl=row&&row.querySelector('button[onclick*="download"]'); if(_dl) _dl.style.display='';
-        var _sh=row&&row.querySelector('button[onclick*="share"]'); if(_sh) _sh.style.display='';
+        var _sh=row&&row.querySelector('button[onclick*="Insp"]'); if(_sh) _sh.style.display='';
       }catch(e){}
     } else {
       var row2=document.getElementById('docBtnRow');
       if(row2){
         var dl=row2.querySelector('button[onclick*="download"]'); if(dl) dl.style.display='none';
-        var sh=row2.querySelector('button[onclick*="share"]'); if(sh) sh.style.display='none';
+        var sh=row2.querySelector('button[onclick*="Insp"]'); if(sh) sh.style.display='none';
       }
       var none2=document.getElementById('docNoneMsg'); if(none2) none2.style.display='block';
     }
@@ -727,12 +727,6 @@ function sharePage(){
   };
   function _setDocStatus(msg){
     var el=document.getElementById('docStatus'); if(el) el.textContent=msg||'';
-  }
-  function _dataUrlToBlob(dataUrl){
-    var parts=dataUrl.split(','), mime=(parts[0].match(/:(.*?);/)||[])[1]||'application/octet-stream';
-    var bin=atob(parts[1]), n=bin.length, u8=new Uint8Array(n);
-    while(n--) u8[n]=bin.charCodeAt(n);
-    return new Blob([u8], {type:mime});
   }
   function _docsArray(){
     if(!_carDocs) return [];
@@ -803,6 +797,21 @@ function sharePage(){
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
     _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
   };
+  /* ★ 성능점검표(cat==='insp') 서류만 골라 다운로드 — 서류공유 버튼 대체 */
+  window.downloadInspDocs = function(){
+    /* 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 재실행 */
+    if(!_docDataLoaded && _docKeyCur && _carDocs){
+      _setDocStatus('⏳ 서류 불러오는 중...');
+      _ensureDocData(function(){ _setDocStatus(''); window.downloadInspDocs(); });
+      return;
+    }
+    if(!_carDocs){ _setDocStatus('첨부된 출고서류가 없습니다.'); return; }
+    var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
+      .filter(function(d){ return d && d.data && d.cat==='insp'; });
+    if(!docs.length){ _setDocStatus('등록된 성능점검표가 없습니다.'); return; }
+    docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'성능점검표'+(i+1)); },i*300); });
+    _setDocStatus('📗 성능점검표 '+docs.length+'개 다운로드됨');
+  };
   window.docAction = function docAction(mode){
     /* ★ 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 진행 */
     if(!_docDataLoaded && _docKeyCur && _carDocs){
@@ -815,27 +824,6 @@ function sharePage(){
     _setDocStatus('');
     if(mode==='download'){
       _renderPickList();
-    } else if(mode==='share'){
-      try{
-        var files=docs.map(function(d){
-          var blob=_dataUrlToBlob(d.data);
-          var nm=d.name||'출고서류';
-          return new File([blob], nm, {type:blob.type});
-        });
-        if(navigator.canShare && navigator.canShare({files:files})){
-          navigator.share({files:files, title:'출고서류', text:'출고서류를 공유합니다.'})
-            .then(function(){ _setDocStatus('📤 공유했습니다.'); })
-            .catch(function(e){ if(e&&e.name!=='AbortError') _setDocStatus('공유가 취소되었습니다.'); });
-        } else {
-          docs.forEach(function(d,idx){
-            setTimeout(function(){
-              var a=document.createElement('a'); a.href=d.data; a.download=d.name||('출고서류'+(idx+1));
-              document.body.appendChild(a); a.click(); a.remove();
-            }, idx*300);
-          });
-          _setDocStatus('이 기기는 파일 공유를 지원하지 않아 다운로드했습니다.');
-        }
-      }catch(e){ _setDocStatus('공유에 실패했습니다.'); }
     }
   };
 
