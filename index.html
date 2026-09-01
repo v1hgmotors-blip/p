@@ -8451,20 +8451,42 @@ function _encarUpdateBtn(idx){
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
 /* ★ 엔카사진 예약 알림음 (Web Audio API, 외부 파일 불필요) */
+/* ★ 알림음 오디오 컨텍스트를 1개만 유지 + 사용자 조작 때 잠금해제
+   (브라우저 자동재생 정책 때문에, 화면을 한 번 터치/클릭해두면 알림음이 확실히 울림) */
+var _encarAudioCtx = null;
+function _encarUnlockAudio(){
+  try{
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
+    if(_encarAudioCtx.state === 'suspended') _encarAudioCtx.resume();
+  }catch(e){}
+}
+try{
+  document.addEventListener('touchstart', _encarUnlockAudio, {passive:true});
+  document.addEventListener('click', _encarUnlockAudio, {passive:true});
+}catch(e){}
+/* ★ 엔카 알림음 — 아주 크게: square 파형(고조파가 많아 체감 음량이 훨씬 큼) + 게인 최대 + 삐 5연속 */
 function _encarPlayAlertBeep(){
   try{
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if(!Ctx) return;
-    var ctx = new Ctx();
-    [0, 220].forEach(function(delayMs, idx){
+    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
+    var ctx = _encarAudioCtx;
+    if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
+    var delays = [0, 300, 600, 900, 1200];
+    delays.forEach(function(delayMs){
       setTimeout(function(){
+        var t = ctx.currentTime;
         var o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = 880;
-        g.gain.setValueAtTime(0.0001, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+        o.type = 'square';            /* 사인보다 훨씬 크고 날카롭게 들림 */
+        o.frequency.value = 1000;     /* 귀에 잘 꽂히는 경보음 대역 */
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(1.0, t + 0.008);  /* 최대 음량 */
+        g.gain.setValueAtTime(1.0, t + 0.20);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
         o.connect(g); g.connect(ctx.destination);
-        o.start(); o.stop(ctx.currentTime + 0.3);
+        o.start(t); o.stop(t + 0.30);
       }, delayMs);
     });
   }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
@@ -8483,7 +8505,7 @@ function _encarApplyBlinks(){
     }
   }
 }
-/* ★ 엔카사진 예약 알림음: 예약시간(±10분 이내)이면 '사진완료' 누를 때까지 10초마다 반복 재생 */
+/* ★ 엔카사진 예약 알림음: 예약 30분 전 ~ 예약시각 1시간 후면 '사진완료' 누를 때까지 30초마다 반복 재생 */
 var _encarSoundTimer = null;
 function _encarApplySounds(){
   var s=getSlots();
@@ -8496,17 +8518,17 @@ function _encarApplySounds(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
+    if(diffMin <= 30 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 30분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
   }
   if(anyDue) _encarPlayAlertBeep();
 }
 function _encarStartSoundTimer(){
   if(_encarSoundTimer) clearInterval(_encarSoundTimer);
-  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격 */
+  _encarSoundTimer = setInterval(_encarApplySounds, 30*1000); /* ★ 30초 간격 */
 }
 _encarStartSoundTimer();
 
-/* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 10분 전부터 '사진완료' 누를 때까지 2분 간격으로 전송 */
+/* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 30분 전부터 '사진완료' 누를 때까지 10분 간격으로 전송 */
 function _postEncarReserveNtfy(topic, car, timeStr){
   if(!topic) return;
   try {
@@ -8541,9 +8563,9 @@ function _encarApplyNtfy(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin > 10 || diffMin <= -60) continue; /* ★ 예약 10분 전 ~ 예약시각 1시간 후까지만 */
+    if(diffMin > 30 || diffMin <= -60) continue; /* ★ 예약 30분 전 ~ 예약시각 1시간 후까지만 */
     var last = _encarNtfyLastSent[i] || 0;
-    if(now - last < 2*60*1000) continue; /* ★ 2분 간격 제어 */
+    if(now - last < 10*60*1000) continue; /* ★ 10분 간격 제어 */
     _encarNtfyLastSent[i] = now;
     var slotTopic = String((s[i]&&s[i].topic)||'').trim();
     var timeStr = (ec.date||'') + ' ' + (ec.time||'');
