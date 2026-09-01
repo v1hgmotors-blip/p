@@ -167,7 +167,7 @@
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
     <!-- ★ 서류 다운로드/공유 + 판매확인서 (현재 앱은 서류를 종류별로 구분 저장하지 않으므로 통합 버튼 사용) -->
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
-      <button onclick="docAction('download')" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">⬇️ 서류다운로드</button>
+      <button id="regDocBtn" onclick="downloadRegDocs()" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📘 차량등록증</button>
       <button id="inspDocBtn" onclick="downloadInspDocs()" style="flex:1;min-width:0;padding:9px 4px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📗 성능점검표</button>
       <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
     </div>
@@ -656,13 +656,13 @@ function sharePage(){
       var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
       var none=document.getElementById('docNoneMsg'); if(none) none.style.display='none';
       try{
-        var _dl=row&&row.querySelector('button[onclick*="download"]'); if(_dl) _dl.style.display='';
+        var _dl=row&&row.querySelector('button[onclick*="Reg"]'); if(_dl) _dl.style.display='';
         var _sh=row&&row.querySelector('button[onclick*="Insp"]'); if(_sh) _sh.style.display='';
       }catch(e){}
     } else {
       var row2=document.getElementById('docBtnRow');
       if(row2){
-        var dl=row2.querySelector('button[onclick*="download"]'); if(dl) dl.style.display='none';
+        var dl=row2.querySelector('button[onclick*="Reg"]'); if(dl) dl.style.display='none';
         var sh=row2.querySelector('button[onclick*="Insp"]'); if(sh) sh.style.display='none';
       }
       var none2=document.getElementById('docNoneMsg'); if(none2) none2.style.display='block';
@@ -811,6 +811,21 @@ function sharePage(){
     if(!docs.length){ _setDocStatus('등록된 성능점검표가 없습니다.'); return; }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'성능점검표'+(i+1)); },i*300); });
     _setDocStatus('📗 성능점검표 '+docs.length+'개 다운로드됨');
+  };
+  /* ★ 차량등록증(cat==='reg') 서류만 골라 다운로드 */
+  window.downloadRegDocs = function(){
+    /* 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 재실행 */
+    if(!_docDataLoaded && _docKeyCur && _carDocs){
+      _setDocStatus('⏳ 서류 불러오는 중...');
+      _ensureDocData(function(){ _setDocStatus(''); window.downloadRegDocs(); });
+      return;
+    }
+    if(!_carDocs){ _setDocStatus('첨부된 출고서류가 없습니다.'); return; }
+    var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
+      .filter(function(d){ return d && d.data && d.cat==='reg'; });
+    if(!docs.length){ _setDocStatus('등록된 차량등록증이 없습니다.'); return; }
+    docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'차량등록증'+(i+1)); },i*300); });
+    _setDocStatus('📘 차량등록증 '+docs.length+'개 다운로드됨');
   };
   window.docAction = function docAction(mode){
     /* ★ 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 진행 */
