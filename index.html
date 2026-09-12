@@ -3072,6 +3072,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
 /* ═══════════════════════════════════════════
    주차현황판 v6
@@ -3160,6 +3161,8 @@ function _fbSettingsRetrySchedule(){
 
 function _fbSafeUpdate(updObj, label){
   if(!fbSlotsRef) return;
+  /* ★ LOWDL: 내 업로드 TS 기록 → 내 변경엔 '새 데이터' 모달 안뜨게 */
+  try{ if(updObj && updObj._localTs){ _myUploadTs = parseInt(updObj._localTs); _lastAppliedTs = _myUploadTs; } }catch(e){}
   fbSlotsRef.update(updObj)
     .then(function(){
       _fbFailStreak = 0;
@@ -3241,6 +3244,8 @@ window._recoverPreOverwrite = function(n){
 };
 function _doFbSafeSet(dataObj,label){
   if(!fbSlotsRef) return;
+  /* ★ LOWDL: 내 업로드 TS 기록 → 내 변경엔 '새 데이터' 모달 안뜨게 */
+  try{ if(dataObj && dataObj._localTs){ _myUploadTs = parseInt(dataObj._localTs); _lastAppliedTs = _myUploadTs; } }catch(e){}
   /* [2층] 덮어쓰기 직전 로컬 스냅샷 저장 (복구 그물) */
   _savePreOverwriteSnapshot(label);
   /* [1층] 빠진 차량슬롯 자동 복구 — 의도된 전체초기화(_cleared)는 제외 */
@@ -3296,6 +3301,8 @@ function _fbRetryFlush(){
   /* ★ FIX: 재시도 시 _localTs 갱신 */
   if(item.upd && typeof item.upd === 'object'){
     item.upd._localTs = _tsNow();
+    /* ★ LOWDL: 오프라인 재전송도 '내 변경' → TS 기록으로 자기 모달 방지 */
+    try{ _myUploadTs = parseInt(item.upd._localTs); _lastAppliedTs = _myUploadTs; }catch(e){}
   }
   var op = item.isSet ? fbSlotsRef.set(item.upd) : fbSlotsRef.update(item.upd);
   op.then(function(){
@@ -8751,6 +8758,7 @@ function onStorageModeSwitchChange(isLocalOnly){
   try{ _stopLiteListeners(); }catch(e){}
     try{ _stopLiteListeners(); }catch(e){}
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
+  try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
     try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
@@ -9325,6 +9333,7 @@ try{ setInterval(_scanDuplicates, 2500); }catch(e){}
 
 function swapSlotsData(a, b){
   if(a===b) return;
+  if(_guardRemotePending()) return; /* ★ LOWDL: 새 데이터 확인 전 드래그이동 차단 */
   /* ★ ID 위치 고정 — 데이터(값)만 이동/교환 */
   var idA=_gidx2id(a), idB=_gidx2id(b);
   if(!idA||!idB) return;
@@ -12702,6 +12711,7 @@ function restoreSlot(){
 /* ══ 히스토리 끝 ══ */
 function saveSlot(){
   if(activeSlot===null)return;
+  if(_guardRemotePending()) return; /* ★ LOWDL: 새 데이터 확인 전 편집 차단 */
   if(window._pbUploadLock){ _uploadLockToast(); return; } /* ★ 업로드 중 저장 잠금 */
   var car=document.getElementById('mCarInput').value.trim();
   /* ★ BUG FIX(중복 저장 제거): 이전에는 여기서 키번호를 즉시 저장+Firebase 전송을 했는데,
@@ -12974,6 +12984,7 @@ function miniConfirmOk(){
 
 function clearSlot(){
   if(activeSlot===null)return;
+  if(_guardRemotePending()) return; /* ★ LOWDL: 새 데이터 확인 전 편집 차단 */
   if(window._pbUploadLock){ _uploadLockToast(); return; } /* ★ 업로드 중 저장 잠금 */
   var s=getSlots();
   _backupSlot(activeSlot); /* ★ 초기화 전 백업 */
@@ -12994,7 +13005,7 @@ function clearSlot(){
   if(_clearedCar && typeof _deleteCarDocs==='function') _deleteCarDocs(_clearedCar);
   closeModal();
 }
-function clearAllSlots(){ openResetConfirm(); } /* ★ 비밀번호 모달로 통합 */
+function clearAllSlots(){ if(_guardRemotePending()) return; openResetConfirm(); } /* ★ 비밀번호 모달로 통합 (LOWDL 가드) */
 
 /* ── 전체초기화 비밀번호 ── */
 var LS_RESET_PW = 'pb_reset_pw';
@@ -13048,6 +13059,7 @@ function confirmClearAll(){
   try{ if(fbRef)         fbRef.off('value'); }catch(e){}
   try{ _stopLiteListeners(); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
+  try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
   try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
@@ -13128,6 +13140,7 @@ function confirmClearAll(){
       'reset_app_' + Date.now()
     );
     var fbDb2 = firebase.database(fbApp2);
+    try{ if(firebase.auth){ firebase.auth(fbApp2).signInAnonymously().catch(function(){}); } }catch(e){}
     fbDb2.ref('kd_rooms/' + _PB_DEFAULTS.code).set(null).then(function(){
       console.log('[RESET] Firebase 데이터 삭제 완료');
       _finishReset();
@@ -13158,6 +13171,7 @@ function confirmLocalClear() {
   try{ if(fbRef)         fbRef.off('value'); }catch(e){}
   try{ _stopLiteListeners(); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
+  try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
   try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
@@ -13925,9 +13939,17 @@ function saveAndConnect(){
 }
 /* ★★ FIX: 슬롯 실시간 리스너를 별도 함수로 분리
    — 새 기기에서 once() 완료 후 호출, 기존 기기에서 바로 호출 */
-function _registerSlotsOnListener(){
-  if(!fbSlotsRef) return;
-  fbSlotsRef.on('value',function(snap){
+/* ★★ 저다운로드 모드(LOW-DOWNLOAD) 전역 상태 ★★
+   - _lowDlMode: true면 실시간 전체구독 대신 "TS감시 + 확인 후 1회 로드" 방식
+   - 기존 로직은 그대로 두고, 데이터 적용 함수(_applySlotSnapshot)를 재사용 */
+var _lowDlMode = true;              /* ★ 기본 ON — 다운로드 절약. false면 기존 실시간 방식 */
+var _pendingRemoteUpdate = false;   /* 확인 대기 중인 원격 변경 존재 여부 */
+var _lastAppliedTs = 0;             /* 마지막으로 화면에 적용한 _localTs */
+var _tsWatchRef = null;             /* _localTs 감시용 ref */
+var _myUploadTs = 0;                /* 내가 방금 업로드한 TS(내 변경엔 모달 안뜨게) */
+
+/* 기존 on('value') 콜백 본체 — 이름만 붙여 재사용 (로직 변경 없음) */
+function _applySlotSnapshot(snap){
     window._fbGotRealData = true;   /* ★ Firebase 실제 데이터 수신됨 (스플래시 해제 판단용) */
     /* ★ 복원 보호: 복원 완료 후 30초간 Firebase 덮어쓰기 차단 */
     var restoreTs = parseInt(localStorage.getItem('pb_restore_pending')||'0');
@@ -14181,7 +14203,10 @@ function _registerSlotsOnListener(){
       }
     }catch(e){}
     _fbSyncMarkReady('firebase-slots');
-  },function(err){
+}
+
+/* ★ 슬롯 리스너 오류 처리 (공통) */
+function _slotsListenerError(err){
     console.warn('[슬롯동기화]',err);
     /* ★ 슬롯 리스너 오류 시 15초 후 재연결 */
     setTimeout(function(){
@@ -14189,7 +14214,96 @@ function _registerSlotsOnListener(){
       var c=localStorage.getItem(LS_CODE)||'';
       if(u&&c){ connectFb(u,c); }
     }, 15000);
-  });
+}
+
+/* ★★ 원격에서 슬롯 1회 로드 → 기존 로직으로 적용 (확인 눌렀을 때 호출) ★★ */
+function _loadSlotsOnce(reason){
+  if(!fbSlotsRef) return;
+  fbSlotsRef.once('value').then(function(snap){
+    try{
+      var d = snap.val();
+      var ts = (d && d._localTs) ? parseInt(d._localTs) : 0;
+      _lastAppliedTs = ts || _lastAppliedTs;
+    }catch(e){}
+    _applySlotSnapshot(snap);   /* 기존 검증된 로직 그대로 재사용 */
+    _pendingRemoteUpdate = false;
+    _hideRemoteUpdateModal();
+    console.log('[LOWDL] 슬롯 1회 로드 완료 ('+(reason||'')+')');
+  }).catch(function(err){ _slotsListenerError(err); });
+}
+
+/* ★★ '새 데이터 있음' 모달 표시/숨김 ★★ */
+function _showRemoteUpdateModal(){
+  _pendingRemoteUpdate = true;
+  var ov = document.getElementById('_remoteUpdateOv');
+  if(ov){ ov.style.display='flex'; ov.classList.add('show'); return; }
+  ov = document.createElement('div');
+  ov.id = '_remoteUpdateOv';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:16px;max-width:340px;width:86%;padding:26px 22px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35);';
+  var icon = document.createElement('div');
+  icon.textContent = '🔔';
+  icon.style.cssText = 'font-size:44px;margin-bottom:10px;';
+  var title = document.createElement('div');
+  title.textContent = '새로운 데이터가 있습니다';
+  title.style.cssText = 'font-size:19px;font-weight:800;color:#1a1a1a;margin-bottom:8px;';
+  var desc = document.createElement('div');
+  desc.textContent = '다른 기기에서 변경된 내용이 있습니다. 확인을 누르면 최신 상태로 갱신됩니다.';
+  desc.style.cssText = 'font-size:14px;color:#555;line-height:1.5;margin-bottom:20px;';
+  var btn = document.createElement('button');
+  btn.textContent = '✅ 확인 (최신 데이터 불러오기)';
+  btn.style.cssText = 'width:100%;padding:14px;border:none;border-radius:12px;background:#2563eb;color:#fff;font-size:16px;font-weight:700;cursor:pointer;';
+  btn.onclick = function(){ _loadSlotsOnce('user-confirm'); };
+  box.appendChild(icon); box.appendChild(title); box.appendChild(desc); box.appendChild(btn);
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+}
+function _hideRemoteUpdateModal(){
+  var ov = document.getElementById('_remoteUpdateOv');
+  if(ov){ ov.classList.remove('show'); ov.style.display='none'; }
+}
+
+/* ★★ 편집 차단 가드 — 확인 대기 중이면 편집 막고 모달 띄움 ★★ */
+function _guardRemotePending(){
+  if(_lowDlMode && _pendingRemoteUpdate){
+    _showRemoteUpdateModal();
+    try{ showToast('🔔 먼저 새 데이터를 확인해주세요','info'); }catch(e){}
+    return true;
+  }
+  return false;
+}
+
+/* ★★ 저다운로드 리스너 등록 — 무거운 슬롯 대신 _localTs(작은 값)만 감시 ★★ */
+function _registerSlotsOnListener(){
+  if(!fbSlotsRef) return;
+
+  if(!_lowDlMode){
+    /* 기존 실시간 방식 (원하면 _lowDlMode=false로 되돌림) */
+    fbSlotsRef.on('value', _applySlotSnapshot, _slotsListenerError);
+    return;
+  }
+
+  /* --- 저다운로드 모드 --- */
+  /* 1) 최초 1회: 현재 슬롯 전체를 once로 로드 (기존 로직 적용) */
+  _loadSlotsOnce('initial');
+
+  /* 2) 이후: _localTs(숫자 하나)만 실시간 감시 → 바뀌면 모달 */
+  try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
+  _tsWatchRef = fbDb.ref('kd_rooms/'+ (localStorage.getItem(LS_CODE)||'') +'/pb_slots/_localTs');
+  _tsWatchRef.on('value', function(tsSnap){
+    var remoteTs = parseInt(tsSnap.val()||'0');
+    if(!remoteTs) return;
+    /* 내가 방금 올린 변경이면 무시 (모달 안뜸) */
+    if(remoteTs === _myUploadTs){ _lastAppliedTs = remoteTs; return; }
+    /* 아직 한 번도 적용 안 했으면 기준선만 설정 */
+    if(!_lastAppliedTs){ _lastAppliedTs = remoteTs; return; }
+    /* 원격이 더 최신 → 새 데이터 있음 */
+    if(remoteTs > _lastAppliedTs){
+      console.log('[LOWDL] 원격 변경 감지 remoteTs='+remoteTs+' > '+_lastAppliedTs);
+      _showRemoteUpdateModal();
+    }
+  }, _slotsListenerError);
 }
 
 function connectFb(url,code){
@@ -14285,6 +14399,14 @@ function connectFb(url,code){
       fbApp=firebase.initializeApp({databaseURL:url},nm);
     }
     fbDb=firebase.database(fbApp);
+    /* ★ 익명 로그인 — 보안 규칙(auth != null) 통과용. 로그인 창 없이 자동 실행됨. */
+    try{
+      if(firebase.auth){
+        firebase.auth(fbApp).signInAnonymously()
+          .then(function(){ console.log('[Auth] 익명 로그인 성공'); })
+          .catch(function(e){ console.warn('[Auth] 익명 로그인 실패 — 콘솔에서 익명 인증을 켰는지 확인하세요:', e && e.code, e && e.message); });
+      }
+    }catch(e){ console.warn('[Auth] 익명 로그인 예외:', e); }
     fbRef=fbDb.ref('kd_rooms/'+code); /* (호환용 유지 — 아래 .off 정리 코드가 참조) */
     isFirstLoad=true; prevUpdatedAt=0; dispatchSet={};
     /* ★★★ 방 전체 대신 작은 필드만 구독 (RTDB 다운로드 비용 폭증 수정) */
@@ -16000,6 +16122,8 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
       _gridConfig: _getGridConfig(),
       _localTs: _restoreTs
     });
+    /* ★ LOWDL: 복원도 '내 변경'이므로 TS 기록 → 복원 후 자기 모달 방지 */
+    try{ _myUploadTs = parseInt(_restoreTs); _lastAppliedTs = _myUploadTs; }catch(e){}
     var _localRestoreTimer = setTimeout(function(){
       console.warn('[로컬복원] Firebase set 타임아웃 → 직접 연결');
       doConnect();
@@ -16010,6 +16134,7 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
       try{
         var _newApp = firebase.initializeApp({ databaseURL: _newUrl+'/' }, 'restore_'+Date.now());
         var _newDb  = firebase.database(_newApp);
+        try{ if(firebase.auth){ firebase.auth(_newApp).signInAnonymously().catch(function(){}); } }catch(e){}
         _newDb.ref('kd_rooms/'+useCode+'/pb_slots').set(_restorePayload)
           .then(function(){
             clearTimeout(_localRestoreTimer);
@@ -16268,6 +16393,7 @@ function showFbBackupList(){
       try{ tmpApp=firebase.app(tmpName); }catch(e){}
       if(!tmpApp) tmpApp=firebase.initializeApp({databaseURL:tmpUrl},tmpName);
       tmpDb=firebase.database(tmpApp);
+      try{ if(firebase.auth){ firebase.auth(tmpApp).signInAnonymously().catch(function(){}); } }catch(e){}
       _loadList(tmpDb, tmpCode);
     }catch(e2){
       while(listDiv.firstChild) listDiv.removeChild(listDiv.firstChild);
@@ -16360,7 +16486,7 @@ function _doShowFbBackupList(useListCode){
   else { try{
     var tu=localStorage.getItem(LS_URL)||_PB_DEFAULTS.url; var tn='pb_tmp2_'+Date.now(); var ta,td;
     try{ ta=firebase.app(tn); }catch(e){} if(!ta) ta=firebase.initializeApp({databaseURL:tu},tn);
-    td=firebase.database(ta); _il(td,useListCode);
+    td=firebase.database(ta); try{ if(firebase.auth){ firebase.auth(ta).signInAnonymously().catch(function(){}); } }catch(e){} _il(td,useListCode);
   }catch(e2){ while(listDiv.firstChild) listDiv.removeChild(listDiv.firstChild);
     var er2=document.createElement('div'); er2.style.cssText='font-size:12px;color:#C03030;text-align:center;padding:8px 0;';
     er2.textContent='❌ Firebase 연결 필요'; listDiv.appendChild(er2);
@@ -16405,6 +16531,7 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
   try{ _stopLiteListeners(); }catch(e){}
     try{ _stopLiteListeners(); }catch(e){}
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
+  try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
     try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
