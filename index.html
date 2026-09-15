@@ -2694,17 +2694,10 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <div id="docsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
       <input type="file" id="docFileInput" accept="image/*,application/pdf" multiple
              style="display:none" onchange="handleDocFiles(this.files)">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button type="button" onclick="pickDocCat('reg')"
-                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #1D4ED8;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📘 등록증 추가</button>
-        <button type="button" onclick="pickDocCat('insp')"
-                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #7C3AED;border-radius:10px;background:#F5F3FF;color:#7C3AED;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📗 점검표 추가</button>
-        <button type="button" onclick="pickDocCat('')"
-                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📎 기타 추가</button>
-      </div>
-      <input type="file" id="docBundleInput" accept="application/pdf" style="display:none" onchange="handleBundlePdf(this.files)">
-      <button type="button" onclick="pickBundlePdf()"
-              style="width:100%;margin-top:6px;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 PDF 자동분리 (1장 등록증·나머지 점검표)</button>
+      <button type="button" onclick="document.getElementById('docFileInput').click()"
+              style="width:100%;padding:9px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">
+        ➕ 서류/사진 추가 (PDF·이미지)
+      </button>
       <div id="docUploadStatus" style="font-size:11px;font-weight:700;color:#7C3AED;margin-top:4px;"></div>
     </div>
 
@@ -2803,7 +2796,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <!-- ① 기본값 -->
     <div class="fb-restore-card default">
       <div class="fb-restore-card-title">🏠 기본값</div>
-      <div class="fb-restore-card-val" id="fbDefaultUrlTxt">🔥https://kp-system-8e4eb-default-rtdb.firebaseio.com/<br>🔑 hangyul2024</div>
+      <div class="fb-restore-card-val" id="fbDefaultUrlTxt">🔥 https://kp-system-8e4eb-default-rtdb.firebaseio.com/<br>🔑 hangyul2024</div>
     </div>
     <button class="fb-restore-btn default" onclick="fbChooseDefault()">① 기본값으로 연결</button>
 
@@ -3161,8 +3154,7 @@ function _fbSettingsRetrySchedule(){
 
 function _fbSafeUpdate(updObj, label){
   if(!fbSlotsRef) return;
-  /* ★ LOWDL: 내 업로드 TS 기록 → 내 변경엔 '새 데이터' 모달 안뜨게 */
-  try{ if(updObj && updObj._localTs){ _myUploadTs = parseInt(updObj._localTs); _lastAppliedTs = _myUploadTs; } }catch(e){}
+  try{ if(updObj && updObj._localTs){ _myUploadTs = parseInt(updObj._localTs); _lastAppliedTs = _myUploadTs; } if(updObj && updObj._gridConfig){ _myGridSig = JSON.stringify(updObj._gridConfig); _lastGridSig = _myGridSig; } }catch(e){}
   fbSlotsRef.update(updObj)
     .then(function(){
       _fbFailStreak = 0;
@@ -3244,8 +3236,7 @@ window._recoverPreOverwrite = function(n){
 };
 function _doFbSafeSet(dataObj,label){
   if(!fbSlotsRef) return;
-  /* ★ LOWDL: 내 업로드 TS 기록 → 내 변경엔 '새 데이터' 모달 안뜨게 */
-  try{ if(dataObj && dataObj._localTs){ _myUploadTs = parseInt(dataObj._localTs); _lastAppliedTs = _myUploadTs; } }catch(e){}
+  try{ if(dataObj && dataObj._localTs){ _myUploadTs = parseInt(dataObj._localTs); _lastAppliedTs = _myUploadTs; } if(dataObj && dataObj._gridConfig){ _myGridSig = JSON.stringify(dataObj._gridConfig); _lastGridSig = _myGridSig; } }catch(e){}
   /* [2층] 덮어쓰기 직전 로컬 스냅샷 저장 (복구 그물) */
   _savePreOverwriteSnapshot(label);
   /* [1층] 빠진 차량슬롯 자동 복구 — 의도된 전체초기화(_cleared)는 제외 */
@@ -3301,8 +3292,6 @@ function _fbRetryFlush(){
   /* ★ FIX: 재시도 시 _localTs 갱신 */
   if(item.upd && typeof item.upd === 'object'){
     item.upd._localTs = _tsNow();
-    /* ★ LOWDL: 오프라인 재전송도 '내 변경' → TS 기록으로 자기 모달 방지 */
-    try{ _myUploadTs = parseInt(item.upd._localTs); _lastAppliedTs = _myUploadTs; }catch(e){}
   }
   var op = item.isSet ? fbSlotsRef.set(item.upd) : fbSlotsRef.update(item.upd);
   op.then(function(){
@@ -8458,42 +8447,20 @@ function _encarUpdateBtn(idx){
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
 /* ★ 엔카사진 예약 알림음 (Web Audio API, 외부 파일 불필요) */
-/* ★ 알림음 오디오 컨텍스트를 1개만 유지 + 사용자 조작 때 잠금해제
-   (브라우저 자동재생 정책 때문에, 화면을 한 번 터치/클릭해두면 알림음이 확실히 울림) */
-var _encarAudioCtx = null;
-function _encarUnlockAudio(){
-  try{
-    var Ctx = window.AudioContext || window.webkitAudioContext;
-    if(!Ctx) return;
-    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
-    if(_encarAudioCtx.state === 'suspended') _encarAudioCtx.resume();
-  }catch(e){}
-}
-try{
-  document.addEventListener('touchstart', _encarUnlockAudio, {passive:true});
-  document.addEventListener('click', _encarUnlockAudio, {passive:true});
-}catch(e){}
-/* ★ 엔카 알림음 — 아주 크게: square 파형(고조파가 많아 체감 음량이 훨씬 큼) + 게인 최대 + 삐 5연속 */
 function _encarPlayAlertBeep(){
   try{
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if(!Ctx) return;
-    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
-    var ctx = _encarAudioCtx;
-    if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
-    var delays = [0, 300, 600, 900, 1200];
-    delays.forEach(function(delayMs){
+    var ctx = new Ctx();
+    [0, 220].forEach(function(delayMs, idx){
       setTimeout(function(){
-        var t = ctx.currentTime;
         var o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'square';            /* 사인보다 훨씬 크고 날카롭게 들림 */
-        o.frequency.value = 1000;     /* 귀에 잘 꽂히는 경보음 대역 */
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(1.0, t + 0.008);  /* 최대 음량 */
-        g.gain.setValueAtTime(1.0, t + 0.20);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
         o.connect(g); g.connect(ctx.destination);
-        o.start(t); o.stop(t + 0.30);
+        o.start(); o.stop(ctx.currentTime + 0.3);
       }, delayMs);
     });
   }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
@@ -8512,7 +8479,7 @@ function _encarApplyBlinks(){
     }
   }
 }
-/* ★ 엔카사진 예약 알림음: 예약 30분 전 ~ 예약시각 1시간 후면 '사진완료' 누를 때까지 30초마다 반복 재생 */
+/* ★ 엔카사진 예약 알림음: 예약시간(±10분 이내)이면 '사진완료' 누를 때까지 10초마다 반복 재생 */
 var _encarSoundTimer = null;
 function _encarApplySounds(){
   var s=getSlots();
@@ -8525,17 +8492,17 @@ function _encarApplySounds(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin <= 30 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 30분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
+    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
   }
   if(anyDue) _encarPlayAlertBeep();
 }
 function _encarStartSoundTimer(){
   if(_encarSoundTimer) clearInterval(_encarSoundTimer);
-  _encarSoundTimer = setInterval(_encarApplySounds, 30*1000); /* ★ 30초 간격 */
+  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격 */
 }
 _encarStartSoundTimer();
 
-/* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 30분 전부터 '사진완료' 누를 때까지 10분 간격으로 전송 */
+/* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 10분 전부터 '사진완료' 누를 때까지 2분 간격으로 전송 */
 function _postEncarReserveNtfy(topic, car, timeStr){
   if(!topic) return;
   try {
@@ -8570,9 +8537,9 @@ function _encarApplyNtfy(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin > 30 || diffMin <= -60) continue; /* ★ 예약 30분 전 ~ 예약시각 1시간 후까지만 */
+    if(diffMin > 10 || diffMin <= -60) continue; /* ★ 예약 10분 전 ~ 예약시각 1시간 후까지만 */
     var last = _encarNtfyLastSent[i] || 0;
-    if(now - last < 10*60*1000) continue; /* ★ 10분 간격 제어 */
+    if(now - last < 2*60*1000) continue; /* ★ 2분 간격 제어 */
     _encarNtfyLastSent[i] = now;
     var slotTopic = String((s[i]&&s[i].topic)||'').trim();
     var timeStr = (ec.date||'') + ' ' + (ec.time||'');
@@ -8759,6 +8726,7 @@ function onStorageModeSwitchChange(isLocalOnly){
     try{ _stopLiteListeners(); }catch(e){}
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
+  try{ if(_gridWatchRef) _gridWatchRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
     try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
@@ -11636,12 +11604,6 @@ function _renderDocList(){
     var row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:8px;background:#F1F5F9;border-radius:8px;padding:6px 10px;';
     var icon=(d.type==='pdf')?'📄':'🖼️';
-    /* ★ 카테고리 배지 (표시 전용) — 서류앱과 동일 규격 reg/insp/'' */
-    var _cat=(d.cat==='reg'||d.cat==='insp')?d.cat:'';
-    var catBadge=document.createElement('span');
-    catBadge.style.cssText='flex-shrink:0;font-size:10px;font-weight:900;border-radius:6px;padding:2px 6px;'
-      + (_cat==='reg' ? 'background:#EFF6FF;color:#1D4ED8;' : (_cat==='insp' ? 'background:#F5F3FF;color:#7C3AED;' : 'background:#F1F5F9;color:#64748B;'));
-    catBadge.textContent=(_cat==='reg' ? '📘등록증' : (_cat==='insp' ? '📗점검표' : '📎기타'));
     var nameSpan=document.createElement('div');
     nameSpan.style.cssText='flex:1;min-width:0;font-size:12px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     nameSpan.textContent=icon+' '+(d.name||'서류')+(d.size?' ('+Math.round(d.size/1024)+'KB)':'');
@@ -11664,7 +11626,7 @@ function _renderDocList(){
     delBtn.textContent='🗑️';
     delBtn.style.cssText='flex-shrink:0;border:none;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
     delBtn.onclick=function(){ deleteDoc(id); };
-    row.appendChild(catBadge); row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
+    row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
     box.appendChild(row);
   });
 }
@@ -11696,24 +11658,6 @@ function deleteDoc(id){
   _docDelBtn.className='mini-confirm-ok clear'; _docDelBtn.style.cssText=''; _docDelBtn.textContent='삭제';
   document.getElementById('miniConfirmOv').classList.add('show');
 }
-/* ★ 서류 개수 경로(kd_doc_counts) 동기화 — 서류앱과 동일 규격 {reg,insp,other}.
-   서류앱은 목록에서 이 경로로 서류 유무·개수를 표시하므로, 주차현황판에서 서류를
-   추가/삭제/이전할 때도 반드시 이 경로를 갱신해야 서류앱 목록에 즉시 반영된다.
-   라이브 kd_docs를 다시 읽어 계산하므로 로컬 캐시 상태와 무관하게 항상 정확하다. */
-function _pbSyncDocCounts(key, cb){
-  var code=_pbCode();
-  if(!key || !code || typeof fbDb==='undefined' || !fbDb){ if(cb) cb(); return; }
-  var roomRef=fbDb.ref('kd_rooms/'+code);
-  roomRef.child('kd_docs/'+key).once('value').then(function(sn){
-    var m=sn.val()||{}, reg=0, insp=0, other=0;
-    Object.keys(m).forEach(function(id){ var d=m[id]; if(!d) return;
-      var ct=(d.cat||''); if(ct==='reg') reg++; else if(ct==='insp') insp++; else other++; });
-    var total=reg+insp+other;
-    var cref=roomRef.child('kd_doc_counts/'+key);
-    var op = total>0 ? cref.set({reg:reg, insp:insp, other:other}) : cref.remove();
-    op.then(function(){ if(cb) cb(); }).catch(function(){ if(cb) cb(); });
-  }).catch(function(){ if(cb) cb(); });
-}
 function _doDeleteDoc(id){
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
@@ -11727,7 +11671,6 @@ function _doDeleteDoc(id){
     delete _curDocs[id];
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
-    _pbSyncDocCounts(key);   /* ★ 서류앱 목록 반영용 개수 경로 갱신 */
     /* ★ 남은 서류가 없으면 📄 플래그도 함께 제거 */
     if(!Object.keys(_curDocs||{}).length && _docFlags[key]){
       delete _docFlags[key];
@@ -11739,24 +11682,12 @@ function _doDeleteDoc(id){
   }).catch(function(){ showAlert('⚠️ 서류 삭제에 실패했습니다.'); });
 }
 
-/* ★ 서류 카테고리 선택 — 서류앱과 동일 규격(reg=차량등록증 / insp=성능점검표 / ''=기타).
-   선택한 카테고리를 기억한 뒤 파일 선택창을 연다. */
-var _pendingDocCat = '';
-function pickDocCat(cat){
-  _pendingDocCat = (cat==='reg'||cat==='insp') ? cat : '';
-  var carEl=document.getElementById('mCarInput');
-  var car = carEl ? carEl.value.trim() : '';
-  if(!_docKeyFromCar(car)){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
-  var fi=document.getElementById('docFileInput');
-  if(fi) fi.click();
-}
 function handleDocFiles(files){
   if(!files||!files.length) return;
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
   var key=_docKeyFromCar(car);
   if(!key){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); document.getElementById('docFileInput').value=''; return; }
-  var cat = (_pendingDocCat==='reg'||_pendingDocCat==='insp') ? _pendingDocCat : '';  /* ★ 이번 첨부에 적용할 카테고리 */
   var statusEl=document.getElementById('docUploadStatus');
   var arr=Array.prototype.slice.call(files);
   var idx=0;
@@ -11775,12 +11706,12 @@ function handleDocFiles(files){
         next(); return;
       }
       var r=new FileReader();
-      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,cat,next); };
+      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,next); };
       r.onerror=function(){ next(); };
       r.readAsDataURL(f);
     } else if(/^image\//.test(f.type)){
       _compressDocImage(f, function(dataUrl, size){
-        _saveDoc(key, f.name, 'image', dataUrl, size, cat, next);
+        _saveDoc(key, f.name, 'image', dataUrl, size, next);
       });
     } else {
       showAlert('⚠️ 지원하지 않는 파일 형식입니다: '+f.name);
@@ -11788,100 +11719,6 @@ function handleDocFiles(files){
     }
   }
   next();
-}
-
-/* ══ 묶음 PDF 자동분리 (1장=등록증 reg / 나머지=성능점검표 insp) — 서류앱과 동일 규격 ══
-   pdf-lib은 필요할 때만 CDN에서 로드한다. */
-function _ensurePdfLib(cb){
-  if(window.PDFLib){ cb(true); return; }
-  var s=document.createElement('script');
-  s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
-  s.onload=function(){ cb(!!window.PDFLib); };
-  s.onerror=function(){ cb(false); };
-  document.head.appendChild(s);
-}
-function _u8ToDataUrl(u8){
-  var bin='', chunk=0x8000;
-  for(var i=0;i<u8.length;i+=chunk){ bin+=String.fromCharCode.apply(null, u8.subarray(i, i+chunk)); }
-  return 'data:application/pdf;base64,'+btoa(bin);
-}
-function _splitBundlePdf(file, onDone){
-  _ensurePdfLib(function(ok){
-    if(!ok){ onDone('lib'); return; }
-    var r=new FileReader();
-    r.onload=function(){
-      try{
-        window.PDFLib.PDFDocument.load(r.result).then(function(src){
-          var n=src.getPageCount();
-          if(!n){ onDone('empty'); return; }
-          var base=(file.name||'서류').replace(/\.pdf$/i,'');
-          window.PDFLib.PDFDocument.create().then(function(regDoc){
-            regDoc.copyPages(src,[0]).then(function(pg){
-              regDoc.addPage(pg[0]);
-              regDoc.save().then(function(regBytes){
-                var reg={ data:_u8ToDataUrl(regBytes), size:regBytes.length, name:base+'_등록증.pdf' };
-                if(n<2){ onDone(null,{reg:reg, insp:null, pages:n}); return; }
-                var idxs=[]; for(var i=1;i<n;i++) idxs.push(i);
-                window.PDFLib.PDFDocument.create().then(function(inspDoc){
-                  inspDoc.copyPages(src, idxs).then(function(ip){
-                    ip.forEach(function(p){ inspDoc.addPage(p); });
-                    inspDoc.save().then(function(inspBytes){
-                      onDone(null,{ reg:reg, insp:{ data:_u8ToDataUrl(inspBytes), size:inspBytes.length, name:base+'_성능점검표.pdf' }, pages:n });
-                    });
-                  });
-                });
-              });
-            });
-          });
-        }).catch(function(){ onDone('parse'); });
-      }catch(e){ onDone('parse'); }
-    };
-    r.onerror=function(){ onDone('read'); };
-    r.readAsArrayBuffer(file);
-  });
-}
-function pickBundlePdf(){
-  var carEl=document.getElementById('mCarInput');
-  var car = carEl ? carEl.value.trim() : '';
-  if(!_docKeyFromCar(car)){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); return; }
-  var fi=document.getElementById('docBundleInput'); if(fi){ fi.value=''; fi.click(); }
-}
-function handleBundlePdf(files){
-  if(!files||!files.length) return;
-  var f=files[0];
-  var fi=document.getElementById('docBundleInput'); if(fi) fi.value='';
-  function _err(m){ showAlert(m); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); }
-  var isPdf=/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name);
-  if(!isPdf){ _err('⚠️ 묶음 분리는 PDF만 가능합니다.'); return; }
-  var carEl=document.getElementById('mCarInput');
-  var car = carEl ? carEl.value.trim() : '';
-  var key=_docKeyFromCar(car);
-  if(!key){ _err('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
-  var statusEl=document.getElementById('docUploadStatus');
-  if(statusEl) statusEl.textContent='⏳ 묶음 PDF 분리 중...';
-  _splitBundlePdf(f, function(err, res){
-    if(err){
-      if(statusEl) statusEl.textContent='';
-      _err(err==='lib' ? '⚠️ 분리 도구 로드 실패 (인터넷 확인)' : '⚠️ PDF 분리 실패 — 개별 첨부를 이용하세요.');
-      return;
-    }
-    var tasks=[], skip=[];
-    if(res.reg){ (res.reg.size<=4*1024*1024) ? tasks.push({cat:'reg',d:res.reg}) : skip.push('등록증'); }
-    if(res.insp){ (res.insp.size<=4*1024*1024) ? tasks.push({cat:'insp',d:res.insp}) : skip.push('점검표'); }
-    var i=0;
-    function next(){
-      if(i>=tasks.length){
-        var msg = (res.pages<2) ? '✅ 등록증 1건 등록 (1페이지 PDF)' : ('✅ 묶음 분리 완료 — 등록증 1 · 점검표 '+(res.pages-1));
-        if(skip.length) msg+=' · ⚠️ '+skip.join('·')+' 4MB 초과 제외';
-        if(statusEl){ statusEl.textContent=msg; setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000); }
-        return;
-      }
-      var t=tasks[i++];
-      if(statusEl) statusEl.textContent='⏳ 저장 중... ('+i+'/'+tasks.length+')';
-      _saveDoc(key, t.d.name, 'pdf', t.d.data, t.d.size, t.cat, next);
-    }
-    next();
-  });
 }
 
 /* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/common_docs 에 저장, 전 차량 공통 ══ */
@@ -11986,13 +11823,11 @@ function _compressDocImage(file, cb){
   reader.readAsDataURL(file);
 }
 
-function _saveDoc(key, name, type, dataUrl, size, cat, cb){
-  /* ★ 하위호환: 예전 시그니처 _saveDoc(...,size,cb)로 호출돼 cat 자리에 함수가 오면 보정 */
-  if(typeof cat==='function' && cb===undefined){ cb=cat; cat=''; }
+function _saveDoc(key, name, type, dataUrl, size, cb){
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb){ showAlert('⚠️ Firebase 연결 후 서류를 첨부할 수 있습니다.'); if(cb) cb(); return; }
   var docId='d'+Date.now()+Math.floor(Math.random()*1000);
-  var meta={ name:name, type:type, size:size, at:Date.now(), cat:(cat==='reg'||cat==='insp')?cat:'' };  /* ★ 서류앱과 동일 규격 */
+  var meta={ name:name, type:type, size:size, at:Date.now() };
   var updates={};
   updates['kd_docs/'+key+'/'+docId]=meta;
   updates['kd_docs_data/'+key+'/'+docId]=dataUrl;
@@ -12001,7 +11836,6 @@ function _saveDoc(key, name, type, dataUrl, size, cat, cb){
     _curDocs[docId]=Object.assign({}, meta, {data:dataUrl});
     _renderDocList();
     if(typeof refreshStorageBadge==='function') refreshStorageBadge();
-    _pbSyncDocCounts(key);   /* ★ 서류앱 목록 반영용 개수 경로 갱신 */
     /* ★ 서류첨부 플래그 갱신 (📄 아이콘 표시용, 실패해도 서류 저장 자체엔 영향 없음) */
     if(!_docFlags[key]){
       _docFlags[key]=true;
@@ -12053,10 +11887,8 @@ function _migrateCarDocs(oldCarText, newCarText){
       updates['kd_docs_data/'+oldKey]=null;
       updates['kd_doc_flags/'+newKey]=true;
       updates['kd_doc_flags/'+oldKey]=null;
-      updates['kd_doc_counts/'+oldKey]=null;   /* ★ 옛 키 개수 제거 (새 키는 아래서 재계산) */
       roomRef.update(updates).then(function(){
         console.log('[서류 이전] "'+oldCarText+'" → "'+newCarText+'" ('+Object.keys(oldMeta).length+'건)');
-        _pbSyncDocCounts(newKey);   /* ★ 새 키 개수 경로 재계산 — 서류앱 목록 반영 */
         delete _docFlags[oldKey];
         _docFlags[newKey]=true;
         _saveDocFlagsCache();
@@ -12112,7 +11944,6 @@ function _deleteCarDocs(carText){
     updates['kd_docs/'+key]=null;
     updates['kd_docs_data/'+key]=null;
     updates['kd_doc_flags/'+key]=null;
-    updates['kd_doc_counts/'+key]=null;   /* ★ 개수 경로도 정리 — 서류앱 목록에 잔상 방지 */
     if(!liveMeta || !Object.keys(liveMeta).length){
       /* 실제 서류가 없으면 보관할 것도 없음 — 플래그만 정리하고 끝 */
       roomRef.update(updates).catch(function(e){ console.warn('[서류 정리 실패]', e); });
@@ -13060,6 +12891,7 @@ function confirmClearAll(){
   try{ _stopLiteListeners(); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
+  try{ if(_gridWatchRef) _gridWatchRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
   try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
@@ -13172,6 +13004,7 @@ function confirmLocalClear() {
   try{ _stopLiteListeners(); }catch(e){}
   try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
+  try{ if(_gridWatchRef) _gridWatchRef.off('value'); }catch(e){}
   try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
   try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
   try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
@@ -13939,14 +13772,15 @@ function saveAndConnect(){
 }
 /* ★★ FIX: 슬롯 실시간 리스너를 별도 함수로 분리
    — 새 기기에서 once() 완료 후 호출, 기존 기기에서 바로 호출 */
-/* ★★ 저다운로드 모드(LOW-DOWNLOAD) 전역 상태 ★★
-   - _lowDlMode: true면 실시간 전체구독 대신 "TS감시 + 확인 후 1회 로드" 방식
-   - 기존 로직은 그대로 두고, 데이터 적용 함수(_applySlotSnapshot)를 재사용 */
-var _lowDlMode = true;              /* ★ 기본 ON — 다운로드 절약. false면 기존 실시간 방식 */
-var _pendingRemoteUpdate = false;   /* 확인 대기 중인 원격 변경 존재 여부 */
-var _lastAppliedTs = 0;             /* 마지막으로 화면에 적용한 _localTs */
-var _tsWatchRef = null;             /* _localTs 감시용 ref */
-var _myUploadTs = 0;                /* 내가 방금 업로드한 TS(내 변경엔 모달 안뜨게) */
+/* ★★ 저다운로드 모드 + 구조변경 즉시동기화(방법A) 전역 상태 ★★ */
+var _lowDlMode = true;
+var _pendingRemoteUpdate = false;
+var _lastAppliedTs = 0;
+var _tsWatchRef = null;
+var _myUploadTs = 0;
+var _gridWatchRef = null;        /* 구조(_gridConfig) 감시용 */
+var _lastGridSig = '';           /* 마지막 적용한 구조 서명 */
+var _myGridSig = '';             /* 내가 방금 올린 구조 서명 */
 
 /* 기존 on('value') 콜백 본체 — 이름만 붙여 재사용 (로직 변경 없음) */
 function _applySlotSnapshot(snap){
@@ -14208,7 +14042,6 @@ function _applySlotSnapshot(snap){
 /* ★ 슬롯 리스너 오류 처리 (공통) */
 function _slotsListenerError(err){
     console.warn('[슬롯동기화]',err);
-    /* ★ 슬롯 리스너 오류 시 15초 후 재연결 */
     setTimeout(function(){
       var u=localStorage.getItem('pb_fb_url')||'';
       var c=localStorage.getItem(LS_CODE)||'';
@@ -14216,7 +14049,16 @@ function _slotsListenerError(err){
     }, 15000);
 }
 
-/* ★★ 원격에서 슬롯 1회 로드 → 기존 로직으로 적용 (확인 눌렀을 때 호출) ★★ */
+/* ★ 구조 서명 계산 — _gridConfig(열/행/간격 등)를 문자열로 (변경 감지용) */
+function _computeGridSig(snapVal){
+  try{
+    var g = snapVal && snapVal._gridConfig;
+    if(!g) return '';
+    return JSON.stringify(g);
+  }catch(e){ return ''; }
+}
+
+/* ★★ 원격 슬롯 1회 로드 → 기존 로직 적용 (확인/구조변경 시 호출) ★★ */
 function _loadSlotsOnce(reason){
   if(!fbSlotsRef) return;
   fbSlotsRef.once('value').then(function(snap){
@@ -14224,15 +14066,16 @@ function _loadSlotsOnce(reason){
       var d = snap.val();
       var ts = (d && d._localTs) ? parseInt(d._localTs) : 0;
       _lastAppliedTs = ts || _lastAppliedTs;
+      _lastGridSig = _computeGridSig(d);   /* 구조 서명도 갱신 */
     }catch(e){}
-    _applySlotSnapshot(snap);   /* 기존 검증된 로직 그대로 재사용 */
+    _applySlotSnapshot(snap);
     _pendingRemoteUpdate = false;
     _hideRemoteUpdateModal();
     console.log('[LOWDL] 슬롯 1회 로드 완료 ('+(reason||'')+')');
   }).catch(function(err){ _slotsListenerError(err); });
 }
 
-/* ★★ '새 데이터 있음' 모달 표시/숨김 ★★ */
+/* ★★ '새 데이터 있음' 모달 ★★ */
 function _showRemoteUpdateModal(){
   _pendingRemoteUpdate = true;
   var ov = document.getElementById('_remoteUpdateOv');
@@ -14242,29 +14085,20 @@ function _showRemoteUpdateModal(){
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
   var box = document.createElement('div');
   box.style.cssText = 'background:#fff;border-radius:16px;max-width:340px;width:86%;padding:26px 22px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35);';
-  var icon = document.createElement('div');
-  icon.textContent = '🔔';
-  icon.style.cssText = 'font-size:44px;margin-bottom:10px;';
-  var title = document.createElement('div');
-  title.textContent = '새로운 데이터가 있습니다';
-  title.style.cssText = 'font-size:19px;font-weight:800;color:#1a1a1a;margin-bottom:8px;';
-  var desc = document.createElement('div');
-  desc.textContent = '다른 기기에서 변경된 내용이 있습니다. 확인을 누르면 최신 상태로 갱신됩니다.';
-  desc.style.cssText = 'font-size:14px;color:#555;line-height:1.5;margin-bottom:20px;';
-  var btn = document.createElement('button');
-  btn.textContent = '✅ 확인 (최신 데이터 불러오기)';
-  btn.style.cssText = 'width:100%;padding:14px;border:none;border-radius:12px;background:#2563eb;color:#fff;font-size:16px;font-weight:700;cursor:pointer;';
+  var icon = document.createElement('div'); icon.textContent='🔔'; icon.style.cssText='font-size:44px;margin-bottom:10px;';
+  var title = document.createElement('div'); title.textContent='새로운 데이터가 있습니다'; title.style.cssText='font-size:19px;font-weight:800;color:#1a1a1a;margin-bottom:8px;';
+  var desc = document.createElement('div'); desc.textContent='다른 기기에서 변경된 내용이 있습니다. 확인을 누르면 최신 상태로 갱신됩니다.'; desc.style.cssText='font-size:14px;color:#555;line-height:1.5;margin-bottom:20px;';
+  var btn = document.createElement('button'); btn.textContent='✅ 확인 (최신 데이터 불러오기)'; btn.style.cssText='width:100%;padding:14px;border:none;border-radius:12px;background:#2563eb;color:#fff;font-size:16px;font-weight:700;cursor:pointer;';
   btn.onclick = function(){ _loadSlotsOnce('user-confirm'); };
   box.appendChild(icon); box.appendChild(title); box.appendChild(desc); box.appendChild(btn);
-  ov.appendChild(box);
-  document.body.appendChild(ov);
+  ov.appendChild(box); document.body.appendChild(ov);
 }
 function _hideRemoteUpdateModal(){
   var ov = document.getElementById('_remoteUpdateOv');
   if(ov){ ov.classList.remove('show'); ov.style.display='none'; }
 }
 
-/* ★★ 편집 차단 가드 — 확인 대기 중이면 편집 막고 모달 띄움 ★★ */
+/* ★★ 편집 차단 가드 ★★ */
 function _guardRemotePending(){
   if(_lowDlMode && _pendingRemoteUpdate){
     _showRemoteUpdateModal();
@@ -14274,34 +14108,45 @@ function _guardRemotePending(){
   return false;
 }
 
-/* ★★ 저다운로드 리스너 등록 — 무거운 슬롯 대신 _localTs(작은 값)만 감시 ★★ */
+/* ★★ 저다운로드 리스너 등록 + 구조변경 즉시동기화(방법A) ★★ */
 function _registerSlotsOnListener(){
   if(!fbSlotsRef) return;
 
   if(!_lowDlMode){
-    /* 기존 실시간 방식 (원하면 _lowDlMode=false로 되돌림) */
     fbSlotsRef.on('value', _applySlotSnapshot, _slotsListenerError);
     return;
   }
 
-  /* --- 저다운로드 모드 --- */
-  /* 1) 최초 1회: 현재 슬롯 전체를 once로 로드 (기존 로직 적용) */
+  /* 1) 최초 1회 전체 로드 */
   _loadSlotsOnce('initial');
 
-  /* 2) 이후: _localTs(숫자 하나)만 실시간 감시 → 바뀌면 모달 */
+  var code = localStorage.getItem(LS_CODE)||'';
+
+  /* 2) _localTs(슬롯 변경) 감시 → 모달 (일반 차량이동/불출은 확인 후 반영) */
   try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
-  _tsWatchRef = fbDb.ref('kd_rooms/'+ (localStorage.getItem(LS_CODE)||'') +'/pb_slots/_localTs');
+  _tsWatchRef = fbDb.ref('kd_rooms/'+code+'/pb_slots/_localTs');
   _tsWatchRef.on('value', function(tsSnap){
     var remoteTs = parseInt(tsSnap.val()||'0');
     if(!remoteTs) return;
-    /* 내가 방금 올린 변경이면 무시 (모달 안뜸) */
     if(remoteTs === _myUploadTs){ _lastAppliedTs = remoteTs; return; }
-    /* 아직 한 번도 적용 안 했으면 기준선만 설정 */
     if(!_lastAppliedTs){ _lastAppliedTs = remoteTs; return; }
-    /* 원격이 더 최신 → 새 데이터 있음 */
-    if(remoteTs > _lastAppliedTs){
-      console.log('[LOWDL] 원격 변경 감지 remoteTs='+remoteTs+' > '+_lastAppliedTs);
-      _showRemoteUpdateModal();
+    if(remoteTs > _lastAppliedTs){ _showRemoteUpdateModal(); }
+  }, _slotsListenerError);
+
+  /* 3) ★방법A: _gridConfig(구조) 감시 → 열밀기/당기기/열간격 변경은 '모달 없이 즉시' 반영 */
+  try{ if(_gridWatchRef) _gridWatchRef.off('value'); }catch(e){}
+  _gridWatchRef = fbDb.ref('kd_rooms/'+code+'/pb_slots/_gridConfig');
+  _gridWatchRef.on('value', function(gSnap){
+    var sig = '';
+    try{ sig = JSON.stringify(gSnap.val()||''); }catch(e){ sig=''; }
+    if(!sig) return;
+    if(sig === _myGridSig){ _lastGridSig = sig; return; }  /* 내 변경이면 무시 */
+    if(!_lastGridSig){ _lastGridSig = sig; return; }        /* 첫 기준선 */
+    if(sig !== _lastGridSig){
+      /* 구조가 바뀜 → 모달 없이 즉시 전체 로드 (열밀기/당기기/열간격 즉시 반영) */
+      console.log('[LOWDL] 구조 변경 감지 → 즉시 동기화');
+      _lastGridSig = sig;
+      _loadSlotsOnce('grid-change');
     }
   }, _slotsListenerError);
 }
@@ -14399,12 +14244,12 @@ function connectFb(url,code){
       fbApp=firebase.initializeApp({databaseURL:url},nm);
     }
     fbDb=firebase.database(fbApp);
-    /* ★ 익명 로그인 — 보안 규칙(auth != null) 통과용. 로그인 창 없이 자동 실행됨. */
+    /* ★ 익명 로그인 — 보안 규칙(auth != null) 통과용 */
     try{
       if(firebase.auth){
         firebase.auth(fbApp).signInAnonymously()
           .then(function(){ console.log('[Auth] 익명 로그인 성공'); })
-          .catch(function(e){ console.warn('[Auth] 익명 로그인 실패 — 콘솔에서 익명 인증을 켰는지 확인하세요:', e && e.code, e && e.message); });
+          .catch(function(e){ console.warn('[Auth] 익명 로그인 실패:', e && e.code, e && e.message); });
       }
     }catch(e){ console.warn('[Auth] 익명 로그인 예외:', e); }
     fbRef=fbDb.ref('kd_rooms/'+code); /* (호환용 유지 — 아래 .off 정리 코드가 참조) */
@@ -16122,8 +15967,6 @@ function _doLocalRestore(data, useUrl, useCode, includeCredentials){
       _gridConfig: _getGridConfig(),
       _localTs: _restoreTs
     });
-    /* ★ LOWDL: 복원도 '내 변경'이므로 TS 기록 → 복원 후 자기 모달 방지 */
-    try{ _myUploadTs = parseInt(_restoreTs); _lastAppliedTs = _myUploadTs; }catch(e){}
     var _localRestoreTimer = setTimeout(function(){
       console.warn('[로컬복원] Firebase set 타임아웃 → 직접 연결');
       doConnect();
@@ -16532,6 +16375,7 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
     try{ _stopLiteListeners(); }catch(e){}
     try{ if(fbSlotsRef)    fbSlotsRef.off('value'); }catch(e){}
   try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
+  try{ if(_gridWatchRef) _gridWatchRef.off('value'); }catch(e){}
     try{ if(fbSettingsRef) fbSettingsRef.off('value'); }catch(e){}
     try{ if(fbEncarLogRef) fbEncarLogRef.off('value'); }catch(e){}
     try{ if(fbDocFlagsRef) fbDocFlagsRef.off('value'); }catch(e){}
