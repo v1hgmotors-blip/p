@@ -2412,6 +2412,13 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="btn btn-save" onclick="saveViewBaseUrl()">💾</button>
       <span class="save-msg" id="viewBaseMsg"></span>
     </div>
+    <div class="s-row">
+      <span class="s-lbl">📲 ntfy토픽</span>
+      <input id="ntfyTopicInput" class="s-fb-url" type="text" placeholder="예: myshop-key-2024 (영문·숫자·하이픈)" style="flex:1;min-width:0;" />
+      <button class="btn btn-save" onclick="saveNtfySettings()">💾</button>
+      <button class="btn" onclick="testNtfy()" style="background:#0F766E;color:#fff;font-size:11px;">🧪테스트</button>
+      <span class="save-msg" id="ntfyMsg"></span>
+    </div>
     <!-- ★★ 요금발생차단 마스터 스위치 — OFF면 모든 발송(문자·알림톡·약도전송) 전면 차단 -->
     <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;background:#7F1D1D;border-radius:10px;padding:6px 10px;">
       <span class="storage-mode-label" style="color:#FECACA;">🚫 요금발생차단</span>
@@ -2694,10 +2701,17 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <div id="docsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
       <input type="file" id="docFileInput" accept="image/*,application/pdf" multiple
              style="display:none" onchange="handleDocFiles(this.files)">
-      <button type="button" onclick="document.getElementById('docFileInput').click()"
-              style="width:100%;padding:9px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">
-        ➕ 서류/사진 추가 (PDF·이미지)
-      </button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" onclick="pickDocCat('reg')"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #1D4ED8;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📘 등록증 추가</button>
+        <button type="button" onclick="pickDocCat('insp')"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #7C3AED;border-radius:10px;background:#F5F3FF;color:#7C3AED;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📗 점검표 추가</button>
+        <button type="button" onclick="pickDocCat('')"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📎 기타 추가</button>
+      </div>
+      <input type="file" id="docBundleInput" accept="application/pdf" style="display:none" onchange="handleBundlePdf(this.files)">
+      <button type="button" onclick="pickBundlePdf()"
+              style="width:100%;margin-top:6px;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 PDF 자동분리 (1장 등록증·나머지 점검표)</button>
       <div id="docUploadStatus" style="font-size:11px;font-weight:700;color:#7C3AED;margin-top:4px;"></div>
     </div>
 
@@ -3044,7 +3058,42 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     </label>
     <div id="fbBackupList" style="display:none;background:#F5F3FF;border-radius:10px;padding:10px;border:1.5px solid #C4B5FD;"></div>
     <div id="backup2Msg" style="display:none;border-radius:9px;padding:9px 12px;font-size:13px;font-weight:800;text-align:center;white-space:pre-line;"></div>
+    <hr style="border:none;border-top:2px solid #EEE;margin:0;">
+    <button onclick="openDataMigrate()" style="background:#0F766E;color:#fff;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;width:100%;">🔀 다른 Firebase로 바로 이전</button>
+    <div style="font-size:11px;color:#64748B;background:#F0FDFA;border-radius:8px;padding:8px 10px;border:1px solid #99F6E4;line-height:1.6;">
+      💡 파일을 다운로드/복원할 필요 없이, 원본(A) 정보와 새 위치(B) 정보만 입력하면 이 기기가 바로 A→B로 옮겨줍니다.
+    </div>
     <button onclick="closeBackup2()" style="background:#F0F0F0;color:#555;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;">닫기</button>
+  </div>
+</div>
+
+<!-- ★ 데이터 이전(A→B) 모달 -->
+<div id="dataMigrateOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9600;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#FFF;border-radius:18px;padding:22px 18px 18px;width:min(380px,94vw);box-shadow:0 12px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:12px;max-height:90vh;overflow-y:auto;">
+    <div style="font-size:18px;font-weight:900;color:#134E4A;text-align:center;">🔀 데이터 이전 (Firebase → Firebase)</div>
+    <div style="font-size:11.5px;color:#555;line-height:1.7;background:#FFF6DB;border-radius:10px;padding:10px 13px;border:1.5px solid #E8B800;">
+      ⚠️ <b>대상(B)에 이미 데이터가 있다면 덮어씌워집니다.</b> 슬롯·설정·서류·사진·이력 등 모든 데이터를 원본(A)에서 그대로 읽어 대상(B)에 씁니다. 이 기기가 A에서 내려받아 B로 올리는 방식이라, 서류·사진이 많으면 시간이 좀 걸립니다.
+    </div>
+
+    <div style="border:1.5px solid #93C5FD;border-radius:11px;padding:10px 12px;background:#EFF6FF;">
+      <div style="font-size:13px;font-weight:900;color:#1D4ED8;margin-bottom:6px;">📤 A. 원본 (지금 있는 데이터)</div>
+      <input id="dmSrcUrl" type="text" placeholder="https://xxx-default-rtdb.firebaseio.com" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1.5px solid #BFDBFE;font-size:13px;margin-bottom:6px;">
+      <input id="dmSrcCode" type="text" placeholder="공유코드 (예: 1234)" oninput="var d=document.getElementById('dmDstCode'); if(d) d.value=this.value;" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1.5px solid #BFDBFE;font-size:13px;">
+    </div>
+
+    <div style="text-align:center;font-size:18px;color:#0F766E;">⬇</div>
+
+    <div style="border:1.5px solid #FCA5A5;border-radius:11px;padding:10px 12px;background:#FEF2F2;">
+      <div style="font-size:13px;font-weight:900;color:#B91C1C;margin-bottom:6px;">📥 B. 새로운 위치 (여기로 옮겨짐)</div>
+      <input id="dmDstUrl" type="text" placeholder="https://yyy-default-rtdb.firebaseio.com" style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1.5px solid #FECACA;font-size:13px;margin-bottom:6px;">
+      <input id="dmDstCode" type="text" placeholder="원본과 동일한 공유코드가 자동으로 채워집니다" readonly style="width:100%;box-sizing:border-box;padding:9px 10px;border-radius:8px;border:1.5px solid #FECACA;font-size:13px;background:#FEE2E2;color:#7F1D1D;font-weight:800;">
+      <div style="font-size:10.5px;color:#B91C1C;margin-top:4px;">⚠️ 이 도구는 <b>같은 공유코드를 유지한 채</b> Firebase 프로젝트(URL)만 옮길 때 사용합니다. 코드 자체를 바꾸는 이전은 지원하지 않습니다.</div>
+    </div>
+
+    <button id="dmStartBtn" onclick="runDataMigrate()" style="background:#0F766E;color:#fff;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;">🚀 이전 시작</button>
+    <div id="dmProgress" style="display:none;font-size:12px;color:#0F766E;text-align:center;font-weight:800;"></div>
+    <div id="dmMsg" style="display:none;border-radius:9px;padding:9px 12px;font-size:12.5px;font-weight:800;text-align:center;white-space:pre-line;"></div>
+    <button onclick="closeDataMigrate()" style="background:#F0F0F0;color:#555;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;">닫기</button>
   </div>
 </div>
 
@@ -3075,7 +3124,11 @@ var TOTAL=120;
 var LS_ENCAR_LOG='pb_encar_log';
 var LS_DOC_FLAGS='pb_doc_flags'; /* ★ 서류첨부(📄) 표시용 경량 캐시 */
 var LS_SLOTS='pb_slots_v7', LS_URL='pb_fb_url', LS_CODE='pb_code';
+var LS_NTFY='kd_ntfy'; /* ★ ntfy 토픽 로컬 저장 키 — 설정화면에서 직접 입력/저장. 'pb_' 접두사 아님 → 백업/다운로드/Firebase 동기화 대상에서 자동 제외됨 */
 
+if(!localStorage.getItem(LS_NTFY)){
+  localStorage.setItem(LS_NTFY, 'myshop-key-9000');
+}
 /* ★ PC 스크롤 리미터: 실시간 계산으로 마지막 파트 설정바에서 멈춤
    ★ FIX(콘솔에러): 원래 파일 뒤쪽(14357번 줄 부근)에 있던 정의를 스크립트
    최상단으로 옮김 — fitLayout()이 초기 로드 중 setTimeout(80ms/200ms)으로
@@ -8502,6 +8555,39 @@ function _encarStartSoundTimer(){
 }
 _encarStartSoundTimer();
 
+/* ★ ntfy 토픽 설정 — 사용자가 설정화면(ntfyTopicInput)에서 입력 → localStorage(kd_ntfy) 저장
+   ※ 이 값은 'pb_' 접두사가 아니므로 백업/다운로드 파일, Firebase 자동/수동 백업(_collectBackupData,
+   doBackup2Export) 어디에도 포함되지 않고, 기기 로컬에만 남습니다. Firebase DB에도 별도로 쓰지 않습니다. */
+function _ntfyShowMsg(msg, isErr){
+  var el=document.getElementById('ntfyMsg');
+  if(!el) return;
+  el.textContent=msg;
+  el.style.color = isErr ? '#f87171' : '#5EEAD4';
+  clearTimeout(el._t);
+  el._t=setTimeout(function(){ el.textContent=''; }, 3000);
+}
+function saveNtfySettings(){
+  var inp=document.getElementById('ntfyTopicInput');
+  var topic = inp ? inp.value.trim() : '';
+  if(!topic){ _ntfyShowMsg('⚠️ 토픽을 입력하세요', true); return; }
+  localStorage.setItem(LS_NTFY, topic);
+  _ntfyShowMsg('✅ 저장 완료: ' + topic, false);
+}
+async function testNtfy(){
+  var topic = localStorage.getItem(LS_NTFY) || '';
+  if(!topic){ _ntfyShowMsg('⚠️ 토픽을 먼저 저장하세요', true); return; }
+  _ntfyShowMsg('📤 전송 중...', false);
+  try{
+    var res = await fetch('https://ntfy.sh/' + topic, {
+      method:'POST',
+      headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'},
+      body: 'ntfy 알림 테스트 성공!\n시간: ' + new Date().toLocaleString('ko-KR') + '\n토픽: ' + topic
+    });
+    if(res.ok) _ntfyShowMsg('📤 테스트 전송 완료', false);
+    else _ntfyShowMsg('⚠️ 전송 실패: ' + res.status, true);
+  }catch(e){ _ntfyShowMsg('⚠️ 전송 오류', true); }
+}
+
 /* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 10분 전부터 '사진완료' 누를 때까지 2분 간격으로 전송 */
 function _postEncarReserveNtfy(topic, car, timeStr){
   if(!topic) return;
@@ -8521,11 +8607,14 @@ function _sendEncarReserveNtfy(slotIdx, car, timeStr, slotTopic){
   };
   if(slotTopic){ sendFn(slotTopic); return; }
   var code = localStorage.getItem(LS_CODE) || '';
+  var localTopic = localStorage.getItem(LS_NTFY) || '';
   if(typeof fbDb!=='undefined' && fbDb && code){
     fbDb.ref('kd_rooms/'+code+'/kd_ntfy_topic').once('value').then(function(sn){
-      var g = (sn && sn.val()) ? String(sn.val()) : '';
+      var g = (sn && sn.val()) ? String(sn.val()) : localTopic;
       sendFn(g);
-    }).catch(function(){});
+    }).catch(function(){ sendFn(localTopic); });
+  } else {
+    sendFn(localTopic);
   }
 }
 function _encarApplyNtfy(){
@@ -10575,13 +10664,14 @@ function _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr){
     var slotTopic = String(slot.topic||'').trim();
     if(slotTopic){ _postSearchNtfy(slotTopic, car, owner, dealerName, dealerPhone, dealerPr); return; }
     var code = localStorage.getItem(LS_CODE) || '';
+    var localTopic = localStorage.getItem(LS_NTFY) || '';
     if(fbDb && code){
       fbDb.ref('kd_rooms/'+code+'/kd_ntfy_topic').once('value').then(function(sn){
-        var g = (sn && sn.val()) ? String(sn.val()) : 'myshop-key-9000';
+        var g = (sn && sn.val()) ? String(sn.val()) : localTopic;
         _postSearchNtfy(g, car, owner, dealerName, dealerPhone, dealerPr);
-      }).catch(function(){ _postSearchNtfy('myshop-key-9000', car, owner, dealerName, dealerPhone, dealerPr); });
+      }).catch(function(){ _postSearchNtfy(localTopic, car, owner, dealerName, dealerPhone, dealerPr); });
     } else {
-      _postSearchNtfy('myshop-key-9000', car, owner, dealerName, dealerPhone, dealerPr);
+      _postSearchNtfy(localTopic, car, owner, dealerName, dealerPhone, dealerPr);
     }
   } catch(e){ console.warn('[검색키불출 차주ntfy] 예외', e); }
 }
@@ -11604,6 +11694,12 @@ function _renderDocList(){
     var row=document.createElement('div');
     row.style.cssText='display:flex;align-items:center;gap:8px;background:#F1F5F9;border-radius:8px;padding:6px 10px;';
     var icon=(d.type==='pdf')?'📄':'🖼️';
+    /* ★ 카테고리 배지 (표시 전용) — 서류앱과 동일 규격 reg/insp/'' */
+    var _cat=(d.cat==='reg'||d.cat==='insp')?d.cat:'';
+    var catBadge=document.createElement('span');
+    catBadge.style.cssText='flex-shrink:0;font-size:10px;font-weight:900;border-radius:6px;padding:2px 6px;'
+      + (_cat==='reg' ? 'background:#EFF6FF;color:#1D4ED8;' : (_cat==='insp' ? 'background:#F5F3FF;color:#7C3AED;' : 'background:#F1F5F9;color:#64748B;'));
+    catBadge.textContent=(_cat==='reg' ? '📘등록증' : (_cat==='insp' ? '📗점검표' : '📎기타'));
     var nameSpan=document.createElement('div');
     nameSpan.style.cssText='flex:1;min-width:0;font-size:12px;font-weight:700;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     nameSpan.textContent=icon+' '+(d.name||'서류')+(d.size?' ('+Math.round(d.size/1024)+'KB)':'');
@@ -11626,7 +11722,7 @@ function _renderDocList(){
     delBtn.textContent='🗑️';
     delBtn.style.cssText='flex-shrink:0;border:none;background:#FEE2E2;color:#DC2626;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
     delBtn.onclick=function(){ deleteDoc(id); };
-    row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
+    row.appendChild(catBadge); row.appendChild(nameSpan); row.appendChild(dlBtn); row.appendChild(delBtn);
     box.appendChild(row);
   });
 }
@@ -11670,6 +11766,7 @@ function _doDeleteDoc(id){
   fbDb.ref('kd_rooms/'+code).update(updates).then(function(){
     delete _curDocs[id];
     _renderDocList();
+    _pbSyncDocCounts(key);   /* ★ 서류앱 목록 반영용 개수 경로 갱신 */
     /* if(typeof refreshStorageBadge==='function') refreshStorageBadge(); */  /* ★ 자동실행 제거 — 버튼 클릭시에만 계산 */
     /* ★ 남은 서류가 없으면 📄 플래그도 함께 제거 */
     if(!Object.keys(_curDocs||{}).length && _docFlags[key]){
@@ -11682,12 +11779,25 @@ function _doDeleteDoc(id){
   }).catch(function(){ showAlert('⚠️ 서류 삭제에 실패했습니다.'); });
 }
 
+/* ★ 서류 카테고리 선택 — 서류앱과 동일 규격(reg=차량등록증 / insp=성능점검표 / ''=기타).
+   선택한 카테고리를 기억한 뒤 파일 선택창을 연다. */
+var _pendingDocCat = '';
+function pickDocCat(cat){
+  _pendingDocCat = (cat==='reg'||cat==='insp') ? cat : '';
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  if(!_docKeyFromCar(car)){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
+  var fi=document.getElementById('docFileInput');
+  if(fi) fi.click();
+}
+
 function handleDocFiles(files){
   if(!files||!files.length) return;
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
   var key=_docKeyFromCar(car);
   if(!key){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); document.getElementById('docFileInput').value=''; return; }
+  var cat = (_pendingDocCat==='reg'||_pendingDocCat==='insp') ? _pendingDocCat : '';  /* ★ 이번 첨부에 적용할 카테고리 */
   var statusEl=document.getElementById('docUploadStatus');
   var arr=Array.prototype.slice.call(files);
   var idx=0;
@@ -11706,12 +11816,12 @@ function handleDocFiles(files){
         next(); return;
       }
       var r=new FileReader();
-      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,next); };
+      r.onload=function(){ _saveDoc(key,f.name,'pdf',r.result,f.size,cat,next); };
       r.onerror=function(){ next(); };
       r.readAsDataURL(f);
     } else if(/^image\//.test(f.type)){
       _compressDocImage(f, function(dataUrl, size){
-        _saveDoc(key, f.name, 'image', dataUrl, size, next);
+        _saveDoc(key, f.name, 'image', dataUrl, size, cat, next);
       });
     } else {
       showAlert('⚠️ 지원하지 않는 파일 형식입니다: '+f.name);
@@ -11719,6 +11829,100 @@ function handleDocFiles(files){
     }
   }
   next();
+}
+
+/* ══ 묶음 PDF 자동분리 (1장=등록증 reg / 나머지=성능점검표 insp) — 서류앱과 동일 규격 ══
+   pdf-lib은 필요할 때만 CDN에서 로드한다. */
+function _ensurePdfLib(cb){
+  if(window.PDFLib){ cb(true); return; }
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+  s.onload=function(){ cb(!!window.PDFLib); };
+  s.onerror=function(){ cb(false); };
+  document.head.appendChild(s);
+}
+function _u8ToDataUrl(u8){
+  var bin='', chunk=0x8000;
+  for(var i=0;i<u8.length;i+=chunk){ bin+=String.fromCharCode.apply(null, u8.subarray(i, i+chunk)); }
+  return 'data:application/pdf;base64,'+btoa(bin);
+}
+function _splitBundlePdf(file, onDone){
+  _ensurePdfLib(function(ok){
+    if(!ok){ onDone('lib'); return; }
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        window.PDFLib.PDFDocument.load(r.result).then(function(src){
+          var n=src.getPageCount();
+          if(!n){ onDone('empty'); return; }
+          var base=(file.name||'서류').replace(/\.pdf$/i,'');
+          window.PDFLib.PDFDocument.create().then(function(regDoc){
+            regDoc.copyPages(src,[0]).then(function(pg){
+              regDoc.addPage(pg[0]);
+              regDoc.save().then(function(regBytes){
+                var reg={ data:_u8ToDataUrl(regBytes), size:regBytes.length, name:base+'_등록증.pdf' };
+                if(n<2){ onDone(null,{reg:reg, insp:null, pages:n}); return; }
+                var idxs=[]; for(var i=1;i<n;i++) idxs.push(i);
+                window.PDFLib.PDFDocument.create().then(function(inspDoc){
+                  inspDoc.copyPages(src, idxs).then(function(ip){
+                    ip.forEach(function(p){ inspDoc.addPage(p); });
+                    inspDoc.save().then(function(inspBytes){
+                      onDone(null,{ reg:reg, insp:{ data:_u8ToDataUrl(inspBytes), size:inspBytes.length, name:base+'_성능점검표.pdf' }, pages:n });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        }).catch(function(){ onDone('parse'); });
+      }catch(e){ onDone('parse'); }
+    };
+    r.onerror=function(){ onDone('read'); };
+    r.readAsArrayBuffer(file);
+  });
+}
+function pickBundlePdf(){
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  if(!_docKeyFromCar(car)){ showAlert('⚠️ 차량번호를 먼저 입력해 주세요.'); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); return; }
+  var fi=document.getElementById('docBundleInput'); if(fi){ fi.value=''; fi.click(); }
+}
+function handleBundlePdf(files){
+  if(!files||!files.length) return;
+  var f=files[0];
+  var fi=document.getElementById('docBundleInput'); if(fi) fi.value='';
+  function _err(m){ showAlert(m); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); }
+  var isPdf=/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name);
+  if(!isPdf){ _err('⚠️ 묶음 분리는 PDF만 가능합니다.'); return; }
+  var carEl=document.getElementById('mCarInput');
+  var car = carEl ? carEl.value.trim() : '';
+  var key=_docKeyFromCar(car);
+  if(!key){ _err('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
+  var statusEl=document.getElementById('docUploadStatus');
+  if(statusEl) statusEl.textContent='⏳ 묶음 PDF 분리 중...';
+  _splitBundlePdf(f, function(err, res){
+    if(err){
+      if(statusEl) statusEl.textContent='';
+      _err(err==='lib' ? '⚠️ 분리 도구 로드 실패 (인터넷 확인)' : '⚠️ PDF 분리 실패 — 개별 첨부를 이용하세요.');
+      return;
+    }
+    var tasks=[], skip=[];
+    if(res.reg){ (res.reg.size<=4*1024*1024) ? tasks.push({cat:'reg',d:res.reg}) : skip.push('등록증'); }
+    if(res.insp){ (res.insp.size<=4*1024*1024) ? tasks.push({cat:'insp',d:res.insp}) : skip.push('점검표'); }
+    var i=0;
+    function next(){
+      if(i>=tasks.length){
+        var msg = (res.pages<2) ? '✅ 등록증 1건 등록 (1페이지 PDF)' : ('✅ 묶음 분리 완료 — 등록증 1 · 점검표 '+(res.pages-1));
+        if(skip.length) msg+=' · ⚠️ '+skip.join('·')+' 4MB 초과 제외';
+        if(statusEl){ statusEl.textContent=msg; setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000); }
+        return;
+      }
+      var t=tasks[i++];
+      if(statusEl) statusEl.textContent='⏳ 저장 중... ('+i+'/'+tasks.length+')';
+      _saveDoc(key, t.d.name, 'pdf', t.d.data, t.d.size, t.cat, next);
+    }
+    next();
+  });
 }
 
 /* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/common_docs 에 저장, 전 차량 공통 ══ */
@@ -11823,11 +12027,32 @@ function _compressDocImage(file, cb){
   reader.readAsDataURL(file);
 }
 
-function _saveDoc(key, name, type, dataUrl, size, cb){
+/* ★ 서류 개수 경로(kd_doc_counts) 동기화 — 서류앱과 동일 규격 {reg,insp,other}.
+   서류앱은 목록에서 이 경로로 서류 유무·개수를 표시하므로, 주차현황판에서 서류를
+   추가/삭제/이전할 때도 반드시 이 경로를 갱신해야 서류앱 목록에 즉시 반영된다.
+   라이브 kd_docs를 다시 읽어 계산하므로 로컬 캐시 상태와 무관하게 항상 정확하다. */
+function _pbSyncDocCounts(key, cb){
+  var code=_pbCode();
+  if(!key || !code || typeof fbDb==='undefined' || !fbDb){ if(cb) cb(); return; }
+  var roomRef=fbDb.ref('kd_rooms/'+code);
+  roomRef.child('kd_docs/'+key).once('value').then(function(sn){
+    var m=sn.val()||{}, reg=0, insp=0, other=0;
+    Object.keys(m).forEach(function(id){ var d=m[id]; if(!d) return;
+      var ct=(d.cat||''); if(ct==='reg') reg++; else if(ct==='insp') insp++; else other++; });
+    var total=reg+insp+other;
+    var cref=roomRef.child('kd_doc_counts/'+key);
+    var op = total>0 ? cref.set({reg:reg, insp:insp, other:other}) : cref.remove();
+    op.then(function(){ if(cb) cb(); }).catch(function(){ if(cb) cb(); });
+  }).catch(function(){ if(cb) cb(); });
+}
+
+function _saveDoc(key, name, type, dataUrl, size, cat, cb){
+  /* ★ 하위호환: 예전 시그니처 _saveDoc(...,size,cb)로 호출돼 cat 자리에 함수가 오면 보정 */
+  if(typeof cat==='function' && cb===undefined){ cb=cat; cat=''; }
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb){ showAlert('⚠️ Firebase 연결 후 서류를 첨부할 수 있습니다.'); if(cb) cb(); return; }
   var docId='d'+Date.now()+Math.floor(Math.random()*1000);
-  var meta={ name:name, type:type, size:size, at:Date.now() };
+  var meta={ name:name, type:type, size:size, at:Date.now(), cat:(cat==='reg'||cat==='insp')?cat:'' };  /* ★ 서류앱과 동일 규격 */
   var updates={};
   updates['kd_docs/'+key+'/'+docId]=meta;
   updates['kd_docs_data/'+key+'/'+docId]=dataUrl;
@@ -11835,6 +12060,7 @@ function _saveDoc(key, name, type, dataUrl, size, cb){
     /* ★ 방금 올린 원본은 메모리에도 같이 보관 — 이번 세션에선 재요청 없이 바로 다운로드 가능 */
     _curDocs[docId]=Object.assign({}, meta, {data:dataUrl});
     _renderDocList();
+    _pbSyncDocCounts(key);   /* ★ 서류앱 목록 반영용 개수 경로 갱신 */
     /* if(typeof refreshStorageBadge==='function') refreshStorageBadge(); */  /* ★ 자동실행 제거 — 버튼 클릭시에만 계산 */
     /* ★ 서류첨부 플래그 갱신 (📄 아이콘 표시용, 실패해도 서류 저장 자체엔 영향 없음) */
     if(!_docFlags[key]){
@@ -11887,11 +12113,13 @@ function _migrateCarDocs(oldCarText, newCarText){
       updates['kd_docs_data/'+oldKey]=null;
       updates['kd_doc_flags/'+newKey]=true;
       updates['kd_doc_flags/'+oldKey]=null;
+      updates['kd_doc_counts/'+oldKey]=null;   /* ★ 옛 키 개수 제거 (새 키는 아래서 재계산) */
       roomRef.update(updates).then(function(){
         console.log('[서류 이전] "'+oldCarText+'" → "'+newCarText+'" ('+Object.keys(oldMeta).length+'건)');
         delete _docFlags[oldKey];
         _docFlags[newKey]=true;
         _saveDocFlagsCache();
+        _pbSyncDocCounts(newKey);   /* ★ 새 키 개수 경로 재계산 — 서류앱 목록 반영 */
         /* 모달이 아직 이 슬롯(새 차량번호)을 보여주고 있으면 서류 목록도 즉시 갱신 */
         var carEl=document.getElementById('mCarInput');
         if(carEl && _docKeyFromCar(carEl.value.trim())===newKey){
@@ -11941,6 +12169,7 @@ function _deleteCarDocs(carText){
     updates['kd_docs/'+key]=null;
     updates['kd_docs_data/'+key]=null;
     updates['kd_doc_flags/'+key]=null;
+    updates['kd_doc_counts/'+key]=null;   /* ★ 개수 경로도 정리 — 서류앱 목록에 잔상 방지 */
     updates['scan_log/'+key]=null;                        /* ★ 추가: QR스캔 여부 기록 삭제 */
     if(car4.length===4) updates['dispatch_auth_car/'+car4]=null;  /* ★ 추가: 본인인증(전화번호뒤4) 매핑 삭제 */
     if(eid){
@@ -14926,6 +15155,10 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   document.getElementById('fbUrlInput').value=u;
   document.getElementById('syncCodeInput').value=c;
   try{ _loadViewBaseInput(); }catch(e){}
+  try{
+    var _nInp=document.getElementById('ntfyTopicInput');
+    if(_nInp) _nInp.value = localStorage.getItem(LS_NTFY) || '';
+  }catch(e){}
   /* ★ 저장소 모드 초기화 — 처음이면 팝업, 아니면 기존 모드 적용 */
   var _initModeResult = _initStorageMode();
   if(_initModeResult === 'pending'){
@@ -15139,6 +15372,138 @@ function closeBackup2(){
   var ov=document.getElementById('backupOv2');
   if(ov) ov.style.display='none';
 }
+
+/* ★★ 데이터 이전(A→B) — 파일 다운로드/복원 없이, 이 기기가 A에서 바로 읽어 B로 바로 쓴다.
+   대상 경로는 "저장용량 현황"/"백업 저장"과 동일한 기준(25개 kd_rooms 하위 경로)에
+   pb_slots·pb_settings(둘 다 Firebase 상의 실제 경로)를 더해, 로컬스토리지를 거치지 않고
+   서버-서버(정확히는 이 브라우저를 경유한 서버↔서버) 방식으로 완전히 옮긴다. */
+var _MIGRATE_ROOM_PATHS = ['pb_slots','pb_settings',
+  'kd_docs','kd_docs_data','common_docs','pb_part_photos','pb_part_canvases',
+  'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','scan_log','kd_doc_flags',
+  'dispatch_auth','dispatch_auth_car','dispatch_req','dispatch_scan','links',
+  'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
+  'pb_search_return','returned','search_dispatch_events','sms_queue','updatedAt'];
+
+function openDataMigrate(){
+  var ov=document.getElementById('dataMigrateOv');
+  if(!ov) return;
+  /* 편의상 A(원본)에는 지금 이 기기가 연결돼 있는 정보를 기본값으로 채워둔다 */
+  var srcUrlEl=document.getElementById('dmSrcUrl'), srcCodeEl=document.getElementById('dmSrcCode');
+  if(srcUrlEl && !srcUrlEl.value) srcUrlEl.value = localStorage.getItem(LS_URL) || (typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url) || '';
+  if(srcCodeEl && !srcCodeEl.value) srcCodeEl.value = localStorage.getItem(LS_CODE) || (typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code) || '';
+  var dstCodeEl=document.getElementById('dmDstCode');
+  if(dstCodeEl) dstCodeEl.value = srcCodeEl ? srcCodeEl.value : '';   /* ★ B코드는 항상 A코드와 동일하게 강제 */
+  document.getElementById('dmMsg').style.display='none';
+  document.getElementById('dmProgress').style.display='none';
+  ov.style.display='flex';
+}
+function closeDataMigrate(){
+  var ov=document.getElementById('dataMigrateOv');
+  if(ov) ov.style.display='none';
+}
+function _dmMsg(text, color, bg, border){
+  var el=document.getElementById('dmMsg');
+  if(!el) return;
+  el.style.display='block'; el.style.color=color; el.style.background=bg; el.style.border='1.5px solid '+border;
+  el.textContent=text;
+}
+function _dmProgress(text){
+  var el=document.getElementById('dmProgress');
+  if(!el) return;
+  el.style.display='block'; el.textContent=text;
+}
+
+async function runDataMigrate(){
+  var srcUrl=(document.getElementById('dmSrcUrl').value||'').trim().replace(/\/+$/,'');
+  var srcCode=(document.getElementById('dmSrcCode').value||'').trim();
+  var dstUrl=(document.getElementById('dmDstUrl').value||'').trim().replace(/\/+$/,'');
+  var dstCode=(document.getElementById('dmDstCode').value||'').trim();
+
+  if(!srcUrl || !srcCode || !dstUrl || !dstCode){
+    _dmMsg('⚠️ 원본(A)과 대상(B) 모두 URL·공유코드를 입력해 주세요.','#8A5A00','#FFF6DB','#E8B800');
+    return;
+  }
+  /* ★ FIX(요청): 이 앱의 백업/복원 구조 자체가 "공유코드 기준"이므로, 이전 과정에서도
+     코드가 다르면 절대 진행되지 않도록 강제 차단한다. (B칸은 원래 A와 자동 동기화되어
+     보통은 이 분기를 안 타지만, 혹시 모를 값 조작·오타에도 다시 한번 확실히 막는다) */
+  if(srcCode!==dstCode){
+    _dmMsg('❌ 이전 불가: 공유코드가 다릅니다 ("'+srcCode+'" ≠ "'+dstCode+'")\n이 기능은 같은 공유코드를 유지한 채 Firebase 프로젝트만 옮길 때만 사용할 수 있습니다.','#C03030','#FFEEEE','#FFAAAA');
+    return;
+  }
+  if(srcUrl===dstUrl){
+    _dmMsg('⚠️ 원본과 대상 Firebase 주소가 동일합니다. 서로 다른 프로젝트 주소를 입력해 주세요.','#8A5A00','#FFF6DB','#E8B800');
+    return;
+  }
+
+  if(!confirm('"'+srcCode+'" 코드의 모든 데이터를\n['+srcUrl+']\n → ['+dstUrl+']\n(으)로 이전합니다.\n대상에 이미 데이터가 있으면 덮어씌워집니다.\n계속할까요?')) return;
+
+  var btn=document.getElementById('dmStartBtn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 이전 중...'; }
+  document.getElementById('dmMsg').style.display='none';
+
+  var total = _MIGRATE_ROOM_PATHS.length + 1; /* +1 = kd_photos */
+  var okCount=0, failList=[];
+
+  async function _getJson(url){
+    try{
+      var r=await fetch(url);
+      var j=null; try{ j=await r.json(); }catch(e){ j=null; }
+      return {ok:r.ok, val:j};
+    }catch(e){ return {ok:false, val:null}; }
+  }
+  async function _putJson(url, val){
+    try{
+      var r=await fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(val)});
+      return r.ok;
+    }catch(e){ return false; }
+  }
+
+  var done=0;
+  for(var i=0;i<_MIGRATE_ROOM_PATHS.length;i++){
+    var p=_MIGRATE_ROOM_PATHS[i];
+    done++; _dmProgress('⏳ 이전 중... ('+done+'/'+total+') '+p);
+    var got = await _getJson(srcUrl+'/kd_rooms/'+encodeURIComponent(srcCode)+'/'+p+'.json');
+    if(!got.ok){ failList.push(p+'(읽기실패)'); continue; }
+    if(got.val==null){ okCount++; continue; } /* 원본에 원래 데이터가 없던 경로 — 정상, 건너뜀 */
+    var put = await _putJson(dstUrl+'/kd_rooms/'+encodeURIComponent(dstCode)+'/'+p+'.json', got.val);
+    if(put) okCount++; else failList.push(p+'(쓰기실패)');
+  }
+  /* kd_photos는 kd_rooms 바깥의 별도 최상위 경로 */
+  done++; _dmProgress('⏳ 이전 중... ('+done+'/'+total+') kd_photos');
+  var photoGot = await _getJson(srcUrl+'/kd_photos/'+encodeURIComponent(srcCode)+'.json');
+  if(!photoGot.ok){ failList.push('kd_photos(읽기실패)'); }
+  else if(photoGot.val==null){ okCount++; }
+  else {
+    var photoPut = await _putJson(dstUrl+'/kd_photos/'+encodeURIComponent(dstCode)+'.json', photoGot.val);
+    if(photoPut) okCount++; else failList.push('kd_photos(쓰기실패)');
+  }
+
+  document.getElementById('dmProgress').style.display='none';
+  if(btn){ btn.disabled=false; btn.textContent='🚀 이전 시작'; }
+
+  if(failList.length===0){
+    /* ★ FIX(요청): 이전이 100% 성공했을 때만 원본(A) 초기화를 "제안"한다.
+       하나라도 실패한 상태에서 원본을 지우면 데이터가 영영 사라질 수 있으므로,
+       실패가 하나라도 있으면 절대 초기화 단계로 넘어가지 않는다. */
+    var wipeSrc = confirm('✅ 이전 완료! ('+okCount+'/'+total+')\n"'+srcCode+'"의 모든 데이터가 새 위치로 이전되었습니다.\n\n⚠️ 원본(A) Firebase의 데이터를 지금 완전초기화할까요?\n이 작업은 되돌릴 수 없습니다.\n(취소하면 원본 데이터는 그대로 남습니다 — 확인 후 나중에 지우셔도 됩니다)');
+    if(wipeSrc){
+      _dmProgress('⏳ 원본(A) 데이터 초기화 중...');
+      var wipeRoomOk = await _putJson(srcUrl+'/kd_rooms/'+encodeURIComponent(srcCode)+'.json', null);
+      var wipePhotoOk = await _putJson(srcUrl+'/kd_photos/'+encodeURIComponent(srcCode)+'.json', null);
+      document.getElementById('dmProgress').style.display='none';
+      if(wipeRoomOk && wipePhotoOk){
+        _dmMsg('✅ 이전 + 원본 초기화 모두 완료!\n"'+srcCode+'"\n['+srcUrl+'] → ['+dstUrl+']\n원본(A) 쪽 데이터는 완전삭제되었습니다.','#1A7A00','#E8FFE0','#AAE0AA');
+      } else {
+        _dmMsg('⚠️ 이전은 완료됐지만, 원본 초기화 중 일부 실패했습니다.\n(kd_rooms 삭제: '+(wipeRoomOk?'성공':'실패')+', kd_photos 삭제: '+(wipePhotoOk?'성공':'실패')+')\n원본 데이터가 일부 남아있을 수 있으니 확인해 주세요.','#8A5A00','#FFF6DB','#E8B800');
+      }
+    } else {
+      _dmMsg('✅ 이전 완료! ('+okCount+'/'+total+')\n"'+srcCode+'" → "'+dstCode+'"\n슬롯·설정·서류·사진·이력 등 전부 이전되었습니다.\n(원본 데이터는 지우지 않고 그대로 두었습니다)','#1A7A00','#E8FFE0','#AAE0AA');
+    }
+  } else {
+    _dmMsg('⚠️ 일부만 이전됨 ('+okCount+'/'+total+')\n실패: '+failList.join(', ')+'\n네트워크 상태를 확인하고 다시 시도해 주세요. (성공한 항목은 다시 눌러도 안전합니다)\n※ 완전히 성공하지 않아 원본(A) 데이터는 초기화하지 않았습니다.','#8A5A00','#FFF6DB','#E8B800');
+  }
+}
+
 function doBackup2Export(){
   /* 모든 pb_ 접두사 데이터 + 차량서류(kd_docs) 포함 백업 */
   var data={_version:2,_date:new Date().toISOString(),_app:"주차현황판",_backup_info:{}};
@@ -15163,20 +15528,33 @@ function doBackup2Export(){
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(function(){URL.revokeObjectURL(url);},2000);
       var _docN=(data._kd_docs?("\n📄 차량서류 "+Object.keys(data._kd_docs).length+"건 포함"):"");
-      /* ★ 정직성 경고: 클라우드(서류·사진) 데이터가 백업에 담기지 못한 경우 알림
-         - _cloudTried=true 인데 실제 담긴 Firebase 경로가 0개면 오프라인/연결실패로 간주 */
-      var _cloudMissing = (data._cloudTried===true) &&
-                          (!data._backup_info || !data._backup_info.fbPathsIncluded);
-      if(_cloudMissing || (data._cloudTried===true && navigator.onLine===false)){
+
+      /* ★ FIX(정확한 완료판정): 예전엔 "1개 경로만 성공해도 완료"로 잘못 판정되고,
+         사진(kd_photos) 성공여부는 아예 판정에 반영되지 않던 문제를 고침.
+         이제 25개 경로 전부(+사진)가 실제로 성공했는지 정확히 확인해서 세 단계로 안내한다. */
+      var bi = data._backup_info || {};
+      var totalPaths = bi.fbPathsTotal || 0;
+      var okPaths = (typeof bi.fbPathsOk==='number') ? bi.fbPathsOk : 0;
+      var failedList = bi.fbPathsFailed || [];
+      var kdPhotosOk = !!bi.kdPhotosOk;
+
+      if(!data._cloudTried){
+        /* Firebase 연결 정보(URL/코드)가 아예 없어서 시도조차 안 한 경우 */
+        _b2msg("✅ 백업 완료 (로컬 데이터만)\n주차칸, 파트설정, 열이름 등은 저장됐습니다.\n(Firebase 미연결 상태라 서류·사진은 애초에 대상이 없습니다)","#1A7A00","#E8FFE0","#AAE0AA");
+      } else if(totalPaths>0 && okPaths===totalPaths && kdPhotosOk){
+        _b2msg("✅ 백업 완료!\n주차칸, 파트설정, 열이름, 엔카이력"+_docN+"\n서류·사진까지 모두 저장되었습니다.","#1A7A00","#E8FFE0","#AAE0AA");
+      } else if(okPaths===0 && !kdPhotosOk){
         _b2msg("⚠️ 부분 백업 완료\n주차칸·설정·메모·엔카이력은 저장됐지만,\n📄서류·📷사진은 담기지 못했습니다.\n(인터넷 연결 후 다시 백업하면 서류·사진까지 포함됩니다)","#8A5A00","#FFF6DB","#E8B800");
       } else {
-        _b2msg("✅ 백업 완료!\n주차칸, 파트설정, 열이름, 엔카이력"+_docN+"\n서류·사진까지 모두 저장되었습니다.","#1A7A00","#E8FFE0","#AAE0AA");
+        /* ★ 신규: 일부만 성공한 애매한 경우 — 정확히 몇 개/무엇이 빠졌는지 표시 */
+        var missNames = failedList.slice(0,4).join(', ') + (failedList.length>4 ? ' 외 '+(failedList.length-4)+'개' : '');
+        _b2msg("⚠️ 일부 항목만 백업됨 ("+okPaths+"/"+totalPaths+"개"+(kdPhotosOk?"":" + 📷사진 실패")+")\n빠진 항목: "+(missNames||'(사진)')+"\n네트워크가 불안정했을 수 있습니다. 다시 시도해 주세요.","#8A5A00","#FFF6DB","#E8B800");
       }
     }catch(e){ _b2msg("❌ 백업 실패: "+e.message,"#C03030","#FFEEEE","#FFAAAA"); }
   }
   /* ★ FIX(완전 이관): Firebase에 있는 모든 데이터를 백업 파일에 포함
      — 차량서류뿐 아니라 공통서류·파트사진·약도그림·이력·백업들까지 전부.
-     이 목록은 "저장용량 현황" 팝업이 조회하는 26개 경로와 동일하게 유지한다. */
+     이 목록은 "저장용량 현황" 팝업이 조회하는 25개 경로와 동일하게 유지한다. */
   /* ★ FIX(코드기반 백업): URL 칸이 비어 있어도 서류·사진이 누락되지 않도록
      실효 URL을 (현재 연결된 Firebase → 저장된 URL → 앱 기본 URL) 순서로 확보한다.
      → 공유코드만 있으면 인터넷이 되는 한 항상 서류·사진까지 포함해 백업된다. */
@@ -15195,22 +15573,38 @@ function doBackup2Export(){
       'dispatch_auth','dispatch_auth_car','dispatch_req','dispatch_scan','links',
       'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
       'pb_search_return','returned','search_dispatch_events','sms_queue','updatedAt'];
+    /* ★ FIX: "요청 실패(ok:false)"와 "그 경로에 원래 데이터가 없어서 null"을 구분해야
+       정확한 성공/실패 판정이 가능하다. 예전엔 둘 다 그냥 null로 뭉뚱그려서, 실패해도
+       "그 경로는 원래 비어있었나보다"처럼 조용히 넘어갔었다. */
     var _fetchOne = function(p){
       return fetch(_base+"/kd_rooms/"+encodeURIComponent(_code)+"/"+p+".json")
-        .then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, val:j}; }).catch(function(){ return {ok:false, val:null}; }); })
+        .catch(function(){ return {ok:false, val:null}; });
     };
     var _fetchPhotos = fetch(_base+"/kd_photos/"+encodeURIComponent(_code)+".json")
-      .then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, val:j}; }).catch(function(){ return {ok:false, val:null}; }); })
+      .catch(function(){ return {ok:false, val:null}; });
     Promise.all(_fbPaths.map(_fetchOne).concat([_fetchPhotos])).then(function(res){
       var _fbFull={};
-      _fbPaths.forEach(function(p, idx){ if(res[idx]!=null) _fbFull[p]=res[idx]; });
+      var _failedPaths=[];
+      _fbPaths.forEach(function(p, idx){
+        var r=res[idx];
+        if(r.ok){ if(r.val!=null) _fbFull[p]=r.val; }   /* 성공 + 실제 값 있음 → 포함 (성공했는데 원래 비어있으면 굳이 안 담아도 무방) */
+        else { _failedPaths.push(p); }                   /* 요청 자체가 실패(ok:false) → 실패로 기록 */
+      });
       data._fbFull = _fbFull;
-      if(res[_fbPaths.length]!=null) data._kdPhotosFull = res[_fbPaths.length];
+      var photoR = res[_fbPaths.length];
+      var kdPhotosOk = !!(photoR && photoR.ok);
+      if(kdPhotosOk && photoR.val!=null) data._kdPhotosFull = photoR.val;
       /* ★ 하위 호환용(구버전 복원파일 호환 필드도 계속 채움) */
       if(_fbFull.kd_docs) data._kd_docs=_fbFull.kd_docs;
       if(_fbFull.kd_doc_flags) data._kd_doc_flags=_fbFull.kd_doc_flags;
       data._backup_info.docs=_fbFull.kd_docs?Object.keys(_fbFull.kd_docs).length:0;
-      data._backup_info.fbPathsIncluded = Object.keys(_fbFull).length;
+      data._backup_info.fbPathsIncluded = Object.keys(_fbFull).length;  /* 하위 호환용 유지 */
+      data._backup_info.fbPathsTotal = _fbPaths.length;
+      data._backup_info.fbPathsOk = _fbPaths.length - _failedPaths.length;
+      data._backup_info.fbPathsFailed = _failedPaths;
+      data._backup_info.kdPhotosOk = kdPhotosOk;
       data._backup_info.kdPhotos = data._kdPhotosFull ? Object.keys(data._kdPhotosFull).length : 0;
       _finishExport();
     }).catch(function(){ _finishExport(); });
@@ -16495,6 +16889,8 @@ function _b2msg(txt,c,bg,bd){
 (function(){
   var ov=document.getElementById('backupOv2');
   if(ov) ov.addEventListener('click',function(e){if(e.target===ov)closeBackup2();});
+  var ov2=document.getElementById('dataMigrateOv');
+  if(ov2) ov2.addEventListener('click',function(e){if(e.target===ov2)closeDataMigrate();});
 })();
 
 

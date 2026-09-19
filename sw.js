@@ -14,7 +14,7 @@
 
 /* ★ 버전 — 앱을 새로 배포할 때마다 이 숫자를 올리면 캐시가 갱신된다.
    (예: 'hg-v1' → 'hg-v2'). 안 올려도 HTML은 네트워크 우선이라 최신이 뜬다. */
-var CACHE_NAME = 'hg-app-v2';
+var CACHE_NAME = 'hg-app-v3';
 
 /* 캐시에서 항상 제외할 도메인/경로 (데이터·API — 반드시 네트워크로) */
 var NEVER_CACHE = [
