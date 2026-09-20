@@ -1,34 +1,36 @@
 /* ══════════════════════════════════════════════════════════════
-   sw.js — 한결 앱 공용 서비스워커 (오프라인 캐시)
-   대상: 주차현황판 / 키불출앱 / 출고서류앱 (각 index.html 옆에 함께 업로드)
+   sw.js — 주차현황판 / 키불출앱 / 출고서류앱 공용 서비스워커
+   (각 앱의 index.html 과 같은 폴더에 함께 업로드)
 
-   ★ 설계 원칙 (매우 중요) ★
-   1) 앱 껍데기(HTML)와 CDN 스크립트 같은 "정적 자원"만 캐시한다.
-      → 네트워크가 끊겨도 앱 화면 자체는 열린다.
-   2) Firebase / 솔라피 / 텔레그램 / 카카오 등 "데이터·API 요청"은
-      절대 캐시하지 않고 항상 네트워크로 통과시킨다.
-      → 주차현황·불출데이터·알림톡이 항상 최신으로 동작 (옛 데이터 사고 방지)
-   3) 새 버전 배포 시: 앱이 보내는 SKIP_WAITING 메시지를 받으면 즉시 교체
-      (앱 쪽은 "다음 실행부터 적용" 방식으로 등록되어 있어 작업 중 강제 리로드 없음)
+   ★ 핵심 동작 ★
+   1) HTML 앱은 "네트워크 우선" — 항상 서버의 최신 파일을 받는다.
+      → 앱을 새로 배포하면 별도 캐시삭제 없이도 최신 화면이 뜬다.
+      → 네트워크가 끊겼을 때만 캐시된 껍데기로 열어준다 (오프라인 지원).
+   2) Firebase·솔라피·텔레그램·카카오·조합사이트 등 "데이터/API"는
+      절대 캐시하지 않는다. → 데이터·알림이 항상 최신 (옛 데이터 사고 방지).
+   3) CDN 스크립트·이미지 등 정적 자원은 "캐시 우선" — 빠르고 오프라인 대응.
    ══════════════════════════════════════════════════════════════ */
 
-/* ★ 버전 — 앱을 새로 배포할 때마다 이 숫자를 올리면 캐시가 갱신된다.
-   (예: 'hg-v1' → 'hg-v2'). 안 올려도 HTML은 네트워크 우선이라 최신이 뜬다. */
-var CACHE_NAME = 'hg-app-v3';
+/* ★ 버전 — 앱을 새로 배포할 때 이 숫자를 올리면 옛 캐시가 완전히 정리된다.
+   (예: 'app-v1' → 'app-v2'). HTML은 네트워크 우선이라 안 올려도 최신이 뜨지만,
+   확실히 갱신하고 싶을 때 올리면 좋다. */
+var CACHE_NAME = 'app-v1';
 
-/* 캐시에서 항상 제외할 도메인/경로 (데이터·API — 반드시 네트워크로) */
+/* 캐시 절대 금지 (데이터·API — 반드시 네트워크로 통과) */
 var NEVER_CACHE = [
   'firebaseio.com',            // Realtime Database
   'firebasedatabase.app',      // RTDB 신 도메인
-  'googleapis.com',            // Firebase/Google API, Functions
-  'identitytoolkit',           // Firebase Auth
+  'googleapis.com',            // Firebase/Google API, Functions, Auth
+  'identitytoolkit',           // Firebase 익명 인증
   'securetoken',               // Firebase Auth 토큰
   'cloudfunctions.net',        // Cloud Functions
-  'run.app',                   // Cloud Run (onKeyDispatch 등)
+  'run.app',                   // Cloud Run
   'solapi.com',                // 솔라피(알림톡)
   'coolsms',                   // 솔라피 구 도메인
   'api.telegram.org',          // 텔레그램 알림
-  'kakao'                      // 카카오 SDK/알림 (동적)
+  'ntfy.sh',                   // ntfy 알림
+  'kakao',                     // 카카오 SDK/알림
+  'carmodoo.com'               // 조합 딜러조회 사이트 (항상 최신)
 ];
 
 function _isNeverCache(url){
@@ -38,14 +40,12 @@ function _isNeverCache(url){
   return false;
 }
 
-/* ── 설치: 즉시 활성 대기 ── */
+/* ── 설치: 즉시 대기 해제 ── */
 self.addEventListener('install', function(e){
-  /* 앱 껍데기는 fetch 시점에 자동 캐시(런타임 캐시)하므로 여기서 미리 받지 않는다.
-     (파일명이 앱마다 달라서 하드코딩하지 않음) */
   self.skipWaiting();
 });
 
-/* ── 활성화: 옛 캐시 정리 ── */
+/* ── 활성화: 옛 버전 캐시 정리 ── */
 self.addEventListener('activate', function(e){
   e.waitUntil(
     caches.keys().then(function(keys){
@@ -65,19 +65,18 @@ self.addEventListener('message', function(e){
 self.addEventListener('fetch', function(e){
   var req = e.request;
 
-  /* GET 이외(POST 등)는 건드리지 않음 — 알림톡 전송 등은 그대로 통과 */
+  /* GET 외(POST 등)는 통과 — 알림 전송·업로드 등 방해 안 함 */
   if (req.method !== 'GET') return;
 
   var url = req.url;
 
-  /* 데이터·API 는 캐시 절대 금지 → 항상 네트워크 (오프라인이면 그대로 실패) */
+  /* 데이터·API 는 캐시 금지 → 항상 네트워크 */
   if (_isNeverCache(url)) return;
 
-  /* chrome-extension 등 비 http(s) 스킴은 무시 */
+  /* http(s) 아닌 스킴 무시 */
   if (url.indexOf('http') !== 0) return;
 
-  /* ── HTML 문서: 네트워크 우선(Network-First) ──
-     항상 최신 앱을 받되, 오프라인이면 캐시된 껍데기로 폴백 */
+  /* ── HTML 문서: 네트워크 우선 (항상 최신 앱, 오프라인이면 캐시 폴백) ── */
   if (req.mode === 'navigate' ||
       (req.headers.get('accept') || '').indexOf('text/html') !== -1){
     e.respondWith(
@@ -98,13 +97,11 @@ self.addEventListener('fetch', function(e){
     return;
   }
 
-  /* ── 그 외 정적 자원(CDN 스크립트·이미지 등): 캐시 우선(Cache-First) ──
-     한 번 받으면 캐시에서 빠르게, 오프라인에서도 동작 */
+  /* ── 그 외 정적 자원(CDN·이미지): 캐시 우선 ── */
   e.respondWith(
     caches.match(req).then(function(cached){
       if (cached) return cached;
       return fetch(req).then(function(res){
-        /* 정상 응답만 캐시 (불투명/에러 응답은 저장 안 함) */
         try{
           if (res && res.status === 200 && res.type === 'basic'){
             var copy = res.clone();
@@ -112,10 +109,7 @@ self.addEventListener('fetch', function(e){
           }
         }catch(err){}
         return res;
-      }).catch(function(){
-        /* 네트워크 실패 + 캐시 없음 → 그대로 실패 */
-        return cached;
-      });
+      }).catch(function(){ return cached; });
     })
   );
 });

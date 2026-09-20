@@ -12234,6 +12234,115 @@ function _purgeOldDocArchive(url, code){
 }
 
 
+/* ★★ 본인인증/QR스캔 데이터(dispatch_auth·dispatch_auth_car·dispatch_scan·scan_log) 24시간 자동정리 ★★
+   - 차량 불출 시 고객 본인확인용으로 잠깐 쓰이는 일시 데이터로, 약도/QR 링크(links)가 이미
+     24시간만 유효 처리되므로(그 후 재사용 안 됨), 그 링크를 검증하는 이 데이터들도 24시간이
+     지나면 함께 쓸모가 없어짐
+   - dispatch_auth/{eid}, dispatch_scan/{eid}: 키(eid)가 곧 생성시각(Date.now())이므로
+     키 값만으로 나이를 계산 (무거운 원본 값을 따로 조회할 필요 없음)
+   - dispatch_auth_car/{car4}: 키가 전화번호 뒤4자리라 시간 정보가 없으므로 값 안의
+     at 필드(생성시각, _pushSearchDispatchToHist에서 eid와 동일하게 저장)로 판단
+   - scan_log/{carKey}: 키가 차량번호 기준이라 시간 정보가 없음. 값에 at 또는 t 필드가
+     있으면 그 기준으로 판단하고, 둘 다 없으면(다른 파일(view.html)이 쓰는 구조라
+     정확히 알 수 없어) 안전하게 건드리지 않음 */
+var _dispatchAuthPruneBusy = false;
+/* ★★ 약도 링크(links) 24시간 자동정리 ★★
+   - view.html이 링크를 24시간만 유효 처리하므로, 24시간 지난 링크는 재사용 안 됨 */
+var _linksPruneBusy = false;
+function _purgeOldLinks(code){
+  try{
+    if(_linksPruneBusy) return;
+    if(typeof fbDb==='undefined' || !fbDb || !code) return;
+    _linksPruneBusy = true;
+    var LIMIT_MS = 24*60*60*1000;
+    var now = Date.now();
+    fbDb.ref('kd_rooms/'+code+'/links').once('value').then(function(snap){
+      var val = snap.val();
+      if(!val){ _linksPruneBusy=false; return; }
+      var updates = {}; var cnt = 0;
+      Object.keys(val).forEach(function(k){
+        var item = val[k];
+        var t = (item && item.t) ? Number(item.t) : 0;
+        if(!t || (now - t) > LIMIT_MS){ updates[k]=null; cnt++; }
+      });
+      if(cnt>0){
+        fbDb.ref('kd_rooms/'+code+'/links').update(updates)
+          .then(function(){ console.log('[약도링크정리] 24시간 지난 링크 '+cnt+'개 삭제'); _linksPruneBusy=false; })
+          .catch(function(){ _linksPruneBusy=false; });
+      } else { _linksPruneBusy=false; }
+    }).catch(function(){ _linksPruneBusy=false; });
+  }catch(e){ _linksPruneBusy=false; }
+}
+
+function _purgeOldDispatchAuth(code){
+  try{
+    if(_dispatchAuthPruneBusy) return;
+    if(typeof fbDb==='undefined' || !fbDb || !code) return;
+    _dispatchAuthPruneBusy = true;
+    var LIMIT_MS = 24*60*60*1000; /* 24시간 */
+    var now = Date.now();
+    var roomRef = fbDb.ref('kd_rooms/'+code);
+    var pending = 4;
+    function _done(){ pending--; if(pending<=0) _dispatchAuthPruneBusy=false; }
+
+    /* dispatch_auth, dispatch_scan — 키(eid) = 생성시각 */
+    ['dispatch_auth','dispatch_scan'].forEach(function(path){
+      roomRef.child(path).once('value').then(function(snap){
+        var val=snap.val();
+        if(!val){ _done(); return; }
+        var updates={}, cnt=0;
+        Object.keys(val).forEach(function(k){
+          var t=Number(k);
+          if(!t || (now-t)>LIMIT_MS){ updates[k]=null; cnt++; }
+        });
+        if(cnt>0){
+          roomRef.child(path).update(updates)
+            .then(function(){ console.log('['+path+' 정리] 24시간 지난 '+cnt+'건 삭제'); _done(); })
+            .catch(function(){ _done(); });
+        } else { _done(); }
+      }).catch(function(){ _done(); });
+    });
+
+    /* dispatch_auth_car — 키는 전화번호 뒤4자리, at 필드로 판단 */
+    roomRef.child('dispatch_auth_car').once('value').then(function(snap){
+      var val=snap.val();
+      if(!val){ _done(); return; }
+      var updates={}, cnt=0;
+      Object.keys(val).forEach(function(k){
+        var item=val[k];
+        var t=(item && item.at) ? Number(item.at) : 0;
+        if(!t || (now-t)>LIMIT_MS){ updates[k]=null; cnt++; }
+      });
+      if(cnt>0){
+        roomRef.child('dispatch_auth_car').update(updates)
+          .then(function(){ console.log('[dispatch_auth_car 정리] 24시간 지난 '+cnt+'건 삭제'); _done(); })
+          .catch(function(){ _done(); });
+      } else { _done(); }
+    }).catch(function(){ _done(); });
+
+    /* scan_log — 키는 차량번호 기준. at/t 필드가 확인되는 항목만 판단(구조 불명확하므로 보수적으로) */
+    roomRef.child('scan_log').once('value').then(function(snap){
+      var val=snap.val();
+      if(!val){ _done(); return; }
+      var updates={}, cnt=0;
+      Object.keys(val).forEach(function(k){
+        var item=val[k];
+        var t=0;
+        if(item && typeof item==='object'){ t=Number(item.at||item.t||0); }
+        if(t && (now-t)>LIMIT_MS){ updates[k]=null; cnt++; }
+      });
+      if(cnt>0){
+        roomRef.child('scan_log').update(updates)
+          .then(function(){ console.log('[scan_log 정리] 24시간 지난 '+cnt+'건 삭제'); _done(); })
+          .catch(function(){ _done(); });
+      } else { _done(); }
+    }).catch(function(){ _done(); });
+  }catch(e){ _dispatchAuthPruneBusy=false; }
+}
+
+
+
+
 /* ★ 차량번호를 수정하고 포커스를 벗어나면(모달이 열려있을 때) 서류 목록도 새로 불러옴
    — 서류는 차량번호 기준으로 저장되므로, 번호를 바꾸면 다른 서류함을 보게 됨 */
 document.addEventListener('DOMContentLoaded', function(){
@@ -14307,7 +14416,18 @@ function _registerSlotsOnListener(){
     if(!remoteTs) return;
     if(remoteTs === _myUploadTs){ _lastAppliedTs = remoteTs; return; }
     if(!_lastAppliedTs){ _lastAppliedTs = remoteTs; return; }
-    if(remoteTs > _lastAppliedTs){ _showRemoteUpdateModal(); }
+    if(remoteTs > _lastAppliedTs){
+      /* ★ 모달을 바로 띄우지 않고 0.6초 지연 → 같은 변경이 구조변경(_gridConfig)이면
+         그 사이 _gridWatch가 즉시 로드하며 _lastAppliedTs를 올려 모달이 취소됨.
+         (열밀기/당기기는 _localTs·_gridConfig 동시 변경 → 모달 중복 방지) */
+      var _tsAtSchedule = remoteTs;
+      setTimeout(function(){
+        /* 지연 사이 이미 로드됐으면(구조변경 등) 모달 안 띄움 */
+        if(_lastAppliedTs >= _tsAtSchedule) return;
+        if(_pendingRemoteUpdate) return;
+        _showRemoteUpdateModal();
+      }, 600);
+    }
   }, _slotsListenerError);
 
   /* 3) ★방법A: _gridConfig(구조) 감시 → 열밀기/당기기/열간격 변경은 '모달 없이 즉시' 반영 */
@@ -14320,10 +14440,14 @@ function _registerSlotsOnListener(){
     if(sig === _myGridSig){ _lastGridSig = sig; return; }  /* 내 변경이면 무시 */
     if(!_lastGridSig){ _lastGridSig = sig; return; }        /* 첫 기준선 */
     if(sig !== _lastGridSig){
-      /* 구조가 바뀜 → 모달 없이 즉시 전체 로드 (열밀기/당기기/열간격 즉시 반영) */
+      /* 구조가 바뀜 → 모달 없이 즉시 전체 로드 (열밀기/당기기/열간격 즉시 반영)
+         ★ 구조변경은 _localTs도 함께 바뀌므로, 여기서 모달을 닫고 로드 →
+            _tsWatchRef가 띄운(또는 띄울) 모달과 중복되지 않게 처리 */
       console.log('[LOWDL] 구조 변경 감지 → 즉시 동기화');
       _lastGridSig = sig;
-      _loadSlotsOnce('grid-change');
+      _hideRemoteUpdateModal();   /* 혹시 먼저 뜬 모달 닫기 */
+      _pendingRemoteUpdate = false;
+      _loadSlotsOnce('grid-change');  /* 내부에서 _lastAppliedTs 갱신 → 이후 _tsWatch 모달 안뜸 */
     }
   }, _slotsListenerError);
 }
@@ -14613,6 +14737,10 @@ function connectFb(url,code){
     try{ _backfillDocFlags(url, code); }catch(e){ console.warn('[서류플래그 보정 호출 실패]', e); }
     /* ★ 서류 보관함 자동정리 — 보관 기간 지난 연월 버킷 완전 삭제 (접속당 1회) */
     try{ _purgeOldDocArchive(url, code); }catch(e){ console.warn('[서류 보관함 정리 호출 실패]', e); }
+    /* ★ 본인인증/QR스캔 데이터(dispatch_auth 등) 자동정리 — 24시간 지난 항목 삭제 (접속당 1회) */
+    try{ setTimeout(function(){ _purgeOldDispatchAuth(code); }, 4500); }catch(e){ console.warn('[본인인증데이터 정리 호출 실패]', e); }
+    /* ★ 약도 링크(links) 24시간 자동정리 (view.html 유효기간과 동일) */
+    try{ setTimeout(function(){ _purgeOldLinks(code); }, 5500); }catch(e){ console.warn('[약도링크 정리 호출 실패]', e); }
 
     /* ★ PIN 사용안함 상태 실시간 동기화 리스너 */
     if(typeof PIN !== 'undefined' && typeof PIN.startListener === 'function'){
@@ -15379,10 +15507,12 @@ function closeBackup2(){
    서버-서버(정확히는 이 브라우저를 경유한 서버↔서버) 방식으로 완전히 옮긴다. */
 var _MIGRATE_ROOM_PATHS = ['pb_slots','pb_settings',
   'kd_docs','kd_docs_data','common_docs','pb_part_photos','pb_part_canvases',
-  'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','scan_log','kd_doc_flags',
-  'dispatch_auth','dispatch_auth_car','dispatch_req','dispatch_scan','links',
+  'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','kd_doc_flags',
+  'links',
   'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
-  'pb_search_return','returned','search_dispatch_events','sms_queue','updatedAt'];
+  'pb_search_return','returned','updatedAt'];
+/* ★★ 발송 큐/인증 경로는 이전에서 제외 — 알림톡 폭주 사고 방지
+   제외: dispatch_req, sms_queue, dispatch_scan, search_dispatch_events, dispatch_auth, dispatch_auth_car, scan_log */
 
 function openDataMigrate(){
   var ov=document.getElementById('dataMigrateOv');
@@ -15569,10 +15699,11 @@ function doBackup2Export(){
     data._cloudTried=true; /* ★ 클라우드(서류·사진) 백업 시도 표시 — 부분백업 경고 판단용 */
     _b2msg("⏳ 전체 데이터 포함 백업 중... 잠시만요 (사진·서류가 많으면 오래 걸릴 수 있습니다)","#7A5500","#FFF8CC","#E8B800");
     var _fbPaths = ['kd_docs','kd_docs_data','common_docs','pb_part_photos','pb_part_canvases',
-      'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','scan_log','kd_doc_flags',
-      'dispatch_auth','dispatch_auth_car','dispatch_req','dispatch_scan','links',
+      'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','kd_doc_flags',
+      'links',
       'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
-      'pb_search_return','returned','search_dispatch_events','sms_queue','updatedAt'];
+      'pb_search_return','returned','updatedAt'];
+    /* ★★ 발송 큐/인증 경로는 백업에서 제외 — 복원 시 알림톡 폭주 사고 방지 */
     /* ★ FIX: "요청 실패(ok:false)"와 "그 경로에 원래 데이터가 없어서 null"을 구분해야
        정확한 성공/실패 판정이 가능하다. 예전엔 둘 다 그냥 null로 뭉뚱그려서, 실패해도
        "그 경로는 원래 비어있었나보다"처럼 조용히 넘어갔었다. */
