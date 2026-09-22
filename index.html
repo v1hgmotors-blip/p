@@ -8589,21 +8589,22 @@ async function testNtfy(){
 }
 
 /* ★ 엔카사진 예약 차주 ntfy 알림 — 예약 10분 전부터 '사진완료' 누를 때까지 2분 간격으로 전송 */
-function _postEncarReserveNtfy(topic, car, timeStr){
+function _postEncarReserveNtfy(topic, car, timeStr, owner){
   if(!topic) return;
   try {
     var body = '\uD83D\uDCF8 \uC5D4\uCE74\uC0AC\uC9C4 \uC608\uC57D \uC54C\uB9BC\n'
       + '\uD83D\uDE97 \uCC28\uB7C9\uBC88\uD638: ' + (car||'') + '\n'
+      + (owner ? '\uD83D\uDC64 \uCC28\uC8FC: ' + owner + '\n' : '')
       + '\u23F0 \uC608\uC57D\uC2DC\uAC01: ' + (timeStr||'') + '\n'
       + '\u2757 \uC0AC\uC9C4\uC644\uB8CC \uCC98\uB9AC \uC804\uAE4C\uC9C0 \uACC4\uC18D \uC804\uC1A1\uB429\uB2C8\uB2E4';
     fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body });
   } catch(e){ console.warn('[엔카예약 ntfy] 실패', e); }
 }
 var _encarNtfyLastSent = {}; /* ★ 슬롯별 마지막 전송 시각(ms) — 2분 간격 제어 */
-function _sendEncarReserveNtfy(slotIdx, car, timeStr, slotTopic){
+function _sendEncarReserveNtfy(slotIdx, car, timeStr, slotTopic, owner){
   var sendFn = function(topic){
     if(!topic) return;
-    _postEncarReserveNtfy(topic, car, timeStr);
+    _postEncarReserveNtfy(topic, car, timeStr, owner);
   };
   if(slotTopic){ sendFn(slotTopic); return; }
   var code = localStorage.getItem(LS_CODE) || '';
@@ -8626,13 +8627,14 @@ function _encarApplyNtfy(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin > 10 || diffMin <= -60) continue; /* ★ 예약 10분 전 ~ 예약시각 1시간 후까지만 */
+    if(diffMin > 60 || diffMin <= -60) continue; /* ★ 예약 1시간 전 ~ 예약시각 1시간 후까지만 */
     var last = _encarNtfyLastSent[i] || 0;
-    if(now - last < 2*60*1000) continue; /* ★ 2분 간격 제어 */
+    var intervalMs = (diffMin > 10) ? 10*60*1000 : 2*60*1000; /* ★ 1시간전~10분전: 10분 간격 / 10분전~1시간후: 2분 간격 */
+    if(now - last < intervalMs) continue;
     _encarNtfyLastSent[i] = now;
     var slotTopic = String((s[i]&&s[i].topic)||'').trim();
     var timeStr = (ec.date||'') + ' ' + (ec.time||'');
-    _sendEncarReserveNtfy(i, s[i].car||'', timeStr, slotTopic);
+    _sendEncarReserveNtfy(i, s[i].car||'', timeStr, slotTopic, s[i].owner||'');
   }
 }
 var _encarNtfyTimer = null;
