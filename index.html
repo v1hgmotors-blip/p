@@ -2709,9 +2709,9 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
         <button type="button" onclick="pickDocCat('')"
                 style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📎 기타 추가</button>
       </div>
-      <input type="file" id="docBundleInput" accept="application/pdf" style="display:none" onchange="handleBundlePdf(this.files)">
+      <input type="file" id="docBundleInput" accept="application/pdf,image/*" multiple style="display:none" onchange="handleBundlePdf(this.files)">
       <button type="button" onclick="pickBundlePdf()"
-              style="width:100%;margin-top:6px;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 PDF 자동분리 (1장 등록증·나머지 점검표)</button>
+              style="width:100%;margin-top:6px;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 자동분리 (PDF·사진 모두 가능, 1장 등록증·나머지 점검표)</button>
       <div id="docUploadStatus" style="font-size:11px;font-weight:700;color:#7C3AED;margin-top:4px;"></div>
     </div>
 
@@ -11883,6 +11883,31 @@ function _splitBundlePdf(file, onDone){
     r.readAsArrayBuffer(file);
   });
 }
+/* ★ 묶음(사진) 자동분리 전용 압축 — 개별 첨부용(_compressDocImage)보다 더 작게 눌러서
+   다운로드 데이터를 최소화. 300KB를 넘으면 화질을 더 낮춰 재압축한다. */
+function _compressDocImageMin(file, cb){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var maxW=1000;
+      var scale=Math.min(1, maxW/img.width);
+      var w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+      var canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      var q=0.6, dataUrl=canvas.toDataURL('image/jpeg',q);
+      while(dataUrl.length*0.75 > 300*1024 && q>0.35){
+        q -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', q);
+      }
+      cb(dataUrl, Math.round(dataUrl.length*0.75));
+    };
+    img.onerror=function(){ cb(e.target.result, file.size); };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
 function pickBundlePdf(){
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
@@ -11891,40 +11916,71 @@ function pickBundlePdf(){
 }
 function handleBundlePdf(files){
   if(!files||!files.length) return;
-  var f=files[0];
-  var fi=document.getElementById('docBundleInput'); if(fi) fi.value='';
-  function _err(m){ showAlert(m); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); }
-  var isPdf=/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name);
-  if(!isPdf){ _err('⚠️ 묶음 분리는 PDF만 가능합니다.'); return; }
+  var fi=document.getElementById('docBundleInput');
+  var arr=Array.prototype.slice.call(files);
+  function _err(m){ if(fi) fi.value=''; showAlert(m); setTimeout(function(){ if(typeof hideAlert==='function') hideAlert(); },2600); }
   var carEl=document.getElementById('mCarInput');
   var car = carEl ? carEl.value.trim() : '';
   var key=_docKeyFromCar(car);
   if(!key){ _err('⚠️ 차량번호를 먼저 입력해 주세요.'); return; }
   var statusEl=document.getElementById('docUploadStatus');
-  if(statusEl) statusEl.textContent='⏳ 묶음 PDF 분리 중...';
-  _splitBundlePdf(f, function(err, res){
-    if(err){
-      if(statusEl) statusEl.textContent='';
-      _err(err==='lib' ? '⚠️ 분리 도구 로드 실패 (인터넷 확인)' : '⚠️ PDF 분리 실패 — 개별 첨부를 이용하세요.');
-      return;
-    }
-    var tasks=[], skip=[];
-    if(res.reg){ (res.reg.size<=4*1024*1024) ? tasks.push({cat:'reg',d:res.reg}) : skip.push('등록증'); }
-    if(res.insp){ (res.insp.size<=4*1024*1024) ? tasks.push({cat:'insp',d:res.insp}) : skip.push('점검표'); }
-    var i=0;
-    function next(){
-      if(i>=tasks.length){
-        var msg = (res.pages<2) ? '✅ 등록증 1건 등록 (1페이지 PDF)' : ('✅ 묶음 분리 완료 — 등록증 1 · 점검표 '+(res.pages-1));
-        if(skip.length) msg+=' · ⚠️ '+skip.join('·')+' 4MB 초과 제외';
-        if(statusEl){ statusEl.textContent=msg; setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000); }
+  var f0=arr[0];
+  var isPdf=/pdf$/i.test(f0.type)||/\.pdf$/i.test(f0.name);
+
+  if(isPdf){
+    if(arr.length>1){ _err('⚠️ PDF는 한 개만 선택해 주세요.'); return; }
+    if(fi) fi.value='';
+    if(statusEl) statusEl.textContent='⏳ 묶음 PDF 분리 중...';
+    _splitBundlePdf(f0, function(err, res){
+      if(err){
+        if(statusEl) statusEl.textContent='';
+        _err(err==='lib' ? '⚠️ 분리 도구 로드 실패 (인터넷 확인)' : '⚠️ PDF 분리 실패 — 개별 첨부를 이용하세요.');
         return;
       }
-      var t=tasks[i++];
-      if(statusEl) statusEl.textContent='⏳ 저장 중... ('+i+'/'+tasks.length+')';
-      _saveDoc(key, t.d.name, 'pdf', t.d.data, t.d.size, t.cat, next);
+      var tasks=[], skip=[];
+      if(res.reg){ (res.reg.size<=4*1024*1024) ? tasks.push({cat:'reg',d:res.reg}) : skip.push('등록증'); }
+      if(res.insp){ (res.insp.size<=4*1024*1024) ? tasks.push({cat:'insp',d:res.insp}) : skip.push('점검표'); }
+      var i=0;
+      function next(){
+        if(i>=tasks.length){
+          var msg = (res.pages<2) ? '✅ 등록증 1건 등록 (1페이지 PDF)' : ('✅ 묶음 분리 완료 — 등록증 1 · 점검표 '+(res.pages-1));
+          if(skip.length) msg+=' · ⚠️ '+skip.join('·')+' 4MB 초과 제외';
+          if(statusEl){ statusEl.textContent=msg; setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000); }
+          return;
+        }
+        var t=tasks[i++];
+        if(statusEl) statusEl.textContent='⏳ 저장 중... ('+i+'/'+tasks.length+')';
+        _saveDoc(key, t.d.name, 'pdf', t.d.data, t.d.size, t.cat, next);
+      }
+      next();
+    });
+    return;
+  }
+
+  /* ★ 사진 묶음 자동분리: 1번째 사진=등록증, 나머지=성능점검표. 다운로드 데이터를
+     줄이기 위해 개별 첨부보다 더 작게 압축(_compressDocImageMin)해서 저장한다. */
+  var allImages = arr.every(function(f){ return /^image\//.test(f.type) || /\.(jpe?g|jpg|png|webp|heic|heif)$/i.test(f.name||''); });
+  if(!allImages){ _err('⚠️ 묶음 분리는 PDF 1개 또는 사진 여러 장만 가능합니다.'); return; }
+  if(fi) fi.value='';
+  var base=(f0.name||'서류').replace(/\.[^.]+$/,'');
+  if(statusEl) statusEl.textContent='⏳ 사진 묶음 분리 중... (0/'+arr.length+')';
+  var i=0;
+  function nextImg(){
+    if(i>=arr.length){
+      var msg = (arr.length<2) ? '✅ 등록증 1건 등록 (사진 1장)' : ('✅ 사진 묶음 분리 완료 — 등록증 1 · 점검표 '+(arr.length-1));
+      if(statusEl){ statusEl.textContent=msg; setTimeout(function(){ if(statusEl) statusEl.textContent=''; },4000); }
+      return;
     }
-    next();
-  });
+    var f=arr[i];
+    var cat = (i===0) ? 'reg' : 'insp';
+    _compressDocImageMin(f, function(dataUrl, size){
+      var seq=i; i++;
+      if(statusEl) statusEl.textContent='⏳ 저장 중... ('+i+'/'+arr.length+')';
+      var name = base+'_'+(cat==='reg'?'등록증':('성능점검표'+(arr.length>2?('_'+seq):'')))+'.jpg';
+      _saveDoc(key, name, 'image', dataUrl, size, cat, nextImg);
+    });
+  }
+  nextImg();
 }
 
 /* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/common_docs 에 저장, 전 차량 공통 ══ */
