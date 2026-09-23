@@ -8499,23 +8499,52 @@ function _encarUpdateBtn(idx){
 }
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
-/* ★ 엔카사진 예약 알림음 (Web Audio API, 외부 파일 불필요) */
+/* ★ 알림음 오디오 컨텍스트를 1개만 유지 + 사용자 조작 때 잠금해제
+   (브라우저 자동재생 정책 때문에, 화면을 한 번 터치/클릭해두면 알림음이 확실히 울림) */
+var _encarAudioCtx = null;
+function _encarUnlockAudio(){
+  try{
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
+    if(_encarAudioCtx.state === 'suspended') _encarAudioCtx.resume();
+  }catch(e){}
+}
+try{
+  document.addEventListener('touchstart', _encarUnlockAudio, {passive:true});
+  document.addEventListener('click', _encarUnlockAudio, {passive:true});
+}catch(e){}
+/* ★ 엔카 알림음 — 자동차 크락션(경적) "빵빵" 스타일: 두 음(400Hz+500Hz, 톱니파)을
+   겹쳐 걸걸한 경적 특유의 음색을 내고, 0.35초씩 "빵" 2번 (총 약 0.9초).
+   * 실제 볼륨은 스피커/미디어 볼륨에 따라 커지고 작아짐 — 여기서 설정하는 값은
+     합성음 자체의 상대적 크기(게인)일 뿐, 기기 볼륨을 대체하지 않음 */
 function _encarPlayAlertBeep(){
   try{
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if(!Ctx) return;
-    var ctx = new Ctx();
-    [0, 220].forEach(function(delayMs, idx){
-      setTimeout(function(){
-        var o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = 880;
-        g.gain.setValueAtTime(0.0001, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(); o.stop(ctx.currentTime + 0.3);
-      }, delayMs);
-    });
+    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
+    var ctx = _encarAudioCtx;
+    if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
+    var honkDur=0.35, gapMs=200, honkCount=2;
+    var freqs=[400, 500]; /* ★ 두 음을 겹쳐서(디소넌스) 경적 특유의 걸걸한 음색 표현 */
+    for(var hi=0; hi<honkCount; hi++){
+      (function(delayMs){
+        setTimeout(function(){
+          var t = ctx.currentTime;
+          freqs.forEach(function(freq){
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sawtooth';        /* 톱니파 — 경적 특유의 거친 질감 */
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
+            g.gain.setValueAtTime(0.45, t + honkDur - 0.05);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + honkDur);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t); o.stop(t + honkDur + 0.02);
+          });
+        }, delayMs);
+      })(hi*(honkDur*1000+gapMs));
+    }
   }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
 }
 function _encarApplyBlinks(){
@@ -8532,8 +8561,9 @@ function _encarApplyBlinks(){
     }
   }
 }
-/* ★ 엔카사진 예약 알림음: 예약시간(±10분 이내)이면 '사진완료' 누를 때까지 10초마다 반복 재생 */
+/* ★ 엔카사진 예약 알림음: 예약시각 10분 전 ~ 1시간 후 동안, '사진완료' 누를 때까지 2분 간격으로 반복 재생 */
 var _encarSoundTimer = null;
+var _encarSoundLastPlayed = 0; /* ★ 마지막으로 실제 소리를 낸 시각(ms) — 2분 간격 제어 */
 function _encarApplySounds(){
   var s=getSlots();
   var now = Date.now();
@@ -8545,13 +8575,20 @@ function _encarApplySounds(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
+    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 */
   }
-  if(anyDue) _encarPlayAlertBeep();
+  if(anyDue){
+    if(now - _encarSoundLastPlayed >= 2*60*1000){ /* ★ 2분 간격으로만 실제 재생 */
+      _encarSoundLastPlayed = now;
+      _encarPlayAlertBeep();
+    }
+  } else {
+    _encarSoundLastPlayed = 0; /* ★ 조건을 벗어나면 리셋 — 다음 예약 도래 시 바로 재생되도록 */
+  }
 }
 function _encarStartSoundTimer(){
   if(_encarSoundTimer) clearInterval(_encarSoundTimer);
-  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격 */
+  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격으로 조건 확인(실제 재생은 2분 간격) */
 }
 _encarStartSoundTimer();
 
@@ -11983,24 +12020,46 @@ function handleBundlePdf(files){
   nextImg();
 }
 
-/* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/common_docs 에 저장, 전 차량 공통 ══ */
+/* ══ 공통서류 (판매확인서 등) — kd_rooms/{code}/kd_common_meta(메타) + kd_common_data(실제 파일) 로 분리 저장, 전 차량 공통.
+   예전에는 common_docs 한 노드에 메타+파일이 같이 있어서 목록만 봐도 전체 파일 데이터를 다 받아야 했음 ══ */
 var _commonDocs = {};
-function _commonDocsRef(){
+function _commonRoomRef(){
   var code=_pbCode();
   if(!code || typeof fbDb==='undefined' || !fbDb) return null;
-  return fbDb.ref('kd_rooms/'+code+'/common_docs');
+  return fbDb.ref('kd_rooms/'+code);
+}
+/* ★ 예전 common_docs(메타+파일 통합) 구조가 남아있으면 kd_common_meta/kd_common_data로
+   1회 옮기고 예전 노드를 지운다. 이미 옮겨졌으면(예전 노드가 비어있으면) 바로 넘어간다.
+   출고서류앱에도 동일 로직이 있어 어느 앱을 먼저 열어도 안전하게 마이그레이션된다. */
+function _migrateCommonDocsIfNeeded(cb){
+  var room=_commonRoomRef();
+  if(!room){ if(cb) cb(); return; }
+  room.child('common_docs').once('value').then(function(snap){
+    var v=snap.val();
+    if(!v || typeof v!=='object' || !Object.keys(v).length){ if(cb) cb(); return; }
+    var updates={};
+    Object.keys(v).forEach(function(id){
+      var d=v[id]||{};
+      updates['kd_common_meta/'+id]={ name:d.name||'', type:d.type||'', size:d.size||0, at:d.at||Date.now() };
+      if(d.data) updates['kd_common_data/'+id]=d.data;
+    });
+    updates['common_docs']=null;
+    room.update(updates).then(function(){ if(cb) cb(); }).catch(function(){ if(cb) cb(); });
+  }).catch(function(){ if(cb) cb(); });
 }
 function loadCommonDocs(){
   var box=document.getElementById('commonDocList');
   if(!box) return;
   _commonDocs={};
-  var ref=_commonDocsRef();
-  if(!ref){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#94A3B8;">Firebase 연결 후 첨부 가능합니다.</div>'; return; }
+  var room=_commonRoomRef();
+  if(!room){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#94A3B8;">Firebase 연결 후 첨부 가능합니다.</div>'; return; }
   box.innerHTML='<div style="font-size:11px;font-weight:700;color:#94A3B8;">불러오는 중...</div>';
-  ref.once('value').then(function(snap){
-    _commonDocs=snap.val()||{};
-    _renderCommonDocList();
-  }).catch(function(){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#EF4444;">목록을 불러오지 못했습니다.</div>'; });
+  _migrateCommonDocsIfNeeded(function(){
+    room.child('kd_common_meta').once('value').then(function(snap){
+      _commonDocs=snap.val()||{};
+      _renderCommonDocList();
+    }).catch(function(){ box.innerHTML='<div style="font-size:11px;font-weight:700;color:#EF4444;">목록을 불러오지 못했습니다.</div>'; });
+  });
 }
 function _renderCommonDocList(){
   var box=document.getElementById('commonDocList');
@@ -12026,8 +12085,8 @@ function _renderCommonDocList(){
 }
 function onCommonDocAttach(files){
   if(!files||!files.length) return;
-  var ref=_commonDocsRef();
-  if(!ref){ showAlert('⚠️ Firebase 연결 후 첨부 가능합니다.'); return; }
+  var room=_commonRoomRef();
+  if(!room){ showAlert('⚠️ Firebase 연결 후 첨부 가능합니다.'); return; }
   var arr=Array.prototype.slice.call(files);
   (function next(){
     if(!arr.length){ var fi=document.getElementById('commonDocInput'); if(fi) fi.value=''; return; }
@@ -12044,21 +12103,25 @@ function onCommonDocAttach(files){
   })();
 }
 function _saveCommonDoc(name,type,dataUrl,size,cb){
-  var ref=_commonDocsRef();
-  if(!ref){ if(cb)cb(); return; }
+  var room=_commonRoomRef();
+  if(!room){ if(cb)cb(); return; }
   var docId='c'+Date.now()+Math.floor(Math.random()*1000);
-  var payload={ name:name, type:type, data:dataUrl, size:size, at:Date.now() };
-  ref.child(docId).set(payload).then(function(){
-    _commonDocs[docId]=payload; _renderCommonDocList();
+  var meta={ name:name, type:type, size:size, at:Date.now() };
+  var updates={};
+  updates['kd_common_meta/'+docId]=meta;
+  updates['kd_common_data/'+docId]=dataUrl;
+  room.update(updates).then(function(){
+    _commonDocs[docId]=meta; _renderCommonDocList();
     /* if(typeof refreshStorageBadge==='function') refreshStorageBadge(); */  /* ★ 자동실행 제거 — 버튼 클릭시에만 계산 */
     if(cb)cb();
   }).catch(function(){ showAlert('⚠️ 공통서류 저장 실패: '+name); if(cb)cb(); });
 }
 function deleteCommonDoc(id){
   if(!confirm('이 공통서류를 삭제할까요?')) return;
-  var ref=_commonDocsRef();
-  if(!ref) return;
-  ref.child(id).remove().then(function(){
+  var room=_commonRoomRef();
+  if(!room) return;
+  var updates={}; updates['kd_common_meta/'+id]=null; updates['kd_common_data/'+id]=null;
+  room.update(updates).then(function(){
     delete _commonDocs[id]; _renderCommonDocList();
     /* if(typeof refreshStorageBadge==='function') refreshStorageBadge(); */  /* ★ 자동실행 제거 — 버튼 클릭시에만 계산 */
   }).catch(function(){});
@@ -12421,7 +12484,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* ══ 저장용량 표시 (DB + 로컬, 버전 뱃지 옆) ══
    ★ 설계 원칙:
-   - 첨부서류(kd_docs 차량별 + common_docs 공통서류) 용량은 별도 항목으로 분리 표시
+   - 첨부서류(kd_docs 차량별 + kd_common_meta/kd_common_data 공통서류) 용량은 별도 항목으로 분리 표시
    - 파트사진/약도그림/슬롯·설정 등 나머지 DB 데이터는 "기타"로 합산
    - 로컬(localStorage) 용량은 DB 용량과 별도로 표시 (기기별 저장공간 관리용) */
 function _byteLen(str){
@@ -12530,7 +12593,7 @@ function _calcDbStorageUsage(cb){
     _fbGetPath(roomRef, 'kd_daily_backup', 15000),
     _fbGetPath(roomRef, 'scan_log', 10000),
     _fbShallowCount(baseUrl, roomPath+'/kd_docs', 8000),           /* 서류 첨부된 차량 수 */
-    _fbShallowCount(baseUrl, roomPath+'/common_docs', 8000),       /* 공통서류 건수 */
+    _fbShallowCount(baseUrl, roomPath+'/kd_common_meta', 8000),   /* 공통서류 건수 */
     _fbShallowCount(baseUrl, roomPath+'/pb_part_photos', 8000),    /* 파트 위치사진 건수 */
     _fbShallowCount(baseUrl, roomPath+'/pb_part_canvases', 8000),  /* 약도 그림데이터 건수 */
     _fbShallowCount(baseUrl, roomPath+'/kd_docs_archive', 8000),   /* 서류 보관함 버킷(연월) 수 */
@@ -15564,7 +15627,7 @@ function closeBackup2(){
    pb_slots·pb_settings(둘 다 Firebase 상의 실제 경로)를 더해, 로컬스토리지를 거치지 않고
    서버-서버(정확히는 이 브라우저를 경유한 서버↔서버) 방식으로 완전히 옮긴다. */
 var _MIGRATE_ROOM_PATHS = ['pb_slots','pb_settings',
-  'kd_docs','kd_docs_data','common_docs','pb_part_photos','pb_part_canvases',
+  'kd_docs','kd_docs_data','kd_common_meta','kd_common_data','pb_part_photos','pb_part_canvases',
   'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','kd_doc_flags',
   'links',
   'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
@@ -15756,7 +15819,7 @@ function doBackup2Export(){
   if(_base && _code){
     data._cloudTried=true; /* ★ 클라우드(서류·사진) 백업 시도 표시 — 부분백업 경고 판단용 */
     _b2msg("⏳ 전체 데이터 포함 백업 중... 잠시만요 (사진·서류가 많으면 오래 걸릴 수 있습니다)","#7A5500","#FFF8CC","#E8B800");
-    var _fbPaths = ['kd_docs','kd_docs_data','common_docs','pb_part_photos','pb_part_canvases',
+    var _fbPaths = ['kd_docs','kd_docs_data','kd_common_meta','kd_common_data','pb_part_photos','pb_part_canvases',
       'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','kd_doc_flags',
       'links',
       'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',

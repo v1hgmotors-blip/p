@@ -686,21 +686,36 @@ function sharePage(){
         _renderDocBox(v, car);
       }).catch(function(){});
     }catch(e){}
-    /* ★ 공통서류(판매확인서) 로드 — 있으면 「판매확인서 다운」 버튼 표시 */
+    /* ★ 공통서류(판매확인서) 로드 — 메타(이름/용량)만 먼저 받아서 버튼 표시 여부만 결정.
+       실제 파일(용량 큰 base64)은 사용자가 「판매확인서 다운」을 눌렀을 때만 받는다.
+       (예전 구조 common_docs가 아직 안 옮겨진 매장 대비 — 있으면 그대로 폴백 사용) */
     try{
-      fdb.ref('kd_rooms/'+code+'/common_docs').once('value').then(function(snap){
+      fdb.ref('kd_rooms/'+code+'/kd_common_meta').once('value').then(function(snap){
         var v = snap.val();
         if(v && typeof v==='object' && Object.keys(v).length){
-          _commonDocs = v;
+          _commonMeta = v;
           var box = document.getElementById('docBox');
           if(box) box.style.display = 'block';
           var cb = document.getElementById('commonDocBtn');
           if(cb) cb.style.display = 'block';
+          return;
         }
+        /* ★ 폴백: 아직 이 매장 관리앱이 새 구조로 마이그레이션을 안 했으면 예전 경로도 확인 */
+        fdb.ref('kd_rooms/'+code+'/common_docs').once('value').then(function(snap2){
+          var v2 = snap2.val();
+          if(v2 && typeof v2==='object' && Object.keys(v2).length){
+            _commonLegacy = v2;
+            var box2 = document.getElementById('docBox');
+            if(box2) box2.style.display = 'block';
+            var cb2 = document.getElementById('commonDocBtn');
+            if(cb2) cb2.style.display = 'block';
+          }
+        }).catch(function(){});
       }).catch(function(){});
     }catch(e){}
   }
-  var _commonDocs = null;
+  var _commonMeta = null;   /* ★ {docId:{name,type,size,at}} — 실제 파일 데이터는 없음 */
+  var _commonLegacy = null; /* ★ 예전 구조 폴백용 — {docId:{name,type,size,at,data}} */
   /* ★ 이 약도 링크 복사 */
   window.copyViewLink = function(){
     var url = location.href;
@@ -789,13 +804,34 @@ function sharePage(){
       _pickListTimer = null;
     }, 10000);
   }
-  /* ★ 공통서류(판매확인서) 다운로드 */
+  /* ★ 공통서류(판매확인서) 다운로드 — 메타만 갖고 있다가, 다운로드 버튼을 누른 이 순간에만
+     실제 파일(kd_common_data)을 받는다. (예전 구조 폴백이면 이미 데이터가 있으니 바로 받음) */
   window.downloadCommonDocs = function(){
-    if(!_commonDocs){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
-    var docs=Object.keys(_commonDocs).map(function(id){ return _commonDocs[id]; }).filter(function(d){ return d&&d.data; });
-    if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
-    docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
-    _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
+    if(_commonLegacy){
+      var legacyDocs=Object.keys(_commonLegacy).map(function(id){ return _commonLegacy[id]; }).filter(function(d){ return d&&d.data; });
+      if(!legacyDocs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      legacyDocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
+      _setDocStatus('📄 판매확인서 '+legacyDocs.length+'개 다운로드됨');
+      return;
+    }
+    if(!_commonMeta){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+    var ids=Object.keys(_commonMeta);
+    if(!ids.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+    _setDocStatus('⏳ 판매확인서 불러오는 중...');
+    Promise.all(ids.map(function(id){
+      return fdb.ref('kd_rooms/'+code+'/kd_common_data/'+id).once('value')
+        .then(function(s){
+          var data=s.val();
+          if(!data) return null;
+          var m=_commonMeta[id]||{};
+          return { name:m.name, type:m.type, data:data };
+        }).catch(function(){ return null; });
+    })).then(function(list){
+      var docs=list.filter(function(d){ return d && d.data; });
+      if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
+      _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
+    });
   };
   /* ★ 성능점검표(cat==='insp') 서류만 골라 다운로드 — 서류공유 버튼 대체 */
   window.downloadInspDocs = function(){
