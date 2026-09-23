@@ -163,7 +163,7 @@
   <div class="car-header" id="carHeader"></div>
   <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
   <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:9px 14px;margin:0 0 8px;">
-    <div style="position:relative;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:8px;line-height:1.4;min-height:22px;"><span id="docTitleLabel">📄 출고서류</span><span id="docCarNo" class="blink" style="position:absolute;left:0;right:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;"></span><span id="safe6Badge" style="display:none;position:absolute;right:0;top:50%;transform:translateY(-50%);background:#0D9488;color:#fff;font-size:13px;font-weight:900;padding:3px 8px;border-radius:8px;pointer-events:none;animation:docCarNoBlink 1s ease-in-out infinite;">🛡️세이프6</span></div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:8px;line-height:1.4;min-height:22px;"><span id="docTitleLabel" style="flex:none;">📄 출고서류</span><span id="docCarNo" class="blink" style="flex:1;min-width:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;word-break:keep-all;"></span><span id="safe6Badge" style="display:none;flex:none;background:#0D9488;color:#fff;font-size:13px;font-weight:900;padding:3px 8px;border-radius:8px;pointer-events:none;animation:docCarNoBlink 1s ease-in-out infinite;">🛡️세이프6</span></div>
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
     <!-- ★ 서류 다운로드/공유 + 판매확인서 (현재 앱은 서류를 종류별로 구분 저장하지 않으므로 통합 버튼 사용) -->
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
@@ -645,12 +645,16 @@ function sharePage(){
         }).catch(function(){ cb(''); });
     }catch(e){ cb(''); }
   }
+  /* ★ 세이프6 배지 표시 — 링크(sf) 또는 실시간 슬롯/설정 값(isSafe6) 기준. 어느 쪽이 먼저 도착해도 반영되도록 별도 함수로 분리 */
+  function _applySafe6Badge(){
+    try{ var _s6=document.getElementById('safe6Badge'); if(_s6) _s6.style.display = isSafe6 ? 'inline-block' : 'none'; }catch(e){}
+  }
   function _renderDocBox(v, car){
     var box = document.getElementById('docBox');
     if(box) box.style.display = 'block'; /* 서류 없어도 영역 표시 */
     var cn = document.getElementById('docCarNo');
     if(cn && car) cn.textContent = '차량번호:' + car;
-    try{ var _s6=document.getElementById('safe6Badge'); if(_s6) _s6.style.display = isSafe6 ? 'inline-block' : 'none'; }catch(e){}
+    _applySafe6Badge();
     if(v && typeof v==='object' && Object.keys(v).length){
       _carDocs = v;
       var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
@@ -1209,6 +1213,9 @@ function sharePage(){
         var m=(String((slot&&slot.memo)||'')+' '+String((slot&&slot.owner)||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
         if(m) oPhone=m[0].replace(/[^0-9]/g,'');
       }
+      /* ★ 세이프6 실시간 반영 — 알림톡 링크(서버 생성)에는 sf가 없으므로 슬롯(safe6)/제휴점 전체설정(safe6Partner)에서 직접 판단 */
+      isSafe6 = !!((slot && slot.safe6) || (st && st.safe6Partner));
+      _applySafe6Badge();
       renderHeader();
       renderMemo(String((slot&&slot.memo)||'').trim());
       drawAutoMap(); /* ★ 사진 유무와 상관없이 항상 자동 약도 갱신 */
@@ -1532,6 +1539,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-07-19 · OEM view v22 (하이브리드 오프라인표시)</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-09-24 · OEM view v23 (세이프6 알림톡 배지 반영)</div>
 </body>
 </html>
