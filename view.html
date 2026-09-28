@@ -761,6 +761,8 @@ function sharePage(){
       fdb.ref(_base+'/dl')
         .transaction(function(cur){ return (cur||0)+1; })
         .catch(function(){});
+      /* ★ 마지막 다운로드 시각도 함께 기록 — 키불출앱 이력에 "언제 받아갔는지" 표시용 */
+      fdb.ref(_base).update({ dlAt: Date.now() }).catch(function(){});
     }catch(e){}
   }
   function _dlOne(d, fallbackName){
@@ -930,11 +932,19 @@ function sharePage(){
   var statusEl = document.getElementById('statusMsg');
   function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
   function hideStatus(){ statusEl.style.display='none'; }
+  /* ★ 주차현황판 미사용(part 없음) 시 "주차위치 보기" 토글 버튼을 숨김 —
+     오류가 아니라 그 매장이 위치 안내 기능을 안 쓰는 정상 상태이므로 조용히 숨긴다 */
+  function _hideParkLocIfNoPart(){
+    try{ var b = document.getElementById('parkLocToggle'); if(b) b.style.display = 'none'; }catch(e){}
+  }
 
   /* 차량번호/차량위치 헤더 — 링크 파라미터에서 즉시 표시 (통신 전에 먼저 보임) */
   if(car || loc){
     var h = document.getElementById('carHeader');
-    h.innerHTML = '차량번호:' + (car ? '<span style="color:#16A34A;font-weight:900;">'+String(car).replace(/[&<>"]/g,'')+'</span>' : '-') + '  차량위치:' + String(loc||'-').replace(/[<>]/g,'');
+    /* ★ 주차현황판 미사용(위치 없음)이면 '차량위치:-'를 띄우지 않고 차량번호만 표시
+       (아래 renderHeader와 동일 규칙 — 초기 표시에서 '-'가 잠깐 보이는 현상 제거) */
+    var _c0 = car ? '<span style="color:#16A34A;font-weight:900;">'+String(car).replace(/[&<>"]/g,'')+'</span>' : '-';
+    h.innerHTML = loc ? ('차량번호:' + _c0 + '  차량위치:' + String(loc).replace(/[<>]/g,'')) : ('차량번호:' + _c0);
     h.style.display = 'block';
   }
 
@@ -951,7 +961,9 @@ function sharePage(){
     if(car || loc){
       /* ★ 차량번호를 녹색 볼드로 강조 */
       var _carHtml = car ? '<span style="color:#16A34A;font-weight:900;">'+_hEsc(car)+'</span>' : '-';
-      h.innerHTML = '차량번호:' + _carHtml + '  차량위치:' + _hEsc(loc||'-');
+      /* ★ 주차위치 정보가 없으면(주차현황판 미사용 매장) "차량위치:-"를 보여주지 않고
+         차량번호만 깔끔히 표시 — 위치는 선택 정보이지 오류가 아님 */
+      h.innerHTML = loc ? ('차량번호:' + _carHtml + '  차량위치:' + _hEsc(loc)) : ('차량번호:' + _carHtml);
       /* ★ 키번호 — 녹색 글씨로 헤더 끝에 표시 */
       if(keyNo){
         h.innerHTML += ' <span style="color:#15803D;font-weight:900;">(키번호는 ' + _hEsc(keyNo) + '번입니다)</span>';
@@ -1084,7 +1096,12 @@ function sharePage(){
   /* ★ FIX(요청): 카카오 승인 템플릿 버튼 URL엔 변수 1개(k)만 허용돼 db=가 아예
      빠져 있음 — 이 시스템의 모든 업체가 결국 같은 Firebase 프로젝트를 쓰므로,
      db가 없으면 이 기본값으로 안전하게 접속한다(URL에 db가 있으면 그 값이 우선). */
-  if(!db){ db = 'https://kp-system-8e4eb-default-rtdb.firebaseio.com'; }
+  /* ★ OEM 설정: 카카오 알림톡 버튼 URL엔 db= 변수를 넣을 수 없어, db 파라미터가 없으면
+     아래 기본 Firebase 주소로 접속합니다. ★ 배포 업체는 이 값을 자사 Firebase 주소로 바꿔주세요.
+     예: 'https://your-project-default-rtdb.firebaseio.com' */
+  var OEM_DEFAULT_DB = 'https://kp-system-8e4eb-default-rtdb.firebaseio.com';
+  if(!db){ db = OEM_DEFAULT_DB; }
+  if(!db){ showStatus('⚠️ 접속 정보가 없습니다.<br>QR을 다시 스캔해 주세요.'); return; }
   try{
     firebase.initializeApp({ databaseURL: db });
     fdb = firebase.database();
@@ -1128,7 +1145,10 @@ function sharePage(){
           if(d1 && d1.slice(-4)===l4){ slotKey=keys[j]; slot=s1; break; }
         }
       }
-      if(!slot){ showCarGone(); return; }
+      /* ★ 주차현황판 미사용 링크(part 없음)는 애초에 주차칸을 쓰지 않는 매장이므로,
+         슬롯에 없다고 해서 "차량이 사라졌다"고 안내하면 안 된다.
+         (키불출앱만 쓰거나 서류앱에 등록되지 않은 차량 → 기존 표시를 그대로 유지) */
+      if(!slot){ if(!part){ return; } showCarGone(); return; }
       var numParts=parseInt(st.numParts)||3, defC=parseInt(st.colsPerPart)||10, defR=parseInt(st.rowsPerPart)||4;
       var pC=[],pR=[],pO=[],off=0;
       for(var p=1;p<=numParts;p++){
@@ -1479,7 +1499,7 @@ function sharePage(){
     loadCarDocs(car);
     if(car){ startLiveTracking(car); _checkAuthThenLog(car); } else { _logScan(''); }
     _lastPartLoaded = part;
-    if(part){ loadPart(); }
+    if(part){ loadPart(); } else { _hideParkLocIfNoPart(); }
   } else if(lkey){
     /* ★ FIX(카카오 템플릿 c= 고정 문제 대응): link_index에서 이 k(단축키)의
        "진짜 코드"를 먼저 확인하고, URL의 c= 값과 다르면 진짜 값으로 바로잡는다.
@@ -1496,6 +1516,14 @@ function sharePage(){
       return fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value');
     }).then(function(snap){
       var d = snap.val();
+      /* ★ FIX: 링크 데이터가 아예 없는 경우 = 24시간 자동정리로 이미 삭제됐거나 잘못된 키.
+         예전에는 아무 안내 없이 "약도를 불러오는 중입니다..." 스피너에서 멈춰
+         고객에게는 먹통처럼 보였다. → 만료 안내를 명확히 표시한다.
+         (URL에 part/car가 직접 담긴 구형 링크는 그대로 진행) */
+      if(!d && !car && !part){
+        showStatus('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
+        return;
+      }
       /* ★ 유효기간 24시간 — 생성(d.t) 후 24시간 지나면 만료 안내 */
       if(d && typeof d === 'object' && d.t){
         var _ageMs = Date.now() - Number(d.t);
@@ -1523,14 +1551,14 @@ function sharePage(){
       if(car){ startLiveTracking(car); _checkAuthThenLog(car); } else { _logScan(''); } /* ★ 실시간 반영 + 본인확인/기록 */
       _lastPartLoaded = part;
       if(part){ loadPart(); }
-      else { showStatus('⚠️ 링크 정보가 만료되었거나 없습니다.'); }
+      else { _hideParkLocIfNoPart(); }   /* ★ 주차현황판 미사용 매장 — 오류 메시지 대신 위치 섹션만 조용히 숨김 */
     }).catch(function(){
       showStatus('⚠️ 링크 정보를 불러오지 못했습니다.<br>네트워크를 확인해 주세요.');
     });
   } else {
     if(car){ startLiveTracking(car); _checkAuthThenLog(car); } /* ★ 실시간 반영 + 본인확인/기록 */
     _lastPartLoaded = part;
-    loadPart();
+    if(part){ loadPart(); } else { _hideParkLocIfNoPart(); }
   }
 
   /* 12초 안전장치 */
