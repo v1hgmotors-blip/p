@@ -262,7 +262,11 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .settings-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;min-height:26px;cursor:pointer;user-select:none;}
 .settings-toggle-lbl{font-size:13px;font-weight:800;color:#7A5500;}
 .settings-toggle-btn{background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px;color:#7A5500;line-height:1;flex-shrink:0;}
-.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:300px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;} /* ★ 세이프6제휴점 줄 추가로 220→300px (발송방식 줄 안 잘리게) */
+.settings-body{overflow:hidden;transition:max-height .25s ease, opacity .2s ease;max-height:800px;opacity:1;display:flex;flex-direction:column;gap:3px;padding-bottom:4px;}
+/* ★ FIX(2026-09-30): 위 max-height 가 300px 이어서 폰 화면(가로 360~480px)에서
+   설정 내용(실측 352px)의 아래쪽이 잘렸다. → 「발송방식(알림톡·문자·QR만)」과
+   「본인확인 / 링크요금」 줄이 파트 헤더에 가려 보이지 않던 문제.
+   줄이 늘어나도 다시 잘리지 않도록 넉넉히 800px 로 올림. (접기 동작은 그대로) */
 .settings-body.collapsed{max-height:0;opacity:0;padding-bottom:0;}
 /* ★ 메인 스크롤 래퍼 */
 #mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
@@ -1772,7 +1776,8 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   overflow:hidden; max-height:0; transition:max-height .3s ease, opacity .2s ease;
   opacity:0; margin-top:0;
 }
-.owner-panel.open { max-height:300px; opacity:1; margin-top:8px; }
+.owner-panel.open { max-height:520px; opacity:1; margin-top:8px; }
+/* ★ 2026-10-01: 직접등록칸이 접기 안으로 들어오면서 펼쳤을 때 높이가 늘어남 → 300→520px */
 .owner-panel-inner {
   background:#FFF9DB; border:1.5px solid #FCD34D; border-radius:10px;
   padding:10px 10px 8px;
@@ -1799,6 +1804,15 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   display:flex; flex-wrap:wrap; gap:5px;
   max-height:140px; overflow-y:auto;
 }
+/* ★ 등록된 차주 목록 접기/펴기 버튼 */
+.owner-add-hint{font-size:11px;font-weight:800;color:#A16207;margin:8px 0 4px;padding-top:7px;border-top:1px dashed #FCD34D;}
+.owner-fold-btn {
+  width:100%; box-sizing:border-box; margin-bottom:6px;
+  background:#FDE68A; color:#92400E; border:1.5px solid #F59E0B; border-radius:8px;
+  padding:7px 10px; font-size:12px; font-weight:900; cursor:pointer;
+  font-family:inherit; text-align:left; touch-action:manipulation;
+}
+.owner-fold-btn:active { background:#FCD34D; }
 .owner-chip-default {
   border: 1.5px solid #A5B4FC !important;
   background: #EEF2FF !important;
@@ -2730,6 +2744,8 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
           <input id="mOwnerPhoneInput" type="tel" inputmode="numeric" autocomplete="off"
                  placeholder="📞 차주 전화번호"
                  maxlength="13"
+                 onfocus="_phoneFocus010(this)"
+                 onblur="_phoneBlur010(this, function(){ onOwnerPhoneInput(''); })"
                  oninput="onOwnerPhoneInput(this.value)"
                  style="flex:1;min-width:120px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#E8F5E9;font-family:inherit;outline:none;box-sizing:border-box;" />
           <!-- ★ 차주 알림 토픽 -->
@@ -2746,28 +2762,38 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <!-- 차주 선택 패널 -->
       <div class="owner-panel" id="ownerPanel">
         <div class="owner-panel-inner">
-          <div class="owner-add-row">
-            <input class="owner-add-input" id="ownerAddInput" type="text"
-                   placeholder="이름" maxlength="15"
-                   onkeydown="if(event.key==='Enter')addOwner()">
-            <!-- ★ 차주 전화번호 (이름과 세트로 저장 → 칩 선택 시 함께 입력됨) -->
-            <input class="owner-add-input" id="ownerAddPhone" type="tel" inputmode="numeric"
-                   placeholder="📞 전화번호" maxlength="13"
-                   onkeydown="if(event.key==='Enter')addOwner()"
-                   style="background:#E8F5E9;">
-            <!-- ★ 차주 알림 토픽 세트 -->
-            <input class="owner-add-input" id="ownerAddTopic" type="text"
-                   placeholder="📲 알림 토픽(선택)" maxlength="60"
-                   onkeydown="if(event.key==='Enter')addOwner()"
-                   style="background:#EDE9FE;">
-            <button class="owner-add-save" onclick="addOwner()">＋ 추가</button>
-            <button class="owner-sel-btn" id="ownerEditBtn" onclick="toggleOwnerEditMode()" title="칩 수정">✏️</button>
-            <button class="owner-sel-btn" id="ownerSelBtn" onclick="toggleOwnerDelMode()" title="선택삭제">🗑️</button>
-          </div>
-          <div class="owner-list" id="ownerList"></div>
-          <div class="owner-del-bar" id="ownerDelBar">
-            <button class="owner-del-cancel" onclick="cancelOwnerDelMode()">취소</button>
-            <button class="owner-del-confirm" onclick="confirmOwnerDelete()" id="ownerDelConfirm">선택 삭제 (0)</button>
+          <!-- ★ 간결화(2026-10-01): 평소에는 이 한 줄만 보인다.
+               펼치면 칩 목록 + 직접등록칸(이름·전화번호·토픽·＋추가·수정·삭제)이 함께 나온다.
+               슬롯에 차주를 입력해 저장하면 목록에 자동 등록되므로, 직접등록칸은
+               "차를 받기 전에 미리 넣어둘 때"만 쓰는 보조 수단이라 안쪽으로 넣었다. -->
+          <button type="button" class="owner-fold-btn" id="ownerFoldBtn"
+                  onclick="toggleOwnerListFold()">👥 등록된 차주 ▼</button>
+          <div id="ownerListWrap" style="display:none;">
+            <div class="owner-list" id="ownerList"></div>
+            <div class="owner-del-bar" id="ownerDelBar">
+              <button class="owner-del-cancel" onclick="cancelOwnerDelMode()">취소</button>
+              <button class="owner-del-confirm" onclick="confirmOwnerDelete()" id="ownerDelConfirm">선택 삭제 (0)</button>
+            </div>
+            <div class="owner-add-hint">＋ 미리 등록해두기 (선택)</div>
+            <div class="owner-add-row">
+              <input class="owner-add-input" id="ownerAddInput" type="text"
+                     placeholder="이름 (필수)" maxlength="15"
+                     onkeydown="if(event.key==='Enter')addOwner()">
+              <!-- ★ 차주 전화번호 (이름과 세트로 저장 → 칩 선택 시 함께 입력됨) -->
+              <input class="owner-add-input" id="ownerAddPhone" type="tel" inputmode="numeric"
+                     placeholder="📞 전화번호 (필수)" maxlength="13"
+                     onfocus="_phoneFocus010(this)" onblur="_phoneBlur010(this)"
+                     onkeydown="if(event.key==='Enter')addOwner()"
+                     style="background:#E8F5E9;">
+              <!-- ★ 차주 알림 토픽 세트 -->
+              <input class="owner-add-input" id="ownerAddTopic" type="text"
+                     placeholder="📲 알림 토픽(선택)" maxlength="60"
+                     onkeydown="if(event.key==='Enter')addOwner()"
+                     style="background:#EDE9FE;">
+              <button class="owner-add-save" onclick="addOwner()">＋ 추가</button>
+              <button class="owner-sel-btn" id="ownerEditBtn" onclick="toggleOwnerEditMode()" title="칩 수정">✏️</button>
+              <button class="owner-sel-btn" id="ownerSelBtn" onclick="toggleOwnerDelMode()" title="선택삭제">🗑️</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3924,6 +3950,7 @@ var LS_CAR_FS_MAP='pb_car_fs_map'; /* ★ PC 차량번호 크기 파트별 설�
    ════════════════════════════════════════ */
 var LS_OWNER_LIST = 'pb_owner_list';
 var _ownerDelMode = false;
+var _ownerListOpen = false;   /* ★ 등록된 차주 칩 목록 접힘/펼침 상태 (기본: 접힘) */
 var _ownerEditMode = false;
 var _ownerEditIdx = -1;
 var _safe6Selected = false;
@@ -3957,6 +3984,9 @@ function _ownerEntryTopic(e){ return (e && typeof e === 'object') ? String(e.t||
 /* ★ 칩 선택 시: 이름 + 전화번호를 슬롯에 함께 적용 */
 function applyOwnerSelection(name, phone, topic){
   insertOwnerToMemo(name);
+  /* ★ 「차주이름 직접입력」 칸에도 같은 이름을 넣어 화면이 서로 어긋나지 않게 한다 */
+  var _ni = document.getElementById('mOwnerInlineInput');
+  if(_ni) _ni.value = String(name||'');
   phone = String(phone||'').replace(/[^0-9]/g,'');
   if(phone){
     var pi = document.getElementById('mOwnerPhoneInput');
@@ -3965,6 +3995,7 @@ function applyOwnerSelection(name, phone, topic){
   }
   var _tp = document.getElementById('mTopicInput');
   if(_tp) _tp.value = String(topic||'');
+  try{ toggleOwnerListFold(false); }catch(e){}   /* ★ 고르면 목록 자동 접힘 */
 }
 function _ownerBackupKey(){
   var c = (localStorage.getItem('pb_code')||localStorage.getItem(LS_CODE)||'').replace(/[^a-zA-Z0-9가-힣_-]/g,'') || 'default';
@@ -4003,6 +4034,98 @@ function toggleOwnerPanel() {
     renderOwnerList();
     setTimeout(function(){ var inp=document.getElementById('ownerAddInput'); if(inp) inp.focus(); }, 300);
   }
+}
+
+/* ★ 저장 차단 경고문구 표시 — 차주이름/전화번호 중 무엇이 빠졌는지 알려준다 */
+function _showOwnerError(title, sub){
+  var el = document.getElementById('mOwnerError');
+  if(!el) return;
+  el.innerHTML = title + '<br><span style="font-size:11px;font-weight:700;opacity:.8;">' + sub + '</span>';
+  el.classList.remove('show');
+  void el.offsetWidth;            /* 애니메이션 재시작 */
+  el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 4000);
+}
+
+/* ★ 슬롯을 저장할 때 그 차주를 「등록된 차주」 목록에 자동으로 넣어 준다.
+   · 차주이름을 직접 입력해 저장하면 따로 [＋ 추가] 를 누르지 않아도 목록에 들어간다
+   · 같은 이름이 이미 있으면 전화번호·토픽만 새 값으로 갱신 (빈 값으로는 덮어쓰지 않음)
+   · 파일에 박혀 있는 기본 차주와 같은 이름이면 건너뜀 (이미 칩으로 보이므로)
+   · 바뀐 내용이 없으면 저장하지 않음 → 불필요한 Firebase 쓰기 방지 */
+function _autoRegisterOwner(name, phone, topic){
+  try{
+    name  = String(name||'').trim();
+    phone = String(phone||'').replace(/[^0-9]/g,'');
+    topic = String(topic||'').trim();
+    if(!name) return;
+    if(typeof DEFAULT_OWNER_LIST !== 'undefined' &&
+       DEFAULT_OWNER_LIST.some(function(e){ return _ownerEntryName(e) === name; })) return;
+
+    var list = getOwnerList();
+    var idx = -1;
+    for(var i=0;i<list.length;i++){ if(_ownerEntryName(list[i]) === name){ idx = i; break; } }
+
+    if(idx >= 0){
+      var exP = _ownerEntryPhone(list[idx]), exT = _ownerEntryTopic(list[idx]);
+      var np  = phone || exP, nt = topic || exT;
+      if(np === exP && nt === exT) return;      /* 달라진 게 없음 */
+      list[idx] = { n:name, p:np, t:nt };
+      saveOwnerList(list);
+      try{ renderOwnerList(); }catch(e){}
+      return;
+    }
+
+    list.push({ n:name, p:phone, t:topic });
+    saveOwnerList(list);
+    try{ renderOwnerList(); }catch(e){}
+    if(typeof showAlert === 'function'){
+      showAlert('⭐ ' + name + ' 님이 차주 목록에 추가되었습니다');
+      setTimeout(hideAlert, 1600);
+    }
+  }catch(e){ console.warn('[차주 자동등록]', e); }
+}
+
+/* ★ 전화번호 칸을 누르면 010 을 자동으로 넣어 준다 (칸이 비어 있을 때만).
+   · 뒤 8자리만 치면 되므로 입력이 빨라진다
+   · 011·016·017·유선번호는 앞자리를 고쳐 쓰면 된다
+   · 010 만 남긴 채 칸을 벗어나면 다시 비운다 → 「010」짜리 쓰레기값이 저장되지 않음 */
+function _phoneFocus010(el){
+  try{
+    if(!el) return;
+    if(String(el.value||'').replace(/[^0-9]/g,'') === ''){
+      el.value = '010';
+      setTimeout(function(){ try{ el.setSelectionRange(3,3); }catch(e){} }, 0);
+    }
+  }catch(e){}
+}
+function _phoneBlur010(el, onClear){
+  try{
+    if(!el) return;
+    if(String(el.value||'').replace(/[^0-9]/g,'') === '010'){
+      el.value = '';
+      if(typeof onClear === 'function') onClear();
+    }
+  }catch(e){}
+}
+
+/* ★ 등록된 차주 칩 목록 접기/펴기
+   · 기본은 접힘 — 모달이 길어지지 않게
+   · 이름을 고르면(applyOwnerSelection) 자동으로 다시 접힘
+   · 수정(✏️)·삭제(🗑️) 모드로 들어갈 때는 자동으로 펼침 */
+function toggleOwnerListFold(force){
+  _ownerListOpen = (typeof force === 'boolean') ? force : !_ownerListOpen;
+  var wrap = document.getElementById('ownerListWrap');
+  if (wrap) wrap.style.display = _ownerListOpen ? 'block' : 'none';
+  _updateOwnerFoldBtn();
+}
+function _updateOwnerFoldBtn(){
+  var b = document.getElementById('ownerFoldBtn');
+  if (!b) return;
+  var n = 0;
+  try {
+    n = (DEFAULT_OWNER_LIST || []).length + (getOwnerList() || []).length;
+  } catch(e) {}
+  b.textContent = '👥 등록된 차주' + (n ? ' ' + n + '명' : '') + (_ownerListOpen ? ' ▲' : ' ▼');
 }
 
 function renderOwnerList() {
@@ -4084,7 +4207,20 @@ function addOwner() {
   var phone = pInp ? pInp.value.replace(/[^0-9]/g,'') : '';
   var tInp = document.getElementById('ownerAddTopic');
   var topic = tInp ? tInp.value.trim() : '';
-  if (!name) return;
+  /* ★ 차주이름·전화번호는 필수 — 약도/알림톡에서 담당차주 표시·전화걸기에 쓰이므로
+     둘 중 하나라도 비면 등록하지 않는다 */
+  if (!name) {
+    showAlert('⚠️ 차주이름을 입력해 주세요 (필수)');
+    setTimeout(hideAlert, 2000);
+    if (inp) inp.focus();
+    return;
+  }
+  if (phone.length < 10) {
+    showAlert('⚠️ 전화번호를 정확히 입력해 주세요 (필수)');
+    setTimeout(hideAlert, 2000);
+    if (pInp) pInp.focus();
+    return;
+  }
   if (_ownerEditIdx >= 0) {
     var _elist = getOwnerList();
     if (_ownerEditIdx < _elist.length) { _elist[_ownerEditIdx] = (phone||topic) ? { n: name, p: phone, t: topic } : name; saveOwnerList(_elist); }
@@ -4114,6 +4250,7 @@ function addOwner() {
   saveOwnerList(list);
   inp.value = ''; if(pInp) pInp.value=''; if(tInp) tInp.value='';
   renderOwnerList();
+  try{ toggleOwnerListFold(true); }catch(e){}   /* ★ 방금 추가된 차주를 바로 볼 수 있게 펼침 */
 }
 
 
@@ -4145,15 +4282,21 @@ function onOwnerInlineInput(name) {
     }
     ta.value = name ? name + ' / ' + memo : memo;
   }
-  /* owner 필드도 즉시 슬롯에 저장 */
-  if (activeSlot !== null && name) {
+  /* owner 필드도 즉시 슬롯에 저장
+     ★ FIX(2026-10-01): 예전에는 (name) 이 있을 때만 저장해서, 이름칸을 지워도
+        슬롯에는 옛 이름이 그대로 남았다. 그 바람에 「차주입력이 안되었습니다」
+        경고가 뜨지 않고 그냥 저장되는 문제가 있었다. → 빈 값이면 비우도록 변경.
+        (값이 달라졌을 때만 저장해 불필요한 Firebase 쓰기도 줄였다) */
+  if (activeSlot !== null) {
     var s = getSlots();
     if (!s[activeSlot]) s[activeSlot] = {};
-    s[activeSlot].owner = name;
-    saveSlots(s);
-    if (fbSlotsRef) {
-      var upd = {}; upd[activeSlot] = s[activeSlot];
-      _fbV7Update(upd);
+    if (s[activeSlot].owner !== name) {
+      s[activeSlot].owner = name;
+      saveSlots(s);
+      if (fbSlotsRef) {
+        var upd = {}; upd[activeSlot] = s[activeSlot];
+        _fbV7Update(upd);
+      }
     }
   }
 }
@@ -4230,6 +4373,7 @@ function toggleOwnerEditMode() {
   }
   var _eb=document.getElementById('ownerEditBtn');
   if(_eb) _eb.style.background = _ownerEditMode ? '#F59E0B' : '#94A3B8';
+  if(_ownerEditMode){ try{ toggleOwnerListFold(true); }catch(e){} }   /* ★ 수정하려면 목록이 보여야 함 */
   renderOwnerList();
 }
 function toggleOwnerDelMode() {
@@ -4239,6 +4383,7 @@ function toggleOwnerDelMode() {
   var btn = document.getElementById('ownerSelBtn');
   if (bar) bar.classList.toggle('show', _ownerDelMode);
   if (btn) btn.style.background = _ownerDelMode ? '#EF4444' : '#94A3B8';
+  if(_ownerDelMode){ try{ toggleOwnerListFold(true); }catch(e){} }   /* ★ 삭제하려면 목록이 보여야 함 */
   renderOwnerList();
 }
 
@@ -4252,6 +4397,7 @@ function cancelOwnerDelMode() {
 }
 
 function _updateDelConfirmBtn() {
+  try{ _updateOwnerFoldBtn(); }catch(e){}   /* ★ 접기버튼의 인원수 표시 갱신 */
   var wrap = document.getElementById('ownerList');
   var btn  = document.getElementById('ownerDelConfirm');
   if (!btn) return;
@@ -13021,17 +13167,17 @@ function saveSlot(){
     }
     /* A방법: 기존 슬롯 owner 필드 */
     var _chkOwnerSlot = (s0[activeSlot] && s0[activeSlot].owner) ? s0[activeSlot].owner : '';
-    var _finalOwner = _chkOwnerMemo || _chkOwnerSlot;
+    /* ★ FIX(2026-10-01): 「차주이름 직접입력」 칸이 지금 화면의 실제 값이다.
+       칸을 비워두었다면 "차주 없음"으로 봐야 한다. 예전에는 슬롯에 남아 있던
+       옛 이름을 보고 그냥 통과시켜서, 지우고 저장해도 경고가 안 떴다. */
+    var _chkInlineEl    = document.getElementById('mOwnerInlineInput');
+    var _chkOwnerInline = _chkInlineEl ? _chkInlineEl.value.trim() : '';
+    var _finalOwner = _chkInlineEl ? (_chkOwnerInline || _chkOwnerMemo)
+                                   : (_chkOwnerMemo   || _chkOwnerSlot);
 
     if(!_finalOwner && !_skipOwnerAndDupCheck){
       /* 차주 없음 → 에러 표시, 저장 차단 */
-      var ownerErrEl = document.getElementById('mOwnerError');
-      if(ownerErrEl){
-        ownerErrEl.classList.remove('show');
-        void ownerErrEl.offsetWidth; /* 애니메이션 재시작 */
-        ownerErrEl.classList.add('show');
-        setTimeout(function(){ ownerErrEl.classList.remove('show'); }, 4000);
-      }
+      _showOwnerError('🙋 차주입력이 안되었습니다', '차주를 입력한 후 저장해 주세요');
       /* 차주 패널 자동 열기 */
       var panel = document.getElementById('ownerPanel');
       var btn   = document.getElementById('ownerPanelBtn');
@@ -13039,11 +13185,28 @@ function saveSlot(){
         panel.classList.add('open');
         if(btn) btn.textContent = '👤 닫기 ▲';
         renderOwnerList();
-        setTimeout(function(){
-          var inp = document.getElementById('ownerAddInput');
-          if(inp) inp.focus();
-        }, 350);
       }
+      if(_chkInlineEl) setTimeout(function(){ try{ _chkInlineEl.focus(); }catch(e){} }, 350);
+      return; /* 저장 차단 */
+    }
+
+    /* ★ 차주 전화번호도 필수 (2026-10-01)
+       약도 페이지의 담당차주 전화 표시·📞전화걸기, 알림톡·문자 발송이 모두 이 번호를 쓴다.
+       번호가 비어 있으면 키불출해도 약도에 차주 전화가 안 뜨므로 저장 단계에서 막는다.
+       (사용안함·판매완료, 그리고 한글 차량번호 등 예외조건은 그대로 통과) */
+    var _chkPhoneEl = document.getElementById('mOwnerPhoneInput');
+    var _chkPhone   = _chkPhoneEl ? _chkPhoneEl.value.replace(/[^0-9]/g,'') : '';
+    if(_chkPhoneEl && _chkPhone.length < 10 && !_skipOwnerAndDupCheck){
+      _showOwnerError('📞 차주 전화번호가 없습니다',
+                      '약도·알림톡에 차주 전화가 표시되려면 번호가 필요합니다');
+      var panel2 = document.getElementById('ownerPanel');
+      var btn2   = document.getElementById('ownerPanelBtn');
+      if(panel2 && !panel2.classList.contains('open')){
+        panel2.classList.add('open');
+        if(btn2) btn2.textContent = '👤 닫기 ▲';
+        renderOwnerList();
+      }
+      setTimeout(function(){ try{ _chkPhoneEl.focus(); }catch(e){} }, 350);
       return; /* 저장 차단 */
     }
   }
@@ -13075,8 +13238,11 @@ function saveSlot(){
   /* ★ 인라인 입력란 값 우선 사용 */
   var _inlineOwnerEl = document.getElementById('mOwnerInlineInput');
   var _inlineOwner = _inlineOwnerEl ? _inlineOwnerEl.value.trim() : '';
-  /* 우선순위: 인라인입력 > 메모파싱 > 기존 owner */
-  var _newOwner = _inlineOwner || _ownerFromMemo || _prevOwner;
+  /* 우선순위: 인라인입력 > 메모파싱 > 기존 owner
+     ★ FIX(2026-10-01): 이름칸이 화면에 있으면 그 값이 기준이다. 비워두고 저장하면
+        기존 owner 로 되살아나지 않고 실제로 비워진다(위 필수검사와 같은 기준). */
+  var _newOwner = _inlineOwnerEl ? (_inlineOwner || _ownerFromMemo)
+                                 : (_inlineOwner || _ownerFromMemo || _prevOwner);
   /* ★ 차주 전화번호: 입력란 값 우선, 없으면 기존값 유지 */
   var _opEl = document.getElementById('mOwnerPhoneInput');
   var _prevOwnerPhone = (s[activeSlot] && s[activeSlot].ownerPhone) ? s[activeSlot].ownerPhone : '';
@@ -13099,6 +13265,9 @@ function saveSlot(){
     inspect:  isClear ? {date:'',done:false} : _newInspect
   };
   saveSlots(s);
+  /* ★ 이 슬롯의 차주를 「등록된 차주」 목록에 자동 등록/갱신
+     (판매완료·사용안함으로 비우는 경우에는 하지 않음) */
+  if(!isClear){ try{ _autoRegisterOwner(_newOwner, _newOwnerPhone, _newTopic); }catch(e){} }
   /* Firebase에도 동기화 */
   if(fbSlotsRef){
     var fbVal={}; fbVal[activeSlot]=s[activeSlot];
