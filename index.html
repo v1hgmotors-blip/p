@@ -7684,7 +7684,7 @@ function _initColScrollArrow(sw){
        ※ 속도를 바꾸려면 이 줄의 숫자만 고치면 됩니다.
           200 = 최소 속도(px/초) · 1.4 = 칸폭 비례 계수 · 800 = 최대 속도
           더 빠르게: 300, 2.0, 1200   /   더 느리게: 120, 0.9, 500 */
-    return Math.max(200, Math.min(800, w * 1.4));
+    return Math.max(100, Math.min(500, w * 1.0));
   }
   function _hScroll(ts){
     if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; _hPrevTs=0; _hAcc=0; return; }
@@ -15281,6 +15281,7 @@ function connectFb(url,code){
       _wasDisconn = false;
       _connRef.on('value', function(snap){
         var isConn = snap.val();
+        window._fbLiveConn = !!isConn;   /* ★ 2026-10-02: 지금 실제로 붙어 있는지 기억 */
         if(isConn){
           setDot('on','실시간 연결됨 🔥');
           if(_wasDisconn){ _wasDisconn = false; _handleGoOnline(); }
@@ -15329,9 +15330,36 @@ function _showOfflineBanner(show){
   var dot = document.getElementById('syncDot');
   var st  = document.getElementById('syncStatus');
   if(!dot || !st) return;
-  if(show){ dot.className = 'sync-dot off'; st.textContent = '📵 오프라인'; }
-  else    { dot.className = 'sync-dot ing'; st.textContent = '⚡ 재연결 중...'; }
+  if(show){ dot.className = 'sync-dot off'; st.textContent = '📵 오프라인'; return; }
+  /* ★ FIX(2026-10-02): 배너를 "숨길" 때 「⚡ 재연결 중...」을 덮어쓰고 있었다.
+     그래서 한 번 끊겼다 돌아오면 실제로는 붙어 있는데도 표시가 영원히
+     「재연결 중」에 멈춰 있었다(.info/connected 는 이미 true 를 쏜 뒤라 다시 안 쏨).
+     → 지금 실제 연결 상태로 되돌린다. */
+  /* ★ 실제 소켓 상태(.info/connected)만 믿는다.
+     fbConnected 는 한 번 붙으면 끊겨도 false 가 되지 않아, 이걸 쓰면
+     Wi-Fi 만 돌아오고 Firebase 엔 아직 못 붙은 상태에서도 「연결됨」으로 잘못 뜬다. */
+  if(window._fbLiveConn){
+    if(typeof setDot === 'function') setDot('on','실시간 연결됨 🔥');
+    else { dot.className = 'sync-dot on'; st.textContent = '실시간 연결됨 🔥'; }
+  } else {
+    dot.className = 'sync-dot ing'; st.textContent = '⚡ 재연결 중...';
+  }
 }
+
+/* ★ 안전망(2026-10-02): 어떤 경로로든 표시가 실제 상태와 어긋나면 20초마다 바로잡는다.
+   (연결은 멀쩡한데 「재연결 중」이 남아 있는 일이 다시 생기지 않도록) */
+setInterval(function(){
+  try{
+    if(!window._fbLiveConn) return;                 /* 진짜 끊긴 상태면 건드리지 않음 */
+    if(typeof _isOffline !== 'undefined' && _isOffline) return;
+    var st = document.getElementById('syncStatus');
+    if(!st) return;
+    var t = st.textContent || '';
+    if(t.indexOf('재연결 중') >= 0 || t.indexOf('연결 실패') >= 0){
+      if(typeof setDot === 'function') setDot('on','실시간 연결됨 🔥');
+    }
+  }catch(e){}
+}, 20000);
 
 function _handleGoOffline(){
   _isOffline = true;
