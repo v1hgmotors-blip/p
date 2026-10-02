@@ -7684,7 +7684,7 @@ function _initColScrollArrow(sw){
        ※ 속도를 바꾸려면 이 줄의 숫자만 고치면 됩니다.
           200 = 최소 속도(px/초) · 1.4 = 칸폭 비례 계수 · 800 = 최대 속도
           더 빠르게: 300, 2.0, 1200   /   더 느리게: 120, 0.9, 500 */
-    return Math.max(300, Math.min(1200, w * 2.0));
+    return Math.max(200, Math.min(800, w * 1.4));
   }
   function _hScroll(ts){
     if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; _hPrevTs=0; _hAcc=0; return; }
@@ -8777,23 +8777,52 @@ function _encarUpdateBtn(idx){
 }
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
-/* ★ 엔카사진 예약 알림음 (Web Audio API, 외부 파일 불필요) */
+/* ★ 알림음 오디오 컨텍스트를 1개만 유지 + 사용자 조작 때 잠금해제
+   (브라우저 자동재생 정책 때문에, 화면을 한 번 터치/클릭해두면 알림음이 확실히 울림) */
+var _encarAudioCtx = null;
+function _encarUnlockAudio(){
+  try{
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
+    if(_encarAudioCtx.state === 'suspended') _encarAudioCtx.resume();
+  }catch(e){}
+}
+try{
+  document.addEventListener('touchstart', _encarUnlockAudio, {passive:true});
+  document.addEventListener('click', _encarUnlockAudio, {passive:true});
+}catch(e){}
+/* ★ 엔카 알림음 — 자동차 크락션(경적) "빵빵" 스타일: 두 음(400Hz+500Hz, 톱니파)을
+   겹쳐 걸걸한 경적 특유의 음색을 내고, 0.35초씩 "빵" 2번 (총 약 0.9초).
+   * 실제 볼륨은 스피커/미디어 볼륨에 따라 커지고 작아짐 — 여기서 설정하는 값은
+     합성음 자체의 상대적 크기(게인)일 뿐, 기기 볼륨을 대체하지 않음 */
 function _encarPlayAlertBeep(){
   try{
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if(!Ctx) return;
-    var ctx = new Ctx();
-    [0, 220].forEach(function(delayMs, idx){
-      setTimeout(function(){
-        var o = ctx.createOscillator(), g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = 880;
-        g.gain.setValueAtTime(0.0001, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(); o.stop(ctx.currentTime + 0.3);
-      }, delayMs);
-    });
+    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
+    var ctx = _encarAudioCtx;
+    if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
+    var honkDur=0.35, gapMs=200, honkCount=2;
+    var freqs=[400, 500]; /* ★ 두 음을 겹쳐서(디소넌스) 경적 특유의 걸걸한 음색 표현 */
+    for(var hi=0; hi<honkCount; hi++){
+      (function(delayMs){
+        setTimeout(function(){
+          var t = ctx.currentTime;
+          freqs.forEach(function(freq){
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sawtooth';        /* 톱니파 — 경적 특유의 거친 질감 */
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
+            g.gain.setValueAtTime(0.45, t + honkDur - 0.05);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + honkDur);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t); o.stop(t + honkDur + 0.02);
+          });
+        }, delayMs);
+      })(hi*(honkDur*1000+gapMs));
+    }
   }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
 }
 function _encarApplyBlinks(){
@@ -8810,8 +8839,9 @@ function _encarApplyBlinks(){
     }
   }
 }
-/* ★ 엔카사진 예약 알림음: 예약시간(±10분 이내)이면 '사진완료' 누를 때까지 10초마다 반복 재생 */
+/* ★ 엔카사진 예약 알림음: 예약시각 10분 전 ~ 1시간 후 동안, '사진완료' 누를 때까지 2분 간격으로 반복 재생 */
 var _encarSoundTimer = null;
+var _encarSoundLastPlayed = 0; /* ★ 마지막으로 실제 소리를 낸 시각(ms) — 2분 간격 제어 */
 function _encarApplySounds(){
   var s=getSlots();
   var now = Date.now();
@@ -8823,13 +8853,20 @@ function _encarApplySounds(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
+    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 */
   }
-  if(anyDue) _encarPlayAlertBeep();
+  if(anyDue){
+    if(now - _encarSoundLastPlayed >= 2*60*1000){ /* ★ 2분 간격으로만 실제 재생 */
+      _encarSoundLastPlayed = now;
+      _encarPlayAlertBeep();
+    }
+  } else {
+    _encarSoundLastPlayed = 0; /* ★ 조건을 벗어나면 리셋 — 다음 예약 도래 시 바로 재생되도록 */
+  }
 }
 function _encarStartSoundTimer(){
   if(_encarSoundTimer) clearInterval(_encarSoundTimer);
-  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격 */
+  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격으로 조건 확인(실제 재생은 2분 간격) */
 }
 _encarStartSoundTimer();
 
@@ -10822,9 +10859,7 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
       committedId = tid; /* ★ transaction 재시도 대비 — 실제 커밋되는 id 추적 */
       /* ★ BUG FIX: slice(hist.length-200)(오래된 항목 유지) → slice(0,200)(최신 항목 유지)
          맨 앞에 추가하는 방식으로 바뀌었으므로 트림도 앞쪽 200건을 남기도록 수정 */
-      /* ★ 50건 통일: 키불출앱 hist 한도(50)와 일치 — 키 반납은 24시간 내 확인되므로
-         50건(대략 1~2일치)이면 반납확인 목록에서 사라질 위험 없음. 다운로드도 최소화. */
-      if(hist.length > 50) hist = hist.slice(0, 50);
+      if(hist.length > 200) hist = hist.slice(0, 200);
       return hist;
     }, function(error, committed, snapshot){
       if(error){ console.error('[검색키불출→키불출앱 전달 실패]', error); return; }
@@ -10866,8 +10901,6 @@ function _cleanupSearchDispatchHist(slotIdx){
     retRef.transaction(function(current){
       var retArr = Array.isArray(current) ? current.map(String) : [];
       if(retArr.indexOf(String(id)) === -1) retArr.push(String(id));
-      /* ★ 무한 누적 방지: hist(50건)와 균형 맞춰 최근 100개만 유지 */
-      if(retArr.length > 100) retArr = retArr.slice(retArr.length - 100);
       return retArr;
     }, function(error, committed){
       if(error){ console.error('[검색키반납확인 전달 실패]', error); return; }
@@ -11348,8 +11381,6 @@ function _confirmKeyReturn(slotIdx, entry){
         _kdRef.child('returned').transaction(function(cur){
           var arr = Array.isArray(cur) ? cur.map(String) : [];
           returnedIds.forEach(function(rid){ if(!arr.includes(rid)) arr.push(rid); });
-          /* ★ 무한 누적 방지: hist(50건)와 균형 맞춰 최근 100개만 유지 */
-          if(arr.length > 100) arr = arr.slice(arr.length - 100);
           return arr;
         }, function(err){
           if(err) console.warn('[키반납확인] Firebase 업데이트 실패:', err);
@@ -14904,17 +14935,6 @@ function connectFb(url,code){
     _fbSyncReady = true;
     _fbLockShow(false);
     setDot('off','로컬 전용 모드');
-    return;
-  }
-  /* ★ FIX(오프라인): 네트워크가 확실히 끊긴 상태(navigator.onLine===false)에서는
-     연결을 시도해봐야 12초 동기화 잠금만 기다리게 된다. 즉시 로컬 데이터로 진행해
-     앱을 바로 쓸 수 있게 하고, 네트워크가 돌아오면 online 이벤트에서 connectFb가
-     자동 재호출되어 정상 동기화된다. (로컬 전용 모드와 동일한 안전 경로) */
-  if(typeof navigator!=='undefined' && navigator.onLine===false){
-    console.log('[SYNC] 오프라인 감지 — 로컬 데이터로 즉시 진행');
-    _fbSyncReady = true;
-    _fbLockShow(false);
-    setDot('off','오프라인 — 로컬 저장');
     return;
   }
   setDot('ing','연결 중...');
@@ -21948,14 +21968,12 @@ window._drawQRCanvas = function(container, text, size){
               qrDiv.innerHTML = '<div style="width:150px;height:150px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:10px;color:#444;text-align:center;padding:8px;box-sizing:border-box;font-weight:700;">QR 생성 실패<br>아래 경로 안내<br>참고하세요</div>';
             }
           };
-          if(typeof window._makeShortLinkGlobal==='function' && _code9 && _getStorageMode()!=='local' && (localStorage.getItem('pb_fb_url')||'')){
-            /* ☁️ Firebase 모드: 단축링크(links 저장) → 스캔 잘 되는 짧은 QR */
+          if(typeof window._makeShortLinkGlobal==='function' && _code9){
             window._makeShortLinkGlobal(_code9, Object.assign({}, window._popupLinkPay), function(shortUrl){
               if(shortUrl){ _popupQrUrl = shortUrl; }
               _drawFinal(shortUrl || _qrUrl || qrContent);
             });
           } else {
-            /* 📱 로컬 전용 모드(또는 Firebase 미설정): 긴 URL로 QR → Firebase 없이 약도 보기 정상 */
             _drawFinal(_qrUrl || qrContent);
           }
         }, 80);
