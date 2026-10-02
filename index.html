@@ -7684,7 +7684,7 @@ function _initColScrollArrow(sw){
        ※ 속도를 바꾸려면 이 줄의 숫자만 고치면 됩니다.
           200 = 최소 속도(px/초) · 1.4 = 칸폭 비례 계수 · 800 = 최대 속도
           더 빠르게: 300, 2.0, 1200   /   더 느리게: 120, 0.9, 500 */
-    return Math.max(200, Math.min(800, w * 1.4));
+    return Math.max(300, Math.min(1200, w * 2.0));
   }
   function _hScroll(ts){
     if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; _hPrevTs=0; _hAcc=0; return; }
