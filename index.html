@@ -272,6 +272,11 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 #mainWrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;display:block;min-height:0;width:100%;}
 .s-row{display:flex;gap:4px;align-items:center;}
 .s-lbl{font-size:10px;font-weight:800;color:var(--text-sub);white-space:nowrap;flex-shrink:0;width:30px;}
+/* ★ 설정창 라벨 잘림 수정 (2026-10-01)
+   「🗺️ 약도주소」·「📲 ntfy토픽」은 실제로 54~55px가 필요한데 30px로 묶여 있어
+   글자 끝이 잘려 보였다. 검색바 라벨(.search-bar .s-lbl)은 아래 별도 규칙이
+   width:auto 로 덮어쓰므로 .s-row 안쪽만 넓힌다. */
+.s-row .s-lbl{width:auto;min-width:58px;}
 .s-fb-url{flex:1.4;min-width:0;}
 .s-fb-code{flex:0.9;min-width:0;}
 .settings-bar input{flex:1;min-width:0;background:#FFF;border:2px solid var(--border);border-radius:8px;color:var(--text-main);font-size:13px;font-weight:600;padding:4px 7px;outline:none;font-family:inherit;transition:border-color .2s;}
@@ -1784,7 +1789,10 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 }
 .owner-add-row { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; align-items:center; } /* ★ 좁은 화면 줄바꿈 */
 .owner-add-input {
-  flex:1; min-width:110px; border:1.5px solid #FCD34D; border-radius:8px; /* ★ min-width로 넘침 방지 */
+  /* ★ 2026-10-02 예시문구 잘림 수정: 「📞 전화번호 (필수)」·「📲 알림 토픽(선택)」은
+     실측 133px가 필요한데 min-width가 110px이라 가로 390~768px에서 끝이 잘렸다.
+     줄바꿈(flex-wrap)이 걸려 있어 넓혀도 넘치지 않고 아래로 내려갈 뿐이다. */
+  flex:1; min-width:136px; border:1.5px solid #FCD34D; border-radius:8px;
   padding:7px 10px; font-size:13px; font-weight:700; font-family:inherit;
   background:#fff; outline:none; color:#3A1D1D;
   box-sizing:border-box;
@@ -1804,6 +1812,10 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   display:flex; flex-wrap:wrap; gap:5px;
   max-height:140px; overflow-y:auto;
 }
+/* ★ 2026-10-02: 수정(✏️)·삭제(🗑️) 모드에서는 목록을 넓힌다.
+   종전에는 140px 안에 기본 차주 10명이 먼저 차서, 정작 고칠 수 있는 칩이
+   스크롤 아래로 가려 보이지 않았다. */
+.owner-list.mode-on { max-height:300px; }
 /* ★ 등록된 차주 목록 접기/펴기 버튼 */
 .owner-add-hint{font-size:11px;font-weight:800;color:#A16207;margin:8px 0 4px;padding-top:7px;border-top:1px dashed #FCD34D;}
 .owner-fold-btn {
@@ -1845,6 +1857,30 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   background:#EF4444; color:#fff; font-size:12px; font-weight:800;
   cursor:pointer; font-family:inherit;
 }
+/* ★ 2026-10-02: 수정(✏️)·삭제(🗑️) 모드를 한눈에 알아보게
+   종전에는 수정 모드에서 테두리만 #FCD34D→#F59E0B 로 바뀌어 거의 구분이 안 됐다. */
+.owner-chip.edit-mode {
+  background:#FEF3C7; border:2.5px solid #F59E0B;
+  box-shadow:0 0 0 2px rgba(245,158,11,.25);
+}
+.owner-chip.edit-mode:hover { background:#FDE68A; }
+.owner-chip.edit-mode .owner-chip-name { color:#92400E; }
+.owner-chip.edit-mode::before { content:'✏️'; font-size:11px; line-height:1; }
+.owner-chip.edit-mode.editing {            /* 지금 고치는 중인 칩 */
+  background:#F59E0B; border-color:#B45309;
+  box-shadow:0 0 0 3px rgba(245,158,11,.45);
+}
+.owner-chip.edit-mode.editing .owner-chip-name { color:#fff; }
+/* 수정·삭제 모드에서 손댈 수 없는 기본 차주는 흐리게 */
+.owner-chip-default.dimmed { opacity:.3; filter:grayscale(.7); cursor:not-allowed; }
+/* 지금 무슨 모드인지 알려주는 한 줄 */
+.owner-mode-hint {
+  width:100%; flex-basis:100%; box-sizing:border-box;
+  font-size:11px; font-weight:800; margin:0 0 6px; padding:6px 9px; border-radius:8px;
+}
+.owner-mode-hint.edit { background:#FEF3C7; color:#92400E; border:1.5px solid #F59E0B; }
+.owner-mode-hint.del  { background:#FEE2E2; color:#991B1B; border:1.5px solid #FCA5A5; }
+
 .owner-chip.sel-mode { padding-left:6px; }
 .owner-chip.sel-mode input[type=checkbox] {
   width:15px; height:15px; cursor:pointer; accent-color:#EF4444; flex-shrink:0;
@@ -2412,7 +2448,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div class="s-row">
       <span class="s-lbl">🔥 URL</span>
       <input id="fbUrlInput" class="s-fb-url" type="url" placeholder="https://프로젝트명-default-rtdb.firebaseio.com" />
-      <span class="s-lbl" style="width:auto;margin-left:2px;">🔑</span>
+      <span class="s-lbl" style="width:auto;min-width:0;margin-left:2px;">🔑</span>
       <input id="syncCodeInput" class="s-fb-code" type="text" placeholder="공유코드" />
       <button class="btn btn-save" onclick="saveAndConnect()">💾</button>
       <button class="btn btn-clear" onclick="clearAllSlots()">🗑️</button>
@@ -2749,7 +2785,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
                  oninput="onOwnerPhoneInput(this.value)"
                  style="flex:1;min-width:120px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#E8F5E9;font-family:inherit;outline:none;box-sizing:border-box;" />
           <!-- ★ 차주 알림 토픽 -->
-          <input id="mTopicInput" type="text" autocomplete="off" placeholder="📲 차주 알림 토픽 (선택)" maxlength="60" style="flex:1;min-width:140px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#EDE9FE;font-family:inherit;outline:none;box-sizing:border-box;" />
+          <input id="mTopicInput" type="text" autocomplete="off" placeholder="📲 차주 알림 토픽 (선택)" maxlength="60" style="flex:1;min-width:156px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#EDE9FE;font-family:inherit;outline:none;box-sizing:border-box;" />
         </div>
         <div class="m-memo-fs-ctrl">
           <span style="font-size:11px;font-weight:700;color:var(--text-sub);">글씨크기</span>
@@ -3950,7 +3986,10 @@ var LS_CAR_FS_MAP='pb_car_fs_map'; /* ★ PC 차량번호 크기 파트별 설�
    ════════════════════════════════════════ */
 var LS_OWNER_LIST = 'pb_owner_list';
 var _ownerDelMode = false;
-var _ownerListOpen = false;   /* ★ 등록된 차주 칩 목록 접힘/펼침 상태 (기본: 접힘) */
+var _ownerListOpen = false;   /* ★ 등록된 차주 칩 목록 접힘/펼침 상태
+                                 (2026-10-02: 기본 접힘 — 차주 패널은 「차주입력」을 누르지
+                                  않아도 열려 있지만, 칩 목록은 접어 두어 모달을 짧게 유지.
+                                  「👥 등록된 차주 N명 ▼」를 누르면 펼쳐진다) */
 var _ownerEditMode = false;
 var _ownerEditIdx = -1;
 var _safe6Selected = false;
@@ -4134,15 +4173,37 @@ function renderOwnerList() {
   if (!wrap) return;
   wrap.innerHTML = '';
 
+  /* ★ 2026-10-02: 지금 어떤 모드인지 목록 맨 위에 알려 준다 */
+  if (_ownerEditMode || _ownerDelMode) {
+    var _hint = document.createElement('div');
+    _hint.className = 'owner-mode-hint ' + (_ownerEditMode ? 'edit' : 'del');
+    wrap.classList.add('mode-on');
+    _hint.textContent = _ownerEditMode
+      ? '✏️ 수정 모드 — 주황색 칩을 누르면 아래 칸에 불러옵니다. 고친 뒤 [＋ 추가]를 누르세요. (흐린 기본 차주는 수정 불가)'
+      : '🗑️ 삭제 모드 — 지울 차주를 체크한 뒤 아래 [선택 삭제]를 누르세요. (흐린 기본 차주는 삭제 불가)';
+    wrap.appendChild(_hint);
+  } else {
+    wrap.classList.remove('mode-on');
+  }
+
   /* ★ 기본 차주 (상단 고정, 선택만 가능) — 이름+전화 세트 */
   DEFAULT_OWNER_LIST.forEach(function(entry) {
     var name  = _ownerEntryName(entry);
     var phone = _ownerEntryPhone(entry);
     var topic = _ownerEntryTopic(entry);
     var chip = document.createElement('div');
-    chip.className = 'owner-chip owner-chip-default';
-    chip.title = '기본 차주 (삭제 불가)' + (phone ? ' · 📞 ' + phone : '');
-    chip.addEventListener('click', function() { applyOwnerSelection(name, phone, topic); });
+    var _locked = (_ownerEditMode || _ownerDelMode);   /* ★ 기본 차주는 수정·삭제 불가 */
+    chip.className = 'owner-chip owner-chip-default' + (_locked ? ' dimmed' : '');
+    chip.title = _locked
+      ? '기본 차주는 수정·삭제할 수 없습니다'
+      : ('기본 차주 (삭제 불가)' + (phone ? ' · 📞 ' + phone : ''));
+    chip.addEventListener('click', function() {
+      if (_ownerEditMode || _ownerDelMode) {
+        try{ showAlert('ℹ️ 기본 차주는 수정·삭제할 수 없습니다'); setTimeout(hideAlert, 2000); }catch(e){}
+        return;
+      }
+      applyOwnerSelection(name, phone, topic);
+    });
     var span = document.createElement('span');
     span.className = 'owner-chip-name';
     span.textContent = name + (phone ? ' 📞' : '');
@@ -4171,7 +4232,10 @@ function renderOwnerList() {
     var phone = _ownerEntryPhone(entry);
     var topic = _ownerEntryTopic(entry);
     var chip = document.createElement('div');
-    chip.className = 'owner-chip' + (_ownerDelMode ? ' sel-mode' : '');
+    chip.className = 'owner-chip'
+                  + (_ownerDelMode  ? ' sel-mode'  : '')
+                  + (_ownerEditMode ? ' edit-mode' : '')
+                  + ((_ownerEditMode && _ownerEditIdx === i) ? ' editing' : '');
     chip.dataset.idx = i;
     if (phone) chip.title = '📞 ' + phone;
     if (_ownerDelMode) {
@@ -4186,7 +4250,8 @@ function renderOwnerList() {
         if (e.target !== cb) { cb.checked = !cb.checked; chip.classList.toggle('selected', cb.checked); _updateDelConfirmBtn(); }
       });
     } else if (_ownerEditMode) {
-      chip.style.borderColor = '#F59E0B';
+      /* ★ 색은 .owner-chip.edit-mode CSS 가 담당 (종전 인라인 테두리색은 구분이 안 됐음) */
+      chip.title = '✏️ 눌러서 아래 칸으로 불러오기';
       chip.addEventListener('click', function() { loadOwnerForEdit(i); });
     } else {
       chip.addEventListener('click', function() { applyOwnerSelection(name, phone, topic); });
@@ -4197,7 +4262,31 @@ function renderOwnerList() {
     chip.appendChild(span);
     wrap.appendChild(chip);
   });
+  /* ★ 2026-10-02: 모드에 들어가면 첫 번째 "고칠 수 있는 칩"이 보이도록 스크롤 */
+  if (_ownerEditMode || _ownerDelMode) {
+    try {
+      var _first = wrap.querySelector('.owner-chip:not(.owner-chip-default)');
+      if (_first) wrap.scrollTop = Math.max(0, _first.offsetTop - wrap.offsetTop - 6);
+    } catch(e) {}
+  } else {
+    try { wrap.scrollTop = 0; } catch(e) {}
+  }
   _updateDelConfirmBtn();
+}
+
+/* ★ 2026-10-02: 전화번호 형식 검사.
+   종전에는 자릿수(10자리 이상)만 봐서 「1234567890」 같은 값도 통과했다.
+   이 번호는 약도 페이지의 담당차주 전화 표시·📞전화걸기, 알림톡·문자 발송에
+   그대로 쓰이므로 형식이 맞지 않으면 전화가 걸리지 않는다. */
+function _isValidPhoneNum(v){
+  var d = String(v||'').replace(/[^0-9]/g,'');
+  if(!d) return false;
+  if(/^01[016789]\d{7,8}$/.test(d))                     return true;  /* 휴대폰 */
+  if(/^02\d{7,8}$/.test(d))                             return true;  /* 서울 */
+  if(/^0(3[1-3]|4[1-4]|5[1-5]|6[1-4])\d{7,8}$/.test(d)) return true;  /* 지역번호 */
+  if(/^070\d{8}$/.test(d))                              return true;  /* 인터넷전화 */
+  if(/^050\d{7,9}$/.test(d))                            return true;  /* 안심번호 */
+  return false;
 }
 
 function addOwner() {
@@ -4215,10 +4304,17 @@ function addOwner() {
     if (inp) inp.focus();
     return;
   }
-  if (phone.length < 10) {
-    showAlert('⚠️ 전화번호를 정확히 입력해 주세요 (필수)');
-    setTimeout(hideAlert, 2000);
+  if (!phone) {
+    showAlert('⚠️ 전화번호를 입력해 주세요 (필수)');
+    setTimeout(hideAlert, 2200);
     if (pInp) pInp.focus();
+    return;
+  }
+  /* ★ 2026-10-02: 자릿수만 보던 것을 형식까지 검사 (010·02·지역번호·070·050) */
+  if (!_isValidPhoneNum(phone)) {
+    showAlert('⚠️ 전화번호 형식이 올바르지 않습니다 — 예) 010-1234-5678');
+    setTimeout(hideAlert, 2600);
+    if (pInp) { pInp.focus(); try{ pInp.select(); }catch(e){} }
     return;
   }
   if (_ownerEditIdx >= 0) {
@@ -4328,10 +4424,11 @@ function insertOwnerToMemo(name) {
   /* ★ 인라인 입력란도 동기화 */
   var inlineInp = document.getElementById('mOwnerInlineInput');
   if (inlineInp) inlineInp.value = name;
+  /* ★ 2026-10-02: 고른 뒤에도 차주 패널을 닫지 않는다 (바로 보이게 해달라는 요청) */
   var panel = document.getElementById('ownerPanel');
   var btn   = document.getElementById('ownerPanelBtn');
-  if (panel) panel.classList.remove('open');
-  if (btn)   btn.textContent = '👤 차주';
+  if (panel) panel.classList.add('open');
+  if (btn)   btn.textContent = '👤 닫기 ▲';
 }
 
 function _updateSafe6PartnerBadge(){
@@ -4357,6 +4454,14 @@ function loadOwnerForEdit(i){
   var pi=document.getElementById('ownerAddPhone'); if(pi) pi.value=_ownerEntryPhone(e);
   var ti=document.getElementById('ownerAddTopic'); if(ti) ti.value=_ownerEntryTopic(e);
   _ownerEditIdx = i;
+  /* ★ 2026-10-02: 지금 고치는 칩을 진한 주황으로 강조.
+     renderOwnerList() 로 다시 그리면 방금 포커스한 입력칸이 풀리므로 클래스만 바꾼다. */
+  try{
+    var _cl = document.querySelectorAll('#ownerList .owner-chip');
+    for(var _k=0; _k<_cl.length; _k++){
+      _cl[_k].classList.toggle('editing', _cl[_k].dataset.idx === String(i));
+    }
+  }catch(e){}
   if(ai){ ai.focus(); }
 }
 function toggleOwnerEditMode() {
@@ -4430,11 +4535,15 @@ function resetOwnerPanel() {
   var inp    = document.getElementById('ownerAddInput');
   var bar    = document.getElementById('ownerDelBar');
   var selBtn = document.getElementById('ownerSelBtn');
-  if (panel)  panel.classList.remove('open');
-  if (btn)    btn.textContent = '👤 차주입력';
+  /* ★ 2026-10-02: 모달을 열면 차주 패널을 처음부터 펼쳐 둔다.
+     종전에는 닫아 두고 「👤 차주입력」을 눌러야 목록이 보였다. */
+  if (panel)  panel.classList.add('open');
+  if (btn)    btn.textContent = '👤 닫기 ▲';
   if (inp)    inp.value = '';
   if (bar)    bar.classList.remove('show');
   if (selBtn) selBtn.style.background = '#94A3B8';
+  try { renderOwnerList(); } catch(e) {}
+  try { toggleOwnerListFold(false); } catch(e) {}  /* 칩 목록은 접은 상태로 시작 (모달 짧게) */
 }
 
 var LS_PARTS=['pb_part1_extra','pb_part2_extra','pb_part3_extra'];
@@ -5089,7 +5198,7 @@ function _showColShiftMenu(part, col, anchorEl){
     +'<button type="button" id="_colColorResetBtn" style="flex:0 0 auto;padding:10px 12px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">색 초기화</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:8px;">'
-    +'<button type="button" id="_colCancelBtn" style="flex:1;padding:8px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">취소</button>'
+    +'<button type="button" id="_colCancelBtn" style="flex:1;padding:8px;background:#475569;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">닫기</button>'
     +'<button type="button" id="_colFullResetBtn" style="flex:1;padding:8px;background:#7F1D1D;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">🗑️ 열초기화</button>'
     +'</div>';
   document.body.appendChild(m);
@@ -7555,17 +7664,40 @@ function _initColScrollArrow(sw){
     return c > 0 ? Math.round(sw.scrollWidth / c) : 80;
   }
 
-  /* 호버 자동 스크롤 */
-  var _hRaf=null, _hDir=0;
-  function _hScroll(){
-    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; return; }
-    if(!_hDir){ _hRaf=null; return; }
-    /* ★ FIX: 화살표 호버 스크롤 속도 개선 (현재의 반 속도)
-       변경 전: Math.max(3, Math.round(_slotW()*0.05)) - 너무 빠름
-       개선 1: Math.max(1, Math.round(_slotW()*0.02)) - 2배 느림
-       개선 2: Math.max(1, Math.round(_slotW()*0.01)) - 4배 느림
-       개선 3: Math.round(_slotW()*0.005) - 8배 느림 (매우 부드러움) */
-    sw.scrollLeft += _hDir * Math.round(_slotW()*0.005);
+  /* 호버 자동 스크롤
+     ★ FIX(2026-10-02): 종전에는 한 프레임마다
+          sw.scrollLeft += _hDir * Math.round(_slotW()*0.005);
+       였다. Math.round 로 정수가 되기 때문에 칸폭이 100px보다 좁으면 값이 0이 되어
+       화살표에 올려도 전혀 움직이지 않았다. 실측 결과
+          세로(1열)  칸폭 126~190px → 1px/프레임 (60px/초)  움직임
+          격자2열     칸폭  63~ 95px → 0px/프레임 ( 0px/초)  멈춤
+          격자3열     칸폭  42~ 63px → 0px/프레임 ( 0px/초)  멈춤
+       "격자 모드가 느리다"고 느껴진 것은 사실 멈춰 있었기 때문이다.
+       또 프레임 단위라 120Hz·144Hz 화면에서는 2배 넘게 빨랐다.
+       → 초당 픽셀로 고정하고 소수점을 누적한다. 어느 모드·어느 주사율에서도
+         같은 속도로 움직이며 절대 0이 되지 않는다.
+         속도 = 칸폭 × 0.48 px/초 (최소 60px/초 — 세로 모드의 종전 속도와 동일) */
+  var _hRaf=null, _hDir=0, _hPrevTs=0, _hAcc=0;
+  function _hSpeedPerSec(){
+    var w = _slotW() || 80;
+    /* ★ 2026-10-02: 더 빠르게 요청 — 60px/초 → 200px/초 (약 3.3배)
+       ※ 속도를 바꾸려면 이 줄의 숫자만 고치면 됩니다.
+          200 = 최소 속도(px/초) · 1.4 = 칸폭 비례 계수 · 800 = 최대 속도
+          더 빠르게: 300, 2.0, 1200   /   더 느리게: 120, 0.9, 500 */
+    return Math.max(300, Math.min(1200, w * 2.0));
+  }
+  function _hScroll(ts){
+    if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; _hPrevTs=0; _hAcc=0; return; }
+    if(!_hDir){ _hRaf=null; _hPrevTs=0; _hAcc=0; return; }
+    var now = (typeof ts === 'number') ? ts : (window.performance && performance.now ? performance.now() : Date.now());
+    if(!_hPrevTs) _hPrevTs = now;
+    var dt = now - _hPrevTs;
+    if(dt < 0) dt = 0;
+    if(dt > 50) dt = 50;      /* 탭 전환·멈춤 뒤 한 번에 튀는 것 방지 */
+    _hPrevTs = now;
+    _hAcc += _hDir * _hSpeedPerSec() * dt / 1000;
+    var step = (_hAcc > 0) ? Math.floor(_hAcc) : Math.ceil(_hAcc);
+    if(step){ sw.scrollLeft += step; _hAcc -= step; }   /* 소수점은 다음 프레임으로 넘김 */
     _upd();
     _hRaf = requestAnimationFrame(_hScroll);
   }
@@ -8645,52 +8777,23 @@ function _encarUpdateBtn(idx){
 }
 
 /* ── 슬롯에 빨간 깜박임 적용/해제 ── */
-/* ★ 알림음 오디오 컨텍스트를 1개만 유지 + 사용자 조작 때 잠금해제
-   (브라우저 자동재생 정책 때문에, 화면을 한 번 터치/클릭해두면 알림음이 확실히 울림) */
-var _encarAudioCtx = null;
-function _encarUnlockAudio(){
-  try{
-    var Ctx = window.AudioContext || window.webkitAudioContext;
-    if(!Ctx) return;
-    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
-    if(_encarAudioCtx.state === 'suspended') _encarAudioCtx.resume();
-  }catch(e){}
-}
-try{
-  document.addEventListener('touchstart', _encarUnlockAudio, {passive:true});
-  document.addEventListener('click', _encarUnlockAudio, {passive:true});
-}catch(e){}
-/* ★ 엔카 알림음 — 자동차 크락션(경적) "빵빵" 스타일: 두 음(400Hz+500Hz, 톱니파)을
-   겹쳐 걸걸한 경적 특유의 음색을 내고, 0.35초씩 "빵" 2번 (총 약 0.9초).
-   * 실제 볼륨은 스피커/미디어 볼륨에 따라 커지고 작아짐 — 여기서 설정하는 값은
-     합성음 자체의 상대적 크기(게인)일 뿐, 기기 볼륨을 대체하지 않음 */
+/* ★ 엔카사진 예약 알림음 (Web Audio API, 외부 파일 불필요) */
 function _encarPlayAlertBeep(){
   try{
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if(!Ctx) return;
-    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
-    var ctx = _encarAudioCtx;
-    if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
-    var honkDur=0.35, gapMs=200, honkCount=2;
-    var freqs=[400, 500]; /* ★ 두 음을 겹쳐서(디소넌스) 경적 특유의 걸걸한 음색 표현 */
-    for(var hi=0; hi<honkCount; hi++){
-      (function(delayMs){
-        setTimeout(function(){
-          var t = ctx.currentTime;
-          freqs.forEach(function(freq){
-            var o = ctx.createOscillator(), g = ctx.createGain();
-            o.type = 'sawtooth';        /* 톱니파 — 경적 특유의 거친 질감 */
-            o.frequency.value = freq;
-            g.gain.setValueAtTime(0.0001, t);
-            g.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
-            g.gain.setValueAtTime(0.45, t + honkDur - 0.05);
-            g.gain.exponentialRampToValueAtTime(0.0001, t + honkDur);
-            o.connect(g); g.connect(ctx.destination);
-            o.start(t); o.stop(t + honkDur + 0.02);
-          });
-        }, delayMs);
-      })(hi*(honkDur*1000+gapMs));
-    }
+    var ctx = new Ctx();
+    [0, 220].forEach(function(delayMs, idx){
+      setTimeout(function(){
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.3);
+      }, delayMs);
+    });
   }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
 }
 function _encarApplyBlinks(){
@@ -8707,9 +8810,8 @@ function _encarApplyBlinks(){
     }
   }
 }
-/* ★ 엔카사진 예약 알림음: 예약시각 10분 전 ~ 1시간 후 동안, '사진완료' 누를 때까지 2분 간격으로 반복 재생 */
+/* ★ 엔카사진 예약 알림음: 예약시간(±10분 이내)이면 '사진완료' 누를 때까지 10초마다 반복 재생 */
 var _encarSoundTimer = null;
-var _encarSoundLastPlayed = 0; /* ★ 마지막으로 실제 소리를 낸 시각(ms) — 2분 간격 제어 */
 function _encarApplySounds(){
   var s=getSlots();
   var now = Date.now();
@@ -8721,20 +8823,13 @@ function _encarApplySounds(){
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 */
+    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 계속 알림 (완료 전까지) */
   }
-  if(anyDue){
-    if(now - _encarSoundLastPlayed >= 2*60*1000){ /* ★ 2분 간격으로만 실제 재생 */
-      _encarSoundLastPlayed = now;
-      _encarPlayAlertBeep();
-    }
-  } else {
-    _encarSoundLastPlayed = 0; /* ★ 조건을 벗어나면 리셋 — 다음 예약 도래 시 바로 재생되도록 */
-  }
+  if(anyDue) _encarPlayAlertBeep();
 }
 function _encarStartSoundTimer(){
   if(_encarSoundTimer) clearInterval(_encarSoundTimer);
-  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격으로 조건 확인(실제 재생은 2분 간격) */
+  _encarSoundTimer = setInterval(_encarApplySounds, 10*1000); /* ★ 10초 간격 */
 }
 _encarStartSoundTimer();
 
@@ -10052,6 +10147,25 @@ function _refreshDirtyOnly(dirty){
     if(typeof reapplyBlinks==='function') reapplyBlinks();
   }catch(e){ try{ buildGridSoft(); }catch(e2){} }
 }
+/* ★ 안전 복제 — 구형 방(_ids 없음)에서는 recvSlots 가 undefined 라
+   JSON.parse(JSON.stringify(undefined)) 가 예외를 던져 그 뒤 동기화 처리가
+   통째로 중단됐다(실시간 갱신이 멎음). 빈 객체로 받아 넘긴다. */
+function _fbCloneSlots(o){
+  try{ return JSON.parse(JSON.stringify(o || {})); }catch(e){ return {}; }
+}
+
+/* ★ 2026-10-02 깜빡임 제거: 실시간 수신 후 "다시 그리기" 공통 처리.
+   buildGrid()  = 파트 컨테이너를 innerHTML='' 로 비우고 전 칸을 새로 만든다
+                  → 화면 전체가 한 번 사라졌다 나타나고(깜빡임) 스크롤도 흔들린다.
+   buildGridSoft() = 칸을 지우지 않고 renderSlot 만 다시 호출한다.
+                  renderSlot 안의 변경감지(dataset.sig)가 실제로 내용이 바뀐 칸만
+                  다시 그리므로, 20칸이 바뀌어도 그 20칸만 바뀐다.
+   파트 수·열·행 같은 "구조"가 바뀐 경우에만 종전처럼 전체 재생성이 필요하다. */
+function _fbSoftRedraw(structChanged){
+  if(structChanged){ buildGrid(); }
+  else             { buildGridSoft(); }
+  try{ if(typeof _initAllBadgeSliders==='function') _initAllBadgeSliders(); }catch(e){}
+}
 function buildGridSoft(){
   try{ window._lastRenderTs = Date.now(); }catch(e){}
   for(var i=0;i<TOTAL;i++){
@@ -10708,7 +10822,9 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
       committedId = tid; /* ★ transaction 재시도 대비 — 실제 커밋되는 id 추적 */
       /* ★ BUG FIX: slice(hist.length-200)(오래된 항목 유지) → slice(0,200)(최신 항목 유지)
          맨 앞에 추가하는 방식으로 바뀌었으므로 트림도 앞쪽 200건을 남기도록 수정 */
-      if(hist.length > 200) hist = hist.slice(0, 200);
+      /* ★ 50건 통일: 키불출앱 hist 한도(50)와 일치 — 키 반납은 24시간 내 확인되므로
+         50건(대략 1~2일치)이면 반납확인 목록에서 사라질 위험 없음. 다운로드도 최소화. */
+      if(hist.length > 50) hist = hist.slice(0, 50);
       return hist;
     }, function(error, committed, snapshot){
       if(error){ console.error('[검색키불출→키불출앱 전달 실패]', error); return; }
@@ -10750,6 +10866,8 @@ function _cleanupSearchDispatchHist(slotIdx){
     retRef.transaction(function(current){
       var retArr = Array.isArray(current) ? current.map(String) : [];
       if(retArr.indexOf(String(id)) === -1) retArr.push(String(id));
+      /* ★ 무한 누적 방지: hist(50건)와 균형 맞춰 최근 100개만 유지 */
+      if(retArr.length > 100) retArr = retArr.slice(retArr.length - 100);
       return retArr;
     }, function(error, committed){
       if(error){ console.error('[검색키반납확인 전달 실패]', error); return; }
@@ -11230,6 +11348,8 @@ function _confirmKeyReturn(slotIdx, entry){
         _kdRef.child('returned').transaction(function(cur){
           var arr = Array.isArray(cur) ? cur.map(String) : [];
           returnedIds.forEach(function(rid){ if(!arr.includes(rid)) arr.push(rid); });
+          /* ★ 무한 누적 방지: hist(50건)와 균형 맞춰 최근 100개만 유지 */
+          if(arr.length > 100) arr = arr.slice(arr.length - 100);
           return arr;
         }, function(err){
           if(err) console.warn('[키반납확인] Firebase 업데이트 실패:', err);
@@ -14064,7 +14184,13 @@ function applyRemoteSettings(data){
   if(gridChanged){
     _applyPartCount(NUM_PARTS);
     _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp();
-    /* ★ 그리드 구조가 바뀐 경우 Firebase 슬롯 데이터를 즉시 한 번 더 읽어 화면 갱신 */
+    /* ★ 그리드 구조가 바뀐 경우 Firebase 슬롯 데이터를 즉시 한 번 더 읽어 화면 갱신
+       ★ FIX(2026-10-02): 여기서 또 buildGrid() 를 불러 보드가 두 번 재생성됐다.
+          (실측: 1차 @3282ms → 2차 @3496ms, 약 0.2초 간격으로 두 번 번쩍임)
+          구조는 바로 위에서 이미 적용·재생성했으므로 칸을 다시 만들 이유가 없고,
+          여기서 필요한 것은 "다시 읽어온 데이터를 화면에 반영"하는 것뿐이다.
+          → 칸을 지우지 않는 buildGridSoft 로 교체한다. renderSlot 의 변경감지가
+            실제로 내용이 달라진 칸만 다시 그리므로 결과는 같고 번쩍임만 사라진다. */
     if(typeof fbSlotsRef !== 'undefined' && fbSlotsRef){
       fbSlotsRef.once('value', function(snap){
         var sd = snap.val();
@@ -14072,7 +14198,8 @@ function applyRemoteSettings(data){
         var slots2={};
         for(var k in sd){ if(k!=='_cleared' && k!=='_gridConfig' && sd[k]!==null) slots2[k]=sd[k]; }
         saveSlots(slots2);
-        buildGrid();
+        if(typeof buildGridSoft==='function') buildGridSoft();
+        else buildGrid();
         if(typeof _encarUpdateCount==='function') _encarUpdateCount();
         if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
       }).catch(function(){});
@@ -14097,13 +14224,24 @@ function applyRemoteSettings(data){
   if(data.hasOwnProperty('feeBlock')){
     try{ if(typeof window._applyFeeBlockRemote==='function') window._applyFeeBlockRemote(String(data.feeBlock)); }catch(e){}
   }
-  /* ★ 세이프6제휴점 원격 수신 → 로컬 적용 + 재렌더 */
+  /* ★ 세이프6제휴점 원격 수신 → 로컬 적용 + 재렌더
+     ★ FIX(2026-10-02): 종전에는 pb_settings 스냅샷이 올 때마다 — 파트이름·업체정보·
+        약도주소·ntfy토픽 등 세이프6와 상관없는 값이 바뀌었을 때도, 심지어 아무것도
+        안 바뀐 재수신에도 — 여기서 buildGrid() 가 돌아 보드 전체가 지워졌다 다시
+        만들어졌다. 화면이 번쩍이는 가장 잦은 원인이었다.
+        → 값이 "실제로" 바뀐 경우에만, 그것도 칸을 지우지 않는 buildGridSoft 로 처리.
+          (🛡️ 아이콘은 renderSlot 의 변경감지 서명에 들어 있어 해당 칸만 다시 그려진다) */
   if(data.hasOwnProperty('safe6Partner')){
-    _safe6Partner = !!data.safe6Partner;
+    var _s6New = !!data.safe6Partner;
+    var _s6Changed = (_s6New !== !!_safe6Partner);
+    _safe6Partner = _s6New;
     try{ var _sw=document.getElementById('safe6PartnerSwitch'); if(_sw) _sw.checked=_safe6Partner; }catch(e){}
     if(typeof _updateSafe6PartnerBadge==='function') _updateSafe6PartnerBadge();
-    if(typeof buildGrid==='function') buildGrid();
-    if(typeof _initAllBadgeSliders==='function') setTimeout(function(){ _initAllBadgeSliders(); }, 300);
+    if(_s6Changed){
+      if(typeof buildGridSoft==='function') buildGridSoft();
+      else if(typeof buildGrid==='function') buildGrid();
+      if(typeof _initAllBadgeSliders==='function') setTimeout(function(){ _initAllBadgeSliders(); }, 300);
+    }
   }
   /* ★ 업체정보 수신 반영 */
   if(data.hasOwnProperty('bizInfo')){
@@ -14559,7 +14697,15 @@ function _applySlotSnapshot(snap){
            판정되어 전체 buildGrid()가 실행됨(화면 전체 깜빡임·스크롤 초기화).
            → 초기 수신 시점에도 캐시를 미리 채워, 그 다음 실시간 수신부터
              바로 정확한 diff(변경된 칸만)로 비교되도록 보장. */
-        window._fbPrevSlotCache = JSON.parse(JSON.stringify(recvSlots));
+        window._fbPrevSlotCache = _fbCloneSlots(recvSlots);
+      } else if(!recvSlots || typeof recvSlots !== 'object'){
+        /* ★ FIX(2026-10-02): 구형 방(_ids 없음) 스냅샷.
+           이 경우 recvSlots 가 만들어지지 않아(위쪽 recvSlots2 경로로 이미 저장됨)
+           아래 diff 비교의 recvSlots.hasOwnProperty(...) 에서 예외가 터졌고,
+           그 뒤 처리가 통째로 중단돼 실시간 갱신이 멎었다.
+           → diff 를 건너뛰고 칸 내용만 재확인한다(바뀐 칸만 실제로 다시 그려짐).
+           캐시는 건드리지 않아, 정상 스냅샷이 오면 그때부터 다시 diff 로 비교된다. */
+        _fbSoftRedraw(structChanged);
       } else {
         /* 실시간 수신: 이전 캐시와 diff 비교 */
         var _prevCache = window._fbPrevSlotCache || {};
@@ -14573,7 +14719,7 @@ function _applySlotSnapshot(snap){
           if(!recvSlots.hasOwnProperty(_pk)) _diffIds.push(_pk);
         }
         /* 캐시 갱신 */
-        window._fbPrevSlotCache = JSON.parse(JSON.stringify(recvSlots));
+        window._fbPrevSlotCache = _fbCloneSlots(recvSlots);
 
         if(_diffIds.length > 0 && _diffIds.length <= 8){
           /* 소량 변경 → refreshSlot */
@@ -14590,10 +14736,19 @@ function _applySlotSnapshot(snap){
             if(typeof _encarApplyBlinks==='function') _encarApplyBlinks();
             /* ★ 변경된 칸의 슬라이더만 재-init (전체 재-init 제거 → 다른 칸 배지 깜빡임 방지) */
             for(var _bsi=0;_bsi<TOTAL;_bsi++){ var _bsid=_gidx2id(_bsi); if(_bsid && _diffIds.indexOf(_bsid)>=0){ var _bsel=document.getElementById('slot_'+_bsi); if(_bsel && typeof _initBadgeSlider==='function') _initBadgeSlider(_bsel); } }
-          } else { buildGrid(); _initAllBadgeSliders(); }
+          } else {
+            /* ★ FIX(2026-10-02): 바뀐 키가 화면 좌표(C_파트_열_행)와 안 맞는 경우.
+               서류앱이 만든 D_ 칸, 구형 랜덤ID(S...)·구형 숫자키가 여기에 해당한다.
+               특히 서류앱에서 서류를 올릴 때마다 D_ 칸만 바뀌는데, 종전에는
+               그때마다 주차현황판 전체가 재빌드되어 화면이 깜빡였다.
+               → 칸을 지우지 않고 내용만 재확인한다(바뀐 칸만 실제로 다시 그려짐). */
+            _fbSoftRedraw(structChanged);
+          }
         } else if(_diffIds.length > 8){
-          /* 대량 변경 → 전체 재빌드 */
-          buildGrid(); _initAllBadgeSliders();
+          /* ★ FIX(2026-10-02): 9칸 이상 동시 변경(키불출 여러 건·일괄 정리·
+             다른 기기의 대량 수정)에도 전체 DOM을 지우지 않는다.
+             종전 buildGrid() 는 전 칸을 삭제·재생성해 화면이 한 번 번쩍였다. */
+          _fbSoftRedraw(structChanged);
         }
         /* _diffIds.length === 0: 변경 없음 → 아무것도 안 함 (정상) */
       }
@@ -14749,6 +14904,17 @@ function connectFb(url,code){
     _fbSyncReady = true;
     _fbLockShow(false);
     setDot('off','로컬 전용 모드');
+    return;
+  }
+  /* ★ FIX(오프라인): 네트워크가 확실히 끊긴 상태(navigator.onLine===false)에서는
+     연결을 시도해봐야 12초 동기화 잠금만 기다리게 된다. 즉시 로컬 데이터로 진행해
+     앱을 바로 쓸 수 있게 하고, 네트워크가 돌아오면 online 이벤트에서 connectFb가
+     자동 재호출되어 정상 동기화된다. (로컬 전용 모드와 동일한 안전 경로) */
+  if(typeof navigator!=='undefined' && navigator.onLine===false){
+    console.log('[SYNC] 오프라인 감지 — 로컬 데이터로 즉시 진행');
+    _fbSyncReady = true;
+    _fbLockShow(false);
+    setDot('off','오프라인 — 로컬 저장');
     return;
   }
   setDot('ing','연결 중...');
@@ -17575,7 +17741,12 @@ function _initPcScrollLimiter2(){
   <div id="mapEditorBox" style="background:#1E293B;border-radius:14px;padding:12px;width:100%;max-width:860px;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;margin:auto;">
 
     <!-- 제목 -->
-    <div style="color:#FEE500;font-size:14px;font-weight:900;text-align:center;">✏️ 파트 위치 안내 — <span id="mapEditorPartName"></span></div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div style="flex:1;color:#FEE500;font-size:14px;font-weight:900;text-align:center;padding-left:30px;">✏️ 파트 위치 안내 — <span id="mapEditorPartName"></span></div>
+      <!-- ★ 2026-10-02: 상단 닫기 버튼 (종전에는 창을 닫는 길이 하단 버튼뿐이었음) -->
+      <button type="button" onclick="_mteAskClose('x')" title="닫기"
+              style="flex:0 0 auto;width:30px;height:30px;background:#334155;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;line-height:1;">✕</button>
+    </div>
 
     <!-- 탭 -->
     <div style="display:flex;gap:2px;border-bottom:2px solid #334155;">
@@ -17648,9 +17819,10 @@ function _initPcScrollLimiter2(){
 
     <!-- 하단 버튼 -->
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-      <button onclick="_closeMapEditor()" style="flex:1;min-width:70px;padding:9px;background:#475569;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">취소</button>
-      <button onclick="_saveStepsOnly()" style="flex:2;min-width:130px;padding:9px;background:#0369A1;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📋 경로안내만 저장</button>
-      <button onclick="_saveMapAsPhoto()" style="flex:2;min-width:140px;padding:9px;background:#FF8C00;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">💾 저장 (사진으로 등록)</button>
+      <button onclick="_mteAskClose('close')" style="flex:1;min-width:70px;padding:9px;background:#334155;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">✕ 닫기</button>
+      <button onclick="_mteAskClose('cancel')" style="flex:1;min-width:70px;padding:9px;background:#475569;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">취소</button>
+      <button onclick="_mteAskSave('steps')" style="flex:2;min-width:130px;padding:9px;background:#0369A1;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📋 경로안내만 저장</button>
+      <button onclick="_mteAskSave('photo')" style="flex:2;min-width:140px;padding:9px;background:#FF8C00;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">💾 저장 (사진으로 등록)</button>
     </div>
 
   </div>
@@ -18126,6 +18298,63 @@ function _initPcScrollLimiter2(){
   window._closeMapEditor=function(){
     document.getElementById('mapEditorOv').style.display='none';
   };
+
+  /* ★ 2026-10-02 ─ 저장 안 된 작업이 있는지 판단
+     (경로칸에 글자가 있거나 · 약도를 그렸거나 · 사진을 붙였으면 "작업 중") */
+  window._mteHasUnsaved=function(){
+    try{
+      var ov=document.getElementById('mapEditorOv');
+      if(ov){
+        var ins=ov.querySelectorAll('.mte-step-input, #mtePanelRoute input[type="text"]');
+        for(var i=0;i<ins.length;i++){ if((ins[i].value||'').trim()) return true; }
+      }
+      if(_history && _history.length) return true;
+      if(_bgPhoto) return true;
+    }catch(e){}
+    return false;
+  };
+
+  /* ★ 닫기 계열 버튼 — 무엇을 하는 버튼인지 알리고, 작업 중이면 한 번 더 확인 */
+  window._mteAskClose=function(kind){
+    var 작업중 = window._mteHasUnsaved();
+    var 머리 = (kind==='cancel')
+      ? '취소 — 입력한 내용을 버리고 창을 닫습니다.'
+      : '✕ 닫기 — 저장하지 않고 창을 닫습니다.';
+    var 몸 = 작업중
+      ? '\n\n⚠️ 아직 저장하지 않은 내용이 있습니다.\n   지금 닫으면 입력한 경로·그린 약도·붙인 사진이 모두 사라집니다.\n   (이미 저장해 둔 약도는 그대로 남습니다)\n\n그래도 닫을까요?'
+      : '\n\n저장할 내용이 없습니다. 창만 닫습니다.\n계속할까요?';
+    if(confirm(머리 + 몸)) window._closeMapEditor();
+  };
+
+  /* ★ 저장 버튼 — 무엇이 저장되는지 먼저 알린다 */
+  window._mteAskSave=function(kind){
+    if(kind==='steps'){
+      if(!confirm('📋 경로안내만 저장\n\n· 단계별 경로 글과 주차장 좌표만 저장합니다.\n· 약도 그림·사진은 저장되지 않습니다(기존 것이 그대로 남습니다).\n\n저장할까요?')) return;
+      window._saveStepsOnly();
+    } else {
+      if(!confirm('💾 저장 (사진으로 등록)\n\n· 지금 화면의 약도를 그림으로 만들어 이 파트의 위치 안내 사진으로 등록합니다.\n· 이 파트에 전에 등록해 둔 사진이 있으면 덮어씁니다.\n\n저장할까요?')) return;
+      window._saveMapAsPhoto();
+    }
+  };
+
+  /* ★ 바깥(검은 배경) 클릭 · ESC 로도 닫기 */
+  (function(){
+    var ov=document.getElementById('mapEditorOv');
+    if(ov && !ov._mteCloseBound){
+      ov._mteCloseBound=true;
+      ov.addEventListener('mousedown', function(ev){
+        if(ev.target===ov) window._mteAskClose('close');
+      });
+    }
+    if(!document._mteEscBound){
+      document._mteEscBound=true;
+      document.addEventListener('keydown', function(ev){
+        if(ev.key!=='Escape') return;
+        var o=document.getElementById('mapEditorOv');
+        if(o && getComputedStyle(o).display!=='none') window._mteAskClose('close');
+      });
+    }
+  })();
   window._mteClear=function(){
     if(!confirm('약도를 전체 지우시겠습니까?')) return;
     _history=[];
@@ -21719,12 +21948,14 @@ window._drawQRCanvas = function(container, text, size){
               qrDiv.innerHTML = '<div style="width:150px;height:150px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:10px;color:#444;text-align:center;padding:8px;box-sizing:border-box;font-weight:700;">QR 생성 실패<br>아래 경로 안내<br>참고하세요</div>';
             }
           };
-          if(typeof window._makeShortLinkGlobal==='function' && _code9){
+          if(typeof window._makeShortLinkGlobal==='function' && _code9 && _getStorageMode()!=='local' && (localStorage.getItem('pb_fb_url')||'')){
+            /* ☁️ Firebase 모드: 단축링크(links 저장) → 스캔 잘 되는 짧은 QR */
             window._makeShortLinkGlobal(_code9, Object.assign({}, window._popupLinkPay), function(shortUrl){
               if(shortUrl){ _popupQrUrl = shortUrl; }
               _drawFinal(shortUrl || _qrUrl || qrContent);
             });
           } else {
+            /* 📱 로컬 전용 모드(또는 Firebase 미설정): 긴 URL로 QR → Firebase 없이 약도 보기 정상 */
             _drawFinal(_qrUrl || qrContent);
           }
         }, 80);
