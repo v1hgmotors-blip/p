@@ -3178,6 +3178,72 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
+/* ★ FIX(2026-10-02): Firebase SDK 다시 받기.
+   위 세 줄은 요청이 한 번 실패하면 끝이라, 앱을 켜는 순간 인터넷이 잠깐
+   불안정했으면 firebase 가 영영 undefined 로 남는다. 그러면 connectFb 가
+   매번 예외를 내고 연결 표시가 「오류」에 머물며, 인터넷이 돌아와도
+   새로고침하기 전까지는 서버로 올라가지 못했다(저장은 로컬에 정상).
+   → 안 받아졌으면 간격을 늘려가며 다시 받고, 받아지면 바로 다시 연결한다. */
+(function(){
+  var BASE  = 'https://www.gstatic.com/firebasejs/9.23.0/';
+  var CHAIN = ['firebase-app-compat.js','firebase-database-compat.js','firebase-auth-compat.js'];
+  var _delay = 2000, _busy = false;
+
+  function _ok(){ return (typeof firebase !== 'undefined') && !!firebase.database; }
+
+  function _add(src, cb, fail){
+    var s = document.createElement('script');
+    s.src = src; s.onload = cb;
+    s.onerror = function(){ if(typeof fail==='function') fail(); };
+    document.head.appendChild(s);
+  }
+
+  function _reconnect(){
+    try{
+      var u = localStorage.getItem('pb_fb_url')  || '';
+      var c = localStorage.getItem('pb_code')    || '';
+      var m = localStorage.getItem('pb_storage_mode') || '';
+      if(m !== 'both') return;                 /* 로컬 전용 모드면 연결하지 않음 */
+      if(u && c && typeof connectFb === 'function'){
+        console.log('[SDK] 뒤늦게 받아짐 → 재연결');
+        connectFb(u, c);
+      }
+    }catch(e){ console.warn('[SDK 재연결]', e); }
+  }
+
+  function _later(){
+    _busy = false;
+    setTimeout(window._pbLoadFbSdk, _delay);
+    _delay = Math.min(_delay * 2, 30000);      /* 2 → 4 → 8 → 16 → 30초 */
+  }
+
+  window._pbLoadFbSdk = function(){
+    if(_ok() || _busy) return;
+    try{ if((localStorage.getItem('pb_storage_mode')||'') !== 'both') return; }catch(e){}
+    _busy = true;
+    _add(BASE+CHAIN[0], function(){
+      _add(BASE+CHAIN[1], function(){
+        _add(BASE+CHAIN[2], function(){
+          _busy = false; _delay = 2000;
+          console.log('[SDK] 로드 완료');
+          setTimeout(_reconnect, 300);
+        }, _later);
+      }, _later);
+    }, _later);
+  };
+
+  /* 페이지가 다 읽힌 뒤 한 번 확인 — 그때도 없으면 재시도 시작 */
+  window.addEventListener('load', function(){
+    setTimeout(function(){ if(!_ok()) window._pbLoadFbSdk(); }, 1500);
+  });
+  /* 인터넷이 돌아오면 / 화면을 다시 보면 즉시 시도 */
+  window.addEventListener('online', function(){ _delay = 2000; window._pbLoadFbSdk(); });
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible' && !_ok()){ _delay = 2000; window._pbLoadFbSdk(); }
+  });
+})();
+</script>
+<script>
 /* ═══════════════════════════════════════════
    주차현황판 v6
    신규: PART 라벨 편집저장 / 불출 팝업 / 텍스트 크게
@@ -7684,7 +7750,7 @@ function _initColScrollArrow(sw){
        ※ 속도를 바꾸려면 이 줄의 숫자만 고치면 됩니다.
           200 = 최소 속도(px/초) · 1.4 = 칸폭 비례 계수 · 800 = 최대 속도
           더 빠르게: 300, 2.0, 1200   /   더 느리게: 120, 0.9, 500 */
-    return Math.max(100, Math.min(500, w * 1.0));
+    return Math.max(200, Math.min(800, w * 1.4));
   }
   function _hScroll(ts){
     if(document.body.classList.contains('dragging-slot')){ _hDir=0; _hRaf=null; _hPrevTs=0; _hAcc=0; return; }
@@ -10859,7 +10925,9 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
       committedId = tid; /* ★ transaction 재시도 대비 — 실제 커밋되는 id 추적 */
       /* ★ BUG FIX: slice(hist.length-200)(오래된 항목 유지) → slice(0,200)(최신 항목 유지)
          맨 앞에 추가하는 방식으로 바뀌었으므로 트림도 앞쪽 200건을 남기도록 수정 */
-      if(hist.length > 200) hist = hist.slice(0, 200);
+      /* ★ 50건 통일: 키불출앱 hist 한도(50)와 일치 — 키 반납은 24시간 내 확인되므로
+         50건(대략 1~2일치)이면 반납확인 목록에서 사라질 위험 없음. 다운로드도 최소화. */
+      if(hist.length > 50) hist = hist.slice(0, 50);
       return hist;
     }, function(error, committed, snapshot){
       if(error){ console.error('[검색키불출→키불출앱 전달 실패]', error); return; }
@@ -10901,6 +10969,9 @@ function _cleanupSearchDispatchHist(slotIdx){
     retRef.transaction(function(current){
       var retArr = Array.isArray(current) ? current.map(String) : [];
       if(retArr.indexOf(String(id)) === -1) retArr.push(String(id));
+      /* ★ 무한 누적 방지: hist 한도와 균형 맞춰 최근 100개만 유지
+         (없으면 returned 배열이 영구히 늘어나 매 접속 다운로드량이 계속 커진다) */
+      if(retArr.length > 100) retArr = retArr.slice(retArr.length - 100);
       return retArr;
     }, function(error, committed){
       if(error){ console.error('[검색키반납확인 전달 실패]', error); return; }
@@ -11381,6 +11452,8 @@ function _confirmKeyReturn(slotIdx, entry){
         _kdRef.child('returned').transaction(function(cur){
           var arr = Array.isArray(cur) ? cur.map(String) : [];
           returnedIds.forEach(function(rid){ if(!arr.includes(rid)) arr.push(rid); });
+          /* ★ 무한 누적 방지: hist 한도와 균형 맞춰 최근 100개만 유지 */
+          if(arr.length > 100) arr = arr.slice(arr.length - 100);
           return arr;
         }, function(err){
           if(err) console.warn('[키반납확인] Firebase 업데이트 실패:', err);
@@ -14935,6 +15008,17 @@ function connectFb(url,code){
     _fbSyncReady = true;
     _fbLockShow(false);
     setDot('off','로컬 전용 모드');
+    return;
+  }
+  /* ★ FIX(오프라인): 네트워크가 확실히 끊긴 상태(navigator.onLine===false)에서는
+     연결을 시도해봐야 12초 동기화 잠금만 기다리게 된다. 즉시 로컬 데이터로 진행해
+     앱을 바로 쓸 수 있게 하고, 네트워크가 돌아오면 online 이벤트에서 connectFb가
+     자동 재호출되어 정상 동기화된다. (로컬 전용 모드와 동일한 안전 경로) */
+  if(typeof navigator!=='undefined' && navigator.onLine===false){
+    console.log('[SYNC] 오프라인 감지 — 로컬 데이터로 즉시 진행');
+    _fbSyncReady = true;
+    _fbLockShow(false);
+    setDot('off','오프라인 — 로컬 저장');
     return;
   }
   setDot('ing','연결 중...');
@@ -21996,12 +22080,14 @@ window._drawQRCanvas = function(container, text, size){
               qrDiv.innerHTML = '<div style="width:150px;height:150px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:10px;color:#444;text-align:center;padding:8px;box-sizing:border-box;font-weight:700;">QR 생성 실패<br>아래 경로 안내<br>참고하세요</div>';
             }
           };
-          if(typeof window._makeShortLinkGlobal==='function' && _code9){
+          if(typeof window._makeShortLinkGlobal==='function' && _code9 && _getStorageMode()!=='local' && (localStorage.getItem('pb_fb_url')||'')){
+            /* ☁️ Firebase 모드: 단축링크(links 저장) → 스캔 잘 되는 짧은 QR */
             window._makeShortLinkGlobal(_code9, Object.assign({}, window._popupLinkPay), function(shortUrl){
               if(shortUrl){ _popupQrUrl = shortUrl; }
               _drawFinal(shortUrl || _qrUrl || qrContent);
             });
           } else {
+            /* 📱 로컬 전용 모드(또는 Firebase 미설정): 긴 URL로 QR → Firebase 없이 약도 보기 정상 */
             _drawFinal(_qrUrl || qrContent);
           }
         }, 80);
