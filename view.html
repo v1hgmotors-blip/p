@@ -837,19 +837,23 @@ window._docChoose = _docChoose;
   }
 
   /* 공유창을 띄웠으면 true, 못 띄웠으면 false (false 면 호출한 쪽이 다운로드로 처리) */
+  /* ★ FIX(2026-10-06): 공유가 안 된 이유를 담아 둔다 */
+  var _docShareWhy = '';
   function _shareDocs(docs, label){
+    _docShareWhy = '';
     try{
-      if (!docs || !docs.length) return false;
-      if (!navigator.share || !navigator.canShare) return false;
+      if (!docs || !docs.length){ _docShareWhy = '보낼 서류가 없습니다'; return false; }
+      if (!navigator.share || !navigator.canShare){ _docShareWhy = '이 브라우저는 공유 기능이 없습니다'; return false; }
       var files = [];
       for (var i = 0; i < docs.length; i++){
         try{ files.push(_dataUrlToFile(docs[i], label + (i + 1))); }catch(e){}
       }
-      if (!files.length) return false;
+      if (!files.length){ _docShareWhy = '서류 파일을 만들지 못했습니다'; return false; }
       if (!navigator.canShare({ files: files })){
         /* 여러 장을 한 번에 못 보내는 기기면 첫 장만 */
         if (files.length > 1 && navigator.canShare({ files: [files[0]] })) files = [files[0]];
-        else return false;
+        else { _docShareWhy = '이 브라우저가 파일 공유를 막습니다 — 크롬으로 열어 주세요'; }
+          /* ★ FIX: canShare 가 거부해도 일단 공유를 시도한다 (보수적인 브라우저 대비) */
       }
       var _car = '';
       try{ _car = (typeof qs === 'function' ? (qs('car') || '') : ''); }catch(e){}
@@ -864,8 +868,8 @@ window._docChoose = _docChoose;
             _setDocStatus(err.name === 'AbortError' ? '' : '📤 한 번 더 눌러 주세요');
             return;
           }
-          _setDocStatus('공유를 열 수 없어 다운로드로 받습니다');
-          docs.forEach(function(d, i){ setTimeout(function(){ _dlOne(d, label + (i + 1)); }, i * 300); });
+          /* ★ FIX: 공유를 고르셨으면 다운로드로 넘어가지 않는다 — 이유만 보여준다 */
+          _setDocStatus('⚠️ 공유 실패(' + ((err && err.name) || '알수없음') + ') — 「다운로드」를 눌러 주세요');
         });
       return true;
     }catch(e){ return false; }
@@ -922,7 +926,11 @@ window._docChoose = _docChoose;
     if(_commonLegacy){
       var legacyDocs=Object.keys(_commonLegacy).map(function(id){ return _commonLegacy[id]; }).filter(function(d){ return d&&d.data; });
       if(!legacyDocs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
-      if (_docMode === 'share' && _shareDocs(legacyDocs, '판매확인서')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+      if (_docMode === 'share'){
+        if (_shareDocs(legacyDocs, '판매확인서')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+        _setDocStatus('⚠️ ' + (_docShareWhy || '공유를 열 수 없습니다'));
+        return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+      }
       legacyDocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
       _setDocStatus('📄 판매확인서 '+legacyDocs.length+'개 다운로드됨');
       return;
@@ -942,7 +950,11 @@ window._docChoose = _docChoose;
     })).then(function(list){
       var docs=list.filter(function(d){ return d && d.data; });
       if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
-      if (_docMode === 'share' && _shareDocs(docs, '판매확인서')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+      if (_docMode === 'share'){
+        if (_shareDocs(docs, '판매확인서')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+        _setDocStatus('⚠️ ' + (_docShareWhy || '공유를 열 수 없습니다'));
+        return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+      }
       docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
       _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
     });
@@ -959,7 +971,11 @@ window._docChoose = _docChoose;
     var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
       .filter(function(d){ return d && d.data && d.cat==='insp'; });
     if(!docs.length){ _setDocStatus('등록된 성능점검표가 없습니다.'); return; }
-    if (_docMode === 'share' && _shareDocs(docs, '성능점검표')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+    if (_docMode === 'share'){
+      if (_shareDocs(docs, '성능점검표')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+      _setDocStatus('⚠️ ' + (_docShareWhy || '공유를 열 수 없습니다'));
+      return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+    }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'성능점검표'+(i+1)); },i*300); });
     _setDocStatus('📗 성능점검표 '+docs.length+'개 다운로드됨');
   };
@@ -975,7 +991,11 @@ window._docChoose = _docChoose;
     var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
       .filter(function(d){ return d && d.data && d.cat==='reg'; });
     if(!docs.length){ _setDocStatus('등록된 차량등록증이 없습니다.'); return; }
-    if (_docMode === 'share' && _shareDocs(docs, '차량등록증')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+    if (_docMode === 'share'){
+      if (_shareDocs(docs, '차량등록증')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+      _setDocStatus('⚠️ ' + (_docShareWhy || '공유를 열 수 없습니다'));
+      return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+    }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'차량등록증'+(i+1)); },i*300); });
     _setDocStatus('📘 차량등록증 '+docs.length+'개 다운로드됨');
   };
@@ -1216,12 +1236,7 @@ window._docChoose = _docChoose;
   /* ★ FIX(요청): 카카오 승인 템플릿 버튼 URL엔 변수 1개(k)만 허용돼 db=가 아예
      빠져 있음 — 이 시스템의 모든 업체가 결국 같은 Firebase 프로젝트를 쓰므로,
      db가 없으면 이 기본값으로 안전하게 접속한다(URL에 db가 있으면 그 값이 우선). */
-  /* ★ OEM 설정: 카카오 알림톡 버튼 URL엔 db= 변수를 넣을 수 없어, db 파라미터가 없으면
-     아래 기본 Firebase 주소로 접속합니다. ★ 배포 업체는 이 값을 자사 Firebase 주소로 바꿔주세요.
-     예: 'https://your-project-default-rtdb.firebaseio.com' */
-  var OEM_DEFAULT_DB = '';
-  if(!db){ db = OEM_DEFAULT_DB; }
-  if(!db){ showStatus('⚠️ 접속 정보가 없습니다.<br>QR을 다시 스캔해 주세요.'); return; }
+  if(!db){ db = 'https://kp-system-8e4eb-default-rtdb.firebaseio.com'; }
   try{
     firebase.initializeApp({ databaseURL: db });
     fdb = firebase.database();
