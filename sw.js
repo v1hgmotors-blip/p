@@ -14,7 +14,7 @@
 
 /* ★ 버전 — 앱을 새로 배포할 때 이 숫자를 올리면 옛 캐시가 완전히 정리된다.
    (예: 'app-v1' → 'app-v2'). HTML은 네트워크 우선이라 안 올려도 최신이 뜬다. */
-var CACHE_NAME = 'app-v1';
+var CACHE_NAME = 'app-v2';
 
 /* 캐시 절대 금지 (데이터·API — 반드시 네트워크로 통과) */
 var NEVER_CACHE = [
