@@ -23,7 +23,7 @@
   button{ width:100%; padding:14px; margin-bottom:8px; border:none; border-radius:11px;
           font-size:15px; font-weight:900; font-family:inherit; cursor:pointer;
           touch-action:manipulation; color:#fff; }
-  .b1{ background:#2563EB; } .b2{ background:#16A34A; } .b3{ background:#B45309; }
+  .b1{ background:#2563EB; } .b2{ background:#16A34A; } .b3{ background:#B45309; } .b4{ background:#7C3AED; } .b5{ background:#0E7490; } .b6{ background:#BE185D; }
   #log{ background:#020617; border:1px solid #1E293B; border-radius:10px; padding:11px;
         font-size:12.5px; line-height:1.8; white-space:pre-wrap; word-break:break-all;
         min-height:90px; color:#BBF7D0; }
@@ -48,6 +48,9 @@
   <button class="b1" onclick="tryText()">① 글자만 공유해 보기</button>
   <button class="b2" onclick="tryFile('png')">② 사진(PNG) 공유해 보기</button>
   <button class="b3" onclick="tryFile('pdf')">③ 서류(PDF) 공유해 보기</button>
+  <button class="b4" onclick="tryAlt('octet')">④ PDF를 「일반파일」로 바꿔 공유</button>
+  <button class="b5" onclick="tryAlt('noType')">⑤ PDF를 「종류없음」으로 공유</button>
+  <button class="b6" onclick="tryAlt('toPng')">⑥ PDF 대신 사진으로 바꿔 공유</button>
 </div>
 
 <div class="card">
@@ -137,6 +140,43 @@ function tryFile(kind){
   }catch(e){
     say(no + ' ' + nm + ' — 바로 예외 ❌ (canShare 판정: ' + can + ')\n오류이름: ' + e.name + '\n내용: ' + e.message);
   }
+}
+
+/* ── ④⑤⑥ 다른 방법으로 PDF 보내기 ── */
+function tryAlt(mode){
+  if (!navigator.share){ say('이 브라우저에는 공유 기능이 없습니다.'); return; }
+  var f, label;
+  try{
+    var ci = PDF.indexOf(',');
+    var bin = atob(PDF.slice(ci + 1));
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+
+    if (mode === 'octet'){
+      f = new File([arr], '시험.pdf', { type: 'application/octet-stream' });
+      label = '④ PDF를 「일반파일」로';
+    } else if (mode === 'noType'){
+      f = new File([arr], '시험.pdf');
+      label = '⑤ PDF를 「종류없음」으로';
+    } else {
+      /* ⑥ 내용은 사진으로 — PDF 대신 그림 한 장을 보낸다 */
+      var ci2 = PNG.indexOf(',');
+      var b2 = atob(PNG.slice(ci2 + 1));
+      var a2 = new Uint8Array(b2.length);
+      for (var j = 0; j < b2.length; j++) a2[j] = b2.charCodeAt(j);
+      f = new File([a2], '시험_등록증.png', { type: 'image/png' });
+      label = '⑥ PDF 대신 사진으로';
+    }
+  }catch(e){ say('파일을 만들지 못했습니다 ❌\n' + e.message); return; }
+
+  var can = '확인불가';
+  try{ if (navigator.canShare) can = navigator.canShare({ files: [f] }) ? '가능' : '불가'; }catch(e){ can = '예외 ' + e.name; }
+
+  try{
+    navigator.share({ files: [f], title: '시험' })
+      .then(function(){ say(label + ' — 성공 ✅ (canShare 판정: ' + can + ')'); })
+      .catch(function(e){ say(label + ' — 실패 ❌ (canShare 판정: ' + can + ')\n오류이름: ' + (e && e.name) + '\n내용: ' + (e && e.message)); });
+  }catch(e){ say(label + ' — 바로 예외 ❌\n오류이름: ' + e.name); }
 }
 </script>
 </body>
