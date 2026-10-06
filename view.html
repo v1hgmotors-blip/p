@@ -167,9 +167,9 @@
     <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
     <!-- ★ 서류 다운로드/공유 + 판매확인서 (현재 앱은 서류를 종류별로 구분 저장하지 않으므로 통합 버튼 사용) -->
     <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
-      <button id="regDocBtn" onclick="downloadRegDocs()" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📘 차량등록증</button>
-      <button id="inspDocBtn" onclick="downloadInspDocs()" style="flex:1;min-width:0;padding:9px 4px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📗 성능점검표</button>
-      <button id="commonDocBtn" onclick="downloadCommonDocs()" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
+      <button id="regDocBtn" onclick="_docChoose('reg')" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📘 차량등록증</button>
+      <button id="inspDocBtn" onclick="_docChoose('insp')" style="flex:1;min-width:0;padding:9px 4px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📗 성능점검표</button>
+      <button id="commonDocBtn" onclick="_docChoose('common')" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
     </div>
     <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
     <div id="docPickList" style="display:none;margin-top:10px;background:#0B1F38;border-radius:10px;padding:10px;"></div>
@@ -765,6 +765,112 @@ function sharePage(){
       fdb.ref(_base).update({ dlAt: Date.now() }).catch(function(){});
     }catch(e){}
   }
+  /* ★ FIX(2026-10-06): 서류 버튼을 누르면 「공유 / 다운로드」를 고르는 창을 띄운다. */
+var _docMode = 'dl';          /* 'share' = 공유, 'dl' = 다운로드 */
+var _docChooseEl = null;
+
+function _docCanShare(){
+  try{ return !!(navigator.share && navigator.canShare); }catch(e){ return false; }
+}
+
+function _docChooseClose(){
+  try{ if(_docChooseEl) _docChooseEl.style.display='none'; }catch(e){}
+}
+
+function _docChoose(kind){
+  var meta = { reg:   { label:'📘 차량등록증', fn:'downloadRegDocs' },
+               insp:  { label:'📗 성능점검표', fn:'downloadInspDocs' },
+               common:{ label:'📄 판매확인서', fn:'downloadCommonDocs' } }[kind];
+  if(!meta) return;
+  /* ★ 고르는 동안 서류 파일을 미리 받아둔다 — 공유는 터치 직후에만 열리기 때문 */
+  try{ if(!_docDataLoaded && _docKeyCur && _carDocs) _ensureDocData(function(){}); }catch(e){}
+
+  if(!_docChooseEl){
+    _docChooseEl = document.createElement('div');
+    _docChooseEl.id = 'docChooseOv';
+    _docChooseEl.style.cssText = 'position:fixed;inset:0;z-index:99500;background:rgba(2,6,23,.72);'
+      + 'display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+    _docChooseEl.addEventListener('click', function(e){ if(e.target===_docChooseEl) _docChooseClose(); });
+    _docChooseEl.innerHTML =
+      '<div style="width:100%;max-width:340px;background:#0F2447;border:2px solid #2C4E7E;border-radius:16px;'
+      + 'padding:18px 16px 14px;box-shadow:0 10px 36px rgba(0,0,0,.55);">'
+      + '<div id="docChooseTitle" style="font-size:17px;font-weight:900;color:#DBEAFE;text-align:center;margin-bottom:14px;"></div>'
+      + '<button id="docChooseShare" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
+      + 'background:#16A34A;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
+      + '📤 공유하기<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">카카오톡 · 모바일팩스 · 메일</div></button>'
+      + '<button id="docChooseDl" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
+      + 'background:#2563EB;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
+      + '📥 다운로드<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">이 기기에 저장</div></button>'
+      + '<button id="docChooseCancel" type="button" style="width:100%;padding:11px;border:none;border-radius:10px;'
+      + 'background:transparent;color:#94A3B8;font-size:14px;font-weight:800;font-family:inherit;cursor:pointer;touch-action:manipulation;">취소</button>'
+      + '</div>';
+    document.body.appendChild(_docChooseEl);
+    document.getElementById('docChooseCancel').addEventListener('click', _docChooseClose);
+  }
+
+  document.getElementById('docChooseTitle').textContent = meta.label;
+  var sb = document.getElementById('docChooseShare');
+  sb.style.display = _docCanShare() ? 'block' : 'none';
+  sb.onclick = function(){ _docChooseClose(); _docMode='share'; try{ window[meta.fn](); }catch(e){} };
+  document.getElementById('docChooseDl').onclick = function(){ _docChooseClose(); _docMode='dl'; try{ window[meta.fn](); }catch(e){} };
+  _docChooseEl.style.display = 'flex';
+}
+/* ★ 버튼 onclick 은 전역에서 실행된다 → 반드시 window 에 올려야 한다 */
+window._docChoose = _docChoose;
+
+/* ★ FIX(2026-10-06): 서류를 휴대폰 「공유하기」로 바로 넘긴다.
+     dataURL → 실제 파일로 바꿔 navigator.share 에 실어 보낸다.
+     (HTTPS 에서만 동작 — github.io 는 HTTPS 이므로 문제없음) */
+  function _dataUrlToFile(d, fallbackName){
+    var du = String((d && d.data) || '');
+    var ci = du.indexOf(',');
+    if (du.indexOf('data:') !== 0 || ci < 0) throw new Error('bad data');
+    var mime = (/^data:([^;,]+)/.exec(du) || [])[1] || 'application/octet-stream';
+    var bin = atob(du.slice(ci + 1));
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    var name = (d && d.name) || fallbackName || '서류';
+    if (!/\.[A-Za-z0-9]{2,5}$/.test(name)){
+      name += (mime.indexOf('pdf') >= 0 ? '.pdf' : (mime.indexOf('png') >= 0 ? '.png' : '.jpg'));
+    }
+    return new File([arr], name, { type: mime });
+  }
+
+  /* 공유창을 띄웠으면 true, 못 띄웠으면 false (false 면 호출한 쪽이 다운로드로 처리) */
+  function _shareDocs(docs, label){
+    try{
+      if (!docs || !docs.length) return false;
+      if (!navigator.share || !navigator.canShare) return false;
+      var files = [];
+      for (var i = 0; i < docs.length; i++){
+        try{ files.push(_dataUrlToFile(docs[i], label + (i + 1))); }catch(e){}
+      }
+      if (!files.length) return false;
+      if (!navigator.canShare({ files: files })){
+        /* 여러 장을 한 번에 못 보내는 기기면 첫 장만 */
+        if (files.length > 1 && navigator.canShare({ files: [files[0]] })) files = [files[0]];
+        else return false;
+      }
+      var _car = '';
+      try{ _car = (typeof qs === 'function' ? (qs('car') || '') : ''); }catch(e){}
+      navigator.share({ files: files, title: label, text: (_car ? (_car + ' ') : '') + label })
+        .then(function(){
+          _setDocStatus('📤 ' + label + ' 공유 완료');
+          try{ _logDocDownload(); }catch(e){}
+        })
+        .catch(function(err){
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')){
+            /* 사용자가 공유창을 닫았거나, 터치 직후가 아니라 막힘 → 다시 누르면 된다 */
+            _setDocStatus(err.name === 'AbortError' ? '' : '📤 한 번 더 눌러 주세요');
+            return;
+          }
+          _setDocStatus('공유를 열 수 없어 다운로드로 받습니다');
+          docs.forEach(function(d, i){ setTimeout(function(){ _dlOne(d, label + (i + 1)); }, i * 300); });
+        });
+      return true;
+    }catch(e){ return false; }
+  }
+
   function _dlOne(d, fallbackName){
     var a=document.createElement('a');
     a.href=d.data; a.download=d.name||fallbackName;
@@ -816,6 +922,7 @@ function sharePage(){
     if(_commonLegacy){
       var legacyDocs=Object.keys(_commonLegacy).map(function(id){ return _commonLegacy[id]; }).filter(function(d){ return d&&d.data; });
       if(!legacyDocs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      if (_docMode === 'share' && _shareDocs(legacyDocs, '판매확인서')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
       legacyDocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
       _setDocStatus('📄 판매확인서 '+legacyDocs.length+'개 다운로드됨');
       return;
@@ -835,6 +942,7 @@ function sharePage(){
     })).then(function(list){
       var docs=list.filter(function(d){ return d && d.data; });
       if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      if (_docMode === 'share' && _shareDocs(docs, '판매확인서')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
       docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
       _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
     });
@@ -851,6 +959,7 @@ function sharePage(){
     var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
       .filter(function(d){ return d && d.data && d.cat==='insp'; });
     if(!docs.length){ _setDocStatus('등록된 성능점검표가 없습니다.'); return; }
+    if (_docMode === 'share' && _shareDocs(docs, '성능점검표')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'성능점검표'+(i+1)); },i*300); });
     _setDocStatus('📗 성능점검표 '+docs.length+'개 다운로드됨');
   };
@@ -866,6 +975,7 @@ function sharePage(){
     var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
       .filter(function(d){ return d && d.data && d.cat==='reg'; });
     if(!docs.length){ _setDocStatus('등록된 차량등록증이 없습니다.'); return; }
+    if (_docMode === 'share' && _shareDocs(docs, '차량등록증')){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'차량등록증'+(i+1)); },i*300); });
     _setDocStatus('📘 차량등록증 '+docs.length+'개 다운로드됨');
   };
@@ -935,6 +1045,16 @@ function sharePage(){
   /* ★ 주차현황판 미사용(part 없음) 시 "주차위치 보기" 토글 버튼을 숨김 —
      오류가 아니라 그 매장이 위치 안내 기능을 안 쓰는 정상 상태이므로 조용히 숨긴다 */
   function _hideParkLocIfNoPart(){
+    /* ★ FIX(2026-10-02): 링크에 오프라인 약도 정보(cols/rows/col/row)가 있으면
+       그 매장은 주차현황판을 쓰는 것이 확실하다 — Firebase 를 안 쓰거나 방이
+       비어 있어도 약도는 URL 값만으로 이미 그려져 있으므로, 여는 버튼을
+       숨기면 손님이 약도를 볼 방법이 아예 없어진다. 그럴 때는 숨기지 않는다.
+       (주차현황판 미사용 매장은 이 값들이 없으므로 종전처럼 조용히 숨겨진다) */
+    try{
+      var _oc = parseInt(qs('cols'),10), _or = parseInt(qs('rows'),10);
+      var _ol = parseInt(qs('col'),10),  _ow = parseInt(qs('row'),10);
+      if(_oc > 0 && _or > 0 && _ol >= 1 && _ow >= 0){ return; }
+    }catch(e){}
     try{ var b = document.getElementById('parkLocToggle'); if(b) b.style.display = 'none'; }catch(e){}
   }
 
@@ -1099,7 +1219,7 @@ function sharePage(){
   /* ★ OEM 설정: 카카오 알림톡 버튼 URL엔 db= 변수를 넣을 수 없어, db 파라미터가 없으면
      아래 기본 Firebase 주소로 접속합니다. ★ 배포 업체는 이 값을 자사 Firebase 주소로 바꿔주세요.
      예: 'https://your-project-default-rtdb.firebaseio.com' */
-  var OEM_DEFAULT_DB = 'https://kp-system-8e4eb-default-rtdb.firebaseio.com';
+  var OEM_DEFAULT_DB = '';
   if(!db){ db = OEM_DEFAULT_DB; }
   if(!db){ showStatus('⚠️ 접속 정보가 없습니다.<br>QR을 다시 스캔해 주세요.'); return; }
   try{
@@ -1567,6 +1687,6 @@ function sharePage(){
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-09-24 · OEM view v23 (세이프6 알림톡 배지 반영)</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-10-06 · OEM view v23 (세이프6 알림톡 배지 반영)</div>
 </body>
 </html>
