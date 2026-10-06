@@ -1,183 +1,1946 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>공유 기능 검사</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>차량 위치 안내</title>
 <style>
-  :root{ color-scheme: dark; }
-  *{ box-sizing:border-box; }
-  body{ margin:0; padding:16px; background:#0B1220; color:#E2E8F0;
-        font-family:-apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",sans-serif; }
-  h1{ font-size:19px; margin:0 0 4px; color:#93C5FD; }
-  .sub{ font-size:12px; color:#94A3B8; margin-bottom:14px; line-height:1.6; }
-  .card{ background:#0F2447; border:2px solid #2C4E7E; border-radius:14px;
-         padding:13px 14px; margin-bottom:12px; }
-  .card h2{ font-size:14px; margin:0 0 9px; color:#DBEAFE; }
-  .row{ display:flex; justify-content:space-between; gap:10px; font-size:13px;
-        padding:6px 0; border-bottom:1px solid rgba(255,255,255,.07); line-height:1.5; }
-  .row:last-child{ border-bottom:none; }
-  .row b{ font-weight:800; color:#CBD5E1; flex:1; }
-  .ok{ color:#4ADE80; font-weight:900; white-space:nowrap; }
-  .no{ color:#F87171; font-weight:900; white-space:nowrap; }
-  button{ width:100%; padding:14px; margin-bottom:8px; border:none; border-radius:11px;
-          font-size:15px; font-weight:900; font-family:inherit; cursor:pointer;
-          touch-action:manipulation; color:#fff; }
-  .b1{ background:#2563EB; } .b2{ background:#16A34A; } .b3{ background:#B45309; } .b4{ background:#7C3AED; } .b5{ background:#0E7490; } .b6{ background:#BE185D; }
-  #log{ background:#020617; border:1px solid #1E293B; border-radius:10px; padding:11px;
-        font-size:12.5px; line-height:1.8; white-space:pre-wrap; word-break:break-all;
-        min-height:90px; color:#BBF7D0; }
-  .ua{ font-size:11px; color:#64748B; word-break:break-all; line-height:1.6; margin-top:4px; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    background:#0F1E33;color:#fff;
+    min-height:100vh;padding:8px 12px 14px;
+  }
+  .wrap{max-width:720px;margin:0 auto;}
+  .top-title{
+    text-align:center;font-size:16px;font-weight:900;color:#FEE500;
+    padding:6px 0 8px;letter-spacing:-.3px;line-height:1.35;
+  }
+  /* 차량번호/차량위치 헤더 — 팝업과 동일 스타일 */
+  .car-header{
+    display:none;
+    font-size:18px;font-weight:900;color:#E8590C;text-align:center;
+    background:#fff;border:2.5px solid #E03131;border-radius:12px;
+    padding:9px 14px;margin-bottom:8px;letter-spacing:-.3px;line-height:1.4;
+  }
+  /* ★ 차량이 더 이상 존재하지 않을 때(출고됨 등) 안내 스타일 */
+  .car-header.gone{
+    color:#475569;background:#F1F5F9;border-color:#94A3B8;font-size:17px;font-weight:800;line-height:1.7;
+  }
+  /* ★ 슬롯 메모 (실시간) */
+  .slot-memo{
+    display:none;font-size:13px;font-weight:700;color:#FDE68A;
+    background:#3A2E1A;border-radius:10px;padding:6px 12px;margin-bottom:8px;line-height:1.5;
+  }
+  /* ★ 담당차주 줄 — 팝업과 동일 (남색 칩 + 연두 글씨 + 전화걸기) */
+  .owner-line{
+    display:none;
+    align-items:center;gap:8px;flex-wrap:nowrap;
+    font-size:14px;font-weight:900;color:#7CE38B;
+    background:#16305A;border-radius:12px;
+    padding:7px 12px;margin-bottom:8px;letter-spacing:-.3px;
+  }
+  .owner-line #ownerTxt{ flex:1;min-width:0;line-height:1.3; }
+  .owner-call{
+    flex-shrink:0;white-space:nowrap;
+    background:#16A34A;color:#fff;text-decoration:none;
+    padding:7px 11px;border-radius:9px;font-size:13px;font-weight:900;
+  }
+  .panel{
+    background:#1E3A5F;border-radius:14px;padding:10px 14px;margin-bottom:8px;
+  }
+  .panel-title{font-size:16px;font-weight:900;color:#FEE500;margin-bottom:7px;}
+  .step-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+  .step-num{
+    flex-shrink:0;width:30px;height:30px;border-radius:50%;
+    background:#FF8C00;color:#fff;font-size:15px;font-weight:900;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step-txt{flex:1;font-size:17px;font-weight:800;line-height:1.6;padding-top:2px;color:#F1F5F9;letter-spacing:-.2px;}
+  .map-box{
+    background:#fff;border-radius:14px;padding:6px;margin-bottom:8px;
+    display:none;
+  }
+  .map-box img{width:100%;height:auto;display:block;border-radius:8px;}
+  .status{
+    text-align:center;font-size:14px;font-weight:800;color:#94A3B8;
+    padding:30px 10px;line-height:1.7;
+  }
+  .spin{
+    display:inline-block;width:26px;height:26px;border-radius:50%;
+    border:3px solid #334E75;border-top-color:#FEE500;
+    animation:sp 0.9s linear infinite;margin-bottom:10px;
+  }
+  @keyframes sp{to{transform:rotate(360deg);}}
+  /* ★ 출고서류 박스 — 차량번호 깜박임 */
+  @keyframes docCarNoBlink{
+    0%,100%{opacity:1;}
+    50%{opacity:.25;}
+  }
+  #docCarNo.blink{
+    animation:docCarNoBlink 1s ease-in-out infinite;
+  }
+  .foot{
+    text-align:center;font-size:11px;font-weight:700;color:#64748B;margin-top:10px;
+  }
+  .foot.foot-sub{
+    display:block;margin:10px auto 0;
+    color:#FEE500;font-size:19px;font-weight:900;
+    text-align:center;letter-spacing:.3px;
+  }
+  /* ★ 주차위치 보기 토글 버튼 — 눈에 확 띄도록 (접힘 상태에서 은은하게 깜빡임) */
+  @keyframes parkLocPulse{
+    0%,100%{ box-shadow:0 3px 10px rgba(245,158,11,.40); transform:scale(1); }
+    50%    { box-shadow:0 6px 22px rgba(245,158,11,.85); transform:scale(1.025); }
+  }
+  #parkLocToggle{
+    width:100%;margin:2px 0 8px;padding:9px 12px;border:none;border-radius:14px;
+    font-size:19px;font-weight:900;cursor:pointer;font-family:inherit;letter-spacing:-.3px;
+    transition:background .2s, box-shadow .2s;
+  }
+  #parkLocToggle.closed{
+    background:linear-gradient(135deg,#FBBF24,#F59E0B);color:#3a2600;
+    text-shadow:0 1px 0 rgba(255,255,255,.35);
+    animation:parkLocPulse 1.5s ease-in-out infinite;
+  }
+  #parkLocToggle.open{
+    background:#334155;color:#fff;animation:none;box-shadow:none;
+  }
+  /* ★ 자동 약도 격자 셀 */
+  #autoMapBox table{ border-collapse:separate;border-spacing:4px;margin:0 auto; }
+  .amCell{
+    width:30px;height:30px;min-width:30px;background:#EEF2F7;
+    border:1.5px solid #CBD5E1;border-radius:6px;text-align:center;
+    vertical-align:middle;padding:0;font-size:15px;line-height:30px;
+  }
+  .amTarget{
+    background:#E03131;border-color:#B91C1C;color:#fff;font-weight:900;
+    animation:amPulse 1.2s ease-in-out infinite;
+  }
+  .amNear{
+    font-size:9px;font-weight:800;color:#334155;letter-spacing:-.5px;
+    background:#DBEAFE;border-color:#93C5FD;
+    line-height:1.15;white-space:normal;word-break:break-all;
+    padding:1px;vertical-align:middle;
+  }
+  .amEmpty{ font-size:12px; opacity:.45; }  /* ★ 차량번호 없는 칸의 🅿️ */
+  /* ★ "사용안함" 칸 — 현황판과 동일하게 회색 + ✕ 표시 */
+  .amDisabled{
+    font-size:8px;font-weight:800;color:#F1F5F9;letter-spacing:-.5px;
+    background:#7A7A7A;border-color:#5A5A5A;
+    line-height:1.1;white-space:normal;word-break:keep-all;
+    padding:1px;vertical-align:middle;
+  }
+  /* ★ 열 간격(열 띄우기) 세로 띠 — 저장된 텍스트/색상 표시 (본 앱과 동일) */
+  .amGap{
+    min-width:16px;width:16px;padding:4px 1px;
+    writing-mode:vertical-rl;text-orientation:mixed;
+    font-weight:900;font-size:11px;letter-spacing:1px;line-height:1.05;
+    text-align:center;vertical-align:middle;white-space:nowrap;
+    background:#FEF9C3;border:1.5px solid #FDE68A;border-radius:6px;
+    color:#92400E;
+  }
+  @keyframes amPulse{
+    0%,100%{ box-shadow:0 0 0 2px rgba(224,49,49,.30); }
+    50%    { box-shadow:0 0 0 6px rgba(224,49,49,.55); }
+  }
+  /* ★ "출고서류" 제목 — 잘 보이도록 강조 + 부드러운 깜박임 */
+  @keyframes docTitleBlink{
+    0%,100%{ opacity:1; color:#FDE68A; text-shadow:0 0 6px rgba(253,230,138,.7); }
+    50%    { opacity:.45; color:#93C5FD; text-shadow:none; }
+  }
+  #docTitleLabel{
+    display:inline-block;font-size:18px;font-weight:900;
+    animation:docTitleBlink 1.3s ease-in-out infinite;
+  }
 </style>
 </head>
 <body>
+<div class="wrap" id="wrap">
+  <div class="top-title" id="topTitle">🚗 차량 위치 안내</div>
+  <!-- ★ 업체정보 (현황판 설정바 🏢업체정보에서 입력) -->
+  <div id="bizInfo" style="display:none;text-align:center;font-size:14px;font-weight:800;color:#BFDBFE;line-height:1.5;margin:-3px 0 8px;padding:0 8px;white-space:pre-line;"></div>
+  <div class="car-header" id="carHeader"></div>
+  <!-- ★★ 출고서류 다운로드/인쇄/공유 (차량번호·위치 헤더 바로 아래) -->
+  <div id="docBox" style="display:none;background:#0F2A4A;border:1.5px solid #2563EB;border-radius:12px;padding:9px 14px;margin:0 0 8px;">
+    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:900;color:#93C5FD;margin-bottom:8px;line-height:1.4;min-height:22px;"><span id="docTitleLabel" style="flex:none;">📄 출고서류</span><span id="docCarNo" class="blink" style="flex:1;min-width:0;text-align:center;color:#FDE68A;font-size:17px;pointer-events:none;word-break:keep-all;"></span><span id="safe6Badge" style="display:none;flex:none;background:#0D9488;color:#fff;font-size:13px;font-weight:900;padding:3px 8px;border-radius:8px;pointer-events:none;animation:docCarNoBlink 1s ease-in-out infinite;">🛡️세이프6</span></div>
+    <div id="docNoneMsg" style="display:none;font-size:13px;font-weight:800;color:#FCA5A5;line-height:1.6;background:#3A1D1D;border-radius:8px;padding:10px 12px;margin-bottom:10px;">● 출고서류는 사무실로 문의 주세요!</div>
+    <!-- ★ 서류 다운로드/공유 + 판매확인서 (현재 앱은 서류를 종류별로 구분 저장하지 않으므로 통합 버튼 사용) -->
+    <div id="docBtnRow" style="display:flex;gap:6px;flex-wrap:nowrap;">
+      <button id="regDocBtn" onclick="_docChoose('reg')" style="flex:1;min-width:0;padding:9px 4px;background:#166534;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📘 차량등록증</button>
+      <button id="inspDocBtn" onclick="_docChoose('insp')" style="flex:1;min-width:0;padding:9px 4px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📗 성능점검표</button>
+      <button id="commonDocBtn" onclick="_docChoose('common')" style="display:none;flex:1;min-width:0;padding:9px 4px;background:#B45309;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;">📄 판매확인서</button>
+    </div>
+    <!-- 출고서류 선택 리스트 (다운로드 시 표시) -->
+    <div id="docPickList" style="display:none;margin-top:10px;background:#0B1F38;border-radius:10px;padding:10px;"></div>
+    <div id="docStatus" style="font-size:11px;color:#94A3B8;font-weight:700;margin-top:8px;"></div>
+  </div>
+  <!-- ★ 담당차주 + 전화걸기 -->
+  <div class="owner-line" id="ownerLine">
+    <span id="ownerTxt"></span>
+    <a class="owner-call" id="ownerCall" href="#" style="display:none;">📞 전화걸기</a>
+  </div>
 
-<h1>📤 공유 기능 검사</h1>
-<div class="sub">
-  이 화면을 <b>삼성 인터넷</b>과 <b>크롬</b>에서 각각 열어 아래 버튼을 눌러 보세요.<br>
-  결과를 그대로 알려주시면 원인을 정확히 짚을 수 있습니다.
+  <!-- ★ 주차위치(약도) 접기/펴기 토글 버튼 (담당차주 바로 아래) -->
+  <button id="parkLocToggle" class="closed" onclick="toggleParkLoc()">📍 주차위치 보기 ▾</button>
+  <!-- ★ 슬롯 메모 (실시간) -->
+  <div class="slot-memo" id="slotMemoBox"></div>
+
+  <!-- ★ 주차위치 영역 (경로안내 + 약도 + 다운/공유 버튼) — 주차위치보기 버튼으로 접기/펴기, 기본 접힘 -->
+  <div id="parkLocWrap" style="display:none;">
+    <div class="panel" id="routePanel" style="display:none;">
+      <div class="panel-title">📋 경로 안내</div>
+      <div id="routeSteps"></div>
+    </div>
+
+    <!-- ★ 자동 약도 (실시간 정확한 위치 — 항상 먼저 표시) -->
+    <div id="autoMapBox" onclick="zoomAutoMap()" style="display:none;background:#fff;border-radius:14px;padding:8px 10px;margin-bottom:8px;cursor:zoom-in;"></div>
+
+    <!-- ★ 관리자가 등록한 사진/약도 (자동 약도 아래에 표시) -->
+    <div class="map-box" id="mapBox">
+      <img id="mapImg" alt="약도" onclick="zoomMap()" style="cursor:zoom-in;">
+      <div style="text-align:center;font-size:11px;color:#94A3B8;font-weight:700;padding:4px 0 2px;">🔍 약도를 누르면 크게 볼 수 있습니다</div>
+    </div>
+
+    <div class="status" id="statusMsg"><span class="spin"></span><br>약도를 불러오는 중입니다...</div>
+
+    <!-- ★ 다운로드 / 공유 버튼 -->
+    <div id="actionBtns" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button onclick="dlMap()" style="flex:1;min-width:100px;padding:10px 8px;background:#166534;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">⬇️ 현재화면다운</button>
+      <button onclick="dlMapOnly()" style="flex:1;min-width:90px;padding:10px 8px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🗺️ 약도만</button>
+      <button onclick="sharePage()" style="flex:1;min-width:80px;padding:10px 8px;background:#6D28D9;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">📤 공유</button>
+    </div>
+  </div>
+
+  <!-- ★ 약도 전체화면 확대 뷰 (가로로 돌리면 화면 가득) — 접기 영역 밖에 위치 -->
+  <div id="mapZoom" onclick="closeZoom()" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.95);align-items:center;justify-content:center;">
+    <img id="mapZoomImg" style="max-width:100%;max-height:100%;object-fit:contain;">
+    <div style="position:absolute;top:14px;right:18px;color:#fff;font-size:30px;font-weight:900;">✕</div>
+  </div>
+  <!-- ★ 제휴점 정보 (하단 표시) -->
+  <div id="promoBox" style="display:none;background:#16305A;border:1.5px solid #3B5C8F;border-radius:12px;padding:6px 14px;margin:12px 0 0;">
+    <div id="promoLines"></div>
+  </div>
+  <!-- ★ 이 약도 링크 복사 -->
+  <button id="viewCopyLinkBtn" onclick="copyViewLink()" style="width:100%;margin:16px 0 0;padding:13px;background:#0369A1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;">🔗 이 약도 링크 복사</button>
+  <div class="foot foot-sub" id="footTxt">📍Suwonskv1motors</div>
 </div>
 
-<div class="card">
-  <h2>1. 이 브라우저가 지원하는 것</h2>
-  <div id="caps"></div>
-</div>
-
-<div class="card">
-  <h2>2. 눌러서 직접 시험</h2>
-  <button class="b1" onclick="tryText()">① 글자만 공유해 보기</button>
-  <button class="b2" onclick="tryFile('png')">② 사진(PNG) 공유해 보기</button>
-  <button class="b3" onclick="tryFile('pdf')">③ 서류(PDF) 공유해 보기</button>
-  <button class="b4" onclick="tryAlt('octet')">④ PDF를 「일반파일」로 바꿔 공유</button>
-  <button class="b5" onclick="tryAlt('noType')">⑤ PDF를 「종류없음」으로 공유</button>
-  <button class="b6" onclick="tryAlt('toPng')">⑥ PDF 대신 사진으로 바꿔 공유</button>
-</div>
-
-<div class="card">
-  <h2>3. 결과</h2>
-  <div id="log">아직 아무 버튼도 누르지 않았습니다.</div>
-</div>
-
-<div class="card">
-  <h2>4. 브라우저 정보</h2>
-  <div class="ua" id="ua"></div>
-</div>
-
+<!-- html2canvas (화면 전체 다운로드용) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Firebase (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
-/* ── 작은 시험용 파일 두 개 (바깥에서 받아오지 않음) ── */
-var PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAJ0lEQVR42mNkYPhfz0AEYBxVSF+FjAxkAsZRhfRVyMhAJmAcVUhfhQBhhwOBmTOEBwAAAABJRU5ErkJggg==';
-var PDF = 'data:application/pdf;base64,JVBERi0xLjEKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgOTkgOTldPj5lbmRvYmoKdHJhaWxlcjw8L1Jvb3QgMSAwIFI+Pg==';
-
-function $(id){ return document.getElementById(id); }
-
-function say(msg){
-  var el = $('log');
-  var t = new Date().toLocaleTimeString('ko-KR');
-  el.textContent = '[' + t + ']\n' + msg + '\n\n' + el.textContent;
+/* ★ 화면 전체 다운로드 — 제휴점/차량위치/담당차주/경로/약도를 한 장으로 저장
+   html2canvas 로드 실패 시 약도 사진만 저장 (폴백) */
+function _dlFallbackMapOnly(){
+  try{
+    var box = document.getElementById('mapBox');
+    var img = document.getElementById('mapImg');
+    /* ★ 사진 박스가 실제 표시 중일 때만 — 자동 약도로 전환된 뒤 남아있는 옛 사진 다운 방지 */
+    var boxVisible = box && box.style.display !== 'none';
+    if(boxVisible && img && img.src && img.src.indexOf('data:image')===0){
+      var a=document.createElement('a');
+      a.href=img.src; a.download='약도_차량위치안내.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+/* ★ 약도 사진 1장만 다운로드 — 등록 사진이 있으면 사진을,
+   자동 약도(격자)가 표시 중이면 격자를 이미지로 캡처해 저장 */
+function dlMapOnly(){
+  /* 1) 등록 사진이 있으면 사진 다운로드 */
+  if(_dlFallbackMapOnly()) return;
+  /* 2) 자동 약도(격자)가 표시 중이면 격자 캡처 다운로드 (전체 폭) */
+  var am = document.getElementById('autoMapBox');
+  var amVisible = am && am.style.display !== 'none' && am.innerHTML;
+  if(amVisible && typeof html2canvas !== 'undefined'){
+    _captureAutoMap(function(url){
+      if(!url){ alert('약도 이미지 생성에 실패했습니다.'); return; }
+      var a=document.createElement('a');
+      a.href=url;
+      a.download='약도_차량위치안내.png';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+    return;
+  }
+  alert('다운로드할 약도가 없습니다.');
+}
+function dlMap(){
+  var btns = document.getElementById('actionBtns');
+  var wrap = document.getElementById('wrap');
+  if(typeof html2canvas === 'undefined' || !wrap){
+    if(!_dlFallbackMapOnly()) alert('다운로드에 실패했습니다.');
+    return;
+  }
+  /* 캡처 중 버튼은 잠깐 숨김 (결과 이미지에 버튼이 안 나오게) */
+  if(btns) btns.style.visibility = 'hidden';
+  /* ★ FIX: windowWidth/width를 wrap의 실제 렌더링 너비로 고정
+     — 지정하지 않으면 html2canvas가 내부적으로 더 넓은 가상 뷰포트를 가정해
+       wrap(max-width:720px, margin:0 auto)이 가운데 정렬되며 좌우에 여백이 생김 */
+  var _w = wrap.scrollWidth, _h = wrap.scrollHeight;
+  html2canvas(wrap, {
+    backgroundColor: '#0F1E33',
+    scale: 2,                 /* 고해상도 */
+    useCORS: true,
+    logging: false,
+    width: _w,
+    height: _h,
+    windowWidth: _w,
+    windowHeight: _h
+  }).then(function(canvas){
+    if(btns) btns.style.visibility = '';
+    var a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = '차량위치안내_전체.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }).catch(function(e){
+    if(btns) btns.style.visibility = '';
+    if(!_dlFallbackMapOnly()) alert('다운로드에 실패했습니다.');
+  });
+}
+/* ★ 약도 전체화면 확대 (가로로 돌리면 화면 가득) */
+/* ★ 자동 약도(격자) 전체 폭 캡처 — 격자가 박스 안에서 가로 스크롤될 때
+   보이는 부분만 찍히는 문제 해결: 안쪽 스크롤 영역의 실제 폭으로 캡처 */
+function _captureAutoMap(onDone){
+  var am = document.getElementById('autoMapBox');
+  if(!am || am.style.display==='none' || !am.innerHTML || typeof html2canvas==='undefined'){ onDone(null); return; }
+  var inner = am.querySelector('div[style*="overflow"]');
+  var fullW = Math.max(am.scrollWidth, (inner ? inner.scrollWidth + 24 : 0));
+  html2canvas(am, {
+    backgroundColor:'#ffffff', scale:2, useCORS:true, logging:false,
+    width:fullW, height:am.scrollHeight,
+    windowWidth:fullW, windowHeight:am.scrollHeight,
+    onclone:function(doc){
+      /* 복제본에서 박스를 전체 폭으로 펼치고 스크롤 잘림 해제 */
+      try{
+        var c=doc.getElementById('autoMapBox');
+        if(c){
+          c.style.width=fullW+'px'; c.style.maxWidth='none';
+          var ic=c.querySelector('div[style*="overflow"]');
+          if(ic){ ic.style.overflow='visible'; ic.style.width='auto'; }
+        }
+      }catch(e){}
+    }
+  }).then(function(canvas){ onDone(canvas.toDataURL('image/png')); })
+    .catch(function(){ onDone(null); });
+}
+function zoomMap(){
+  var z = document.getElementById('mapZoom');
+  var zi = document.getElementById('mapZoomImg');
+  var src = (document.getElementById('mapImg')||{}).src;
+  if(!src) return;
+  zi.src = src;
+  z.style.display = 'flex';
+}
+/* ★ 자동 약도(격자) 탭 → 전체화면 크게 보기 (전체 폭 캡처) */
+var _autoZoomCache = null; /* {html:격자HTML, img:dataURL} — 같은 내용이면 재캡처 생략 */
+function zoomAutoMap(){
+  var am = document.getElementById('autoMapBox');
+  if(!am || am.style.display==='none' || !am.innerHTML) return;
+  /* 확대해 보는 동안 자동 접힘 방지 — 타이머 재시작 */
+  try{ if(typeof _parkLocTimer!=='undefined' && _parkLocTimer){ clearTimeout(_parkLocTimer); _parkLocTimer=setTimeout(function(){ collapseParkLoc(); }, 30000); } }catch(e){}
+  var z = document.getElementById('mapZoom');
+  var zi = document.getElementById('mapZoomImg');
+  if(_autoZoomCache && _autoZoomCache.html===am.innerHTML){
+    zi.src=_autoZoomCache.img; z.style.display='flex'; return;
+  }
+  _captureAutoMap(function(url){
+    if(!url) return;
+    _autoZoomCache={ html:am.innerHTML, img:url };
+    zi.src=url; z.style.display='flex';
+  });
+}
+function closeZoom(){
+  var z = document.getElementById('mapZoom');
+  if(z) z.style.display = 'none';
 }
 
-function mark(ok){ return ok ? '<span class="ok">있음 ✅</span>' : '<span class="no">없음 ❌</span>'; }
-
-function toFile(dataUrl, name){
-  var ci = dataUrl.indexOf(',');
-  var mime = /^data:([^;,]+)/.exec(dataUrl)[1];
-  var bin = atob(dataUrl.slice(ci + 1));
-  var arr = new Uint8Array(bin.length);
-  for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new File([arr], name, { type: mime });
+/* ★ 주차위치(약도) 접기/펴기 — 기본 접힘, 펴면 20초 후 자동으로 다시 접힘 */
+var _parkLocTimer = null;
+function _setParkLocBtn(open){
+  var b = document.getElementById('parkLocToggle');
+  if(!b) return;
+  if(open){ b.className = 'open';   b.innerHTML = '📍 주차위치 접기 ▴'; }
+  else    { b.className = 'closed'; b.innerHTML = '📍 주차위치 보기 ▾'; }
 }
-
-/* ── 1. 지원 여부 확인 ── */
+function collapseParkLoc(){
+  var w = document.getElementById('parkLocWrap');
+  if(w) w.style.display = 'none';
+  if(_parkLocTimer){ clearTimeout(_parkLocTimer); _parkLocTimer = null; }
+  _setParkLocBtn(false);
+  var _pb = document.getElementById('promoBox'); if(_pb && window._promoActive) _pb.style.display = 'block'; /* ★ 접으면 제휴점 다시 표시 */
+}
+function expandParkLoc(){
+  var w = document.getElementById('parkLocWrap');
+  if(w) w.style.display = 'block';
+  _setParkLocBtn(true);
+  var _pb = document.getElementById('promoBox'); if(_pb) _pb.style.display = 'none'; /* ★ 약도 펼치면 제휴점 숨김 */
+  /* ★ 펼치면 차량위치(빨간 📍 칸)가 바로 보이도록 자동 스크롤
+     — 자동 약도의 📍 칸이 있으면 거기로(세로+가로), 없으면(사진 약도) 약도 영역으로 */
+  setTimeout(function(){
+    try{
+      var t = document.querySelector('#autoMapBox .amTarget');
+      if(t && t.offsetParent){
+        t.scrollIntoView({behavior:'smooth', block:'center', inline:'center'});
+      } else if(w){
+        w.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    }catch(e){
+      try{ if(w) w.scrollIntoView(); }catch(e2){}
+    }
+  }, 120);
+  if(_parkLocTimer){ clearTimeout(_parkLocTimer); }
+  /* 30초 후 자동 접기 */
+  _parkLocTimer = setTimeout(function(){ collapseParkLoc(); }, 30000);
+}
+function toggleParkLoc(){
+  var w = document.getElementById('parkLocWrap');
+  var isOpen = w && w.style.display !== 'none' && w.style.display !== '';
+  if(isOpen){ collapseParkLoc(); }
+  else { expandParkLoc(); }
+}
+/* ★ 페이지 공유 — 약도 이미지 + 위치 텍스트 + 링크 (카톡/문자 등 선택) */
+function sharePage(){
+  var hdr = (document.getElementById('carHeader')||{}).textContent || '차량 위치 안내';
+  var own = (document.getElementById('ownerTxt')||{}).textContent || '';
+  var txt = hdr + (own ? '\n' + own : '');
+  var img = document.getElementById('mapImg');
+  var doShare = function(files){
+    var data = { title: document.title, text: txt, url: location.href };
+    if(files) data.files = files;
+    navigator.share(data).catch(function(e){
+      if(e && e.name !== 'AbortError'){ fallbackCopy(); }
+    });
+  };
+  var fallbackCopy = function(){
+    try{
+      navigator.clipboard.writeText(txt + '\n' + location.href).then(function(){
+        alert('링크가 복사되었습니다. 카톡/문자에 붙여넣어 공유하세요.');
+      });
+    }catch(e){ alert('공유가 지원되지 않는 브라우저입니다.'); }
+  };
+  if(!navigator.share){ fallbackCopy(); return; }
+  /* 약도 이미지가 있으면 파일로 첨부 시도 */
+  if(img && img.src && img.src.indexOf('data:image')===0 && navigator.canShare){
+    try{
+      fetch(img.src).then(function(r){ return r.blob(); }).then(function(b){
+        var f = new File([b], '약도.png', {type: b.type||'image/png'});
+        if(navigator.canShare({files:[f]})){ doShare([f]); }
+        else { doShare(null); }
+      }).catch(function(){ doShare(null); });
+    }catch(e){ doShare(null); }
+  } else {
+    doShare(null);
+  }
+}
 (function(){
-  var rows = [];
-  var hasShare    = !!navigator.share;
-  var hasCanShare = !!navigator.canShare;
-  rows.push(['공유 기능 (navigator.share)', mark(hasShare)]);
-  rows.push(['파일 검사 (navigator.canShare)', mark(hasCanShare)]);
-  rows.push(['보안 주소 (https)', mark(window.isSecureContext)]);
-
-  if (hasCanShare){
-    try{ rows.push(['글자 공유 가능?', mark(navigator.canShare({ text: '시험' }))]); }
-    catch(e){ rows.push(['글자 공유 가능?', '<span class="no">예외: ' + e.name + '</span>']); }
-    try{ rows.push(['사진(PNG) 공유 가능?', mark(navigator.canShare({ files: [toFile(PNG, '시험.png')] }))]); }
-    catch(e){ rows.push(['사진(PNG) 공유 가능?', '<span class="no">예외: ' + e.name + '</span>']); }
-    try{ rows.push(['서류(PDF) 공유 가능?', mark(navigator.canShare({ files: [toFile(PDF, '시험.pdf')] }))]); }
-    catch(e){ rows.push(['서류(PDF) 공유 가능?', '<span class="no">예외: ' + e.name + '</span>']); }
+  function qs(k){
+    try{ return new URLSearchParams(location.search).get(k) || ''; }catch(e){ return ''; }
   }
+  function _b64urlDecode(s){
+    try{ s = String(s||'').replace(/-/g,'+').replace(/_/g,'/'); while(s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }catch(e){ return ''; }
+  }
+  var code = qs('code') || qs('c');
+  var part = qs('part');
+  var car  = qs('car');
+  var isSafe6 = false; /* ★ 세이프6 상태 (payload.sf) */
+  try{ if(typeof qs==='function' && qs('sf')==='1') isSafe6 = true; }catch(e){}  /* ★ 직접 URL ?sf=1 대응 */
+  var loc  = qs('loc');
+  var db   = qs('db') || ''; /* ★ (OEM) 기본 Firebase 폴백 제거 — db는 링크에서만 받음 */
+  var eid  = qs('eid') || '';  /* ★ 불출건 ID — 건별 스캔/다운로드 집계용 */
+  var lkey = qs('k');   /* ★ 단축링크 키 — Firebase에서 상세정보를 읽어옴 */
+  var bz   = qs('bz');  /* ★ 업체명(상호명) — 현황판/키불출앱에서 자동 전달됨 */
+  var sub  = qs('sub'); /* ★ 메인타이틀이름 — 하단 중앙에 표시 */
+  function applyBiz(name){
+    if(!name) return;
+    try{
+      document.getElementById('topTitle').textContent = '🚗 ' + name + ' 차량 위치 안내';
+      document.title = name + ' 차량 위치 안내';
+      var f = document.getElementById('footTxt');
+      if(f){
+        if(sub){ f.textContent = sub; f.classList.add('foot-sub'); }
+        else{ f.textContent = '📍Suwonskv1motors'; f.classList.add('foot-sub'); }
+      }
+      var dn = document.getElementById('docNoneMsg');
+      if(dn) dn.textContent = '● 출고서류는 ' + name + ' 사무실로 문의 주세요!';
+    }catch(e){}
+  }
+  applyBiz(bz);
+  /* ★ 업체정보 텍스트 (여러 줄 지원) */
+  function applyBizInfo(info){
+    if(!info) return;
+    try{
+      var el = document.getElementById('bizInfo');
+      el.textContent = String(info);
+      el.style.display = 'block';
+    }catch(e){}
+  }
+  applyBizInfo(qs('bi'));
+  /* ★ 제휴점 정보 — 줄별 표시, 전화번호(010~) 포함 줄엔 📞 전화걸기 버튼 */
+  /* ★★ 출고서류 — 차량번호 기준 조회 (kd_rooms/{code}/kd_docs/{차량번호키})
+     현황판이 차량번호로 서류를 저장하므로, view는 링크의 car 값으로 조회한다. */
+  var _carDocs = null;   /* { docId: {name,type,data,size,at} } */
+  /* ★★ QR 스캔 기록 — 딜러가 실제로 약도를 열었는지 키불출앱 이력에 표시하기 위함.
+     차량번호 키로 "마지막 조회 시각"만 기록 (값 1개라 통신·요금 부담 사실상 없음) */
+  function _dbgScan(){}   /* 진단 표시 제거됨 */
 
-  $('caps').innerHTML = rows.map(function(r){
-    return '<div class="row"><b>' + r[0] + '</b>' + r[1] + '</div>';
-  }).join('');
+  /* ★★ 약도 본인확인 — 딜러 전화 뒤 4자리 입력해야 열람 (현황판 설정 ON일 때만)
+     · 뒤4자리는 URL에 없음 → Firebase에서 eid로 조회 (유출 방지)
+     · 번호 없이 불출된 건은 인증 없이 바로 열림
+     · 한 번 맞히면 그 기기에선 다시 안 물음 */
+  var _authUnlocked = false;
+  function _showAuthLock(expect4){
+    if(document.getElementById('authLockOv')) return;
+    var ov=document.createElement('div');
+    ov.id='authLockOv';
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:#0F172A;display:flex;align-items:center;justify-content:center;padding:24px 20px;overflow-y:auto;';
+    var _carEsc = String(car||'').replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];});
+    ov.innerHTML='<div style="width:100%;max-width:400px;text-align:center;margin:auto;">'
+      +'<div style="font-size:60px;margin-bottom:14px;">🔒</div>'
+      +'<div style="font-size:27px;font-weight:900;color:#FEE500;margin-bottom:18px;">딜러 확인이 필요합니다</div>'
+      +'<div style="font-size:30px;font-weight:900;color:#22C55E;background:#052E16;border:2px solid #16A34A;border-radius:12px;padding:14px 12px;margin-bottom:12px;line-height:1.25;">차량번호 : '+(_carEsc||'-')+'</div>'
+      +'<div style="font-size:18px;font-weight:800;color:#E2E8F0;margin-bottom:22px;">차량 주차위치 및 출고서류 다운로드</div>'
+      +'<div style="font-size:18px;font-weight:800;color:#F1F5F9;line-height:1.7;margin-bottom:18px;">키불출 시 등록한<br><b style="color:#FEE500;">전화번호 뒤 4자리</b>를 정확히 입력해 주세요!</div>'
+      +'<input id="authInp" type="tel" inputmode="numeric" maxlength="4" placeholder="0000" '
+      +'style="width:100%;box-sizing:border-box;text-align:center;font-size:36px;font-weight:900;letter-spacing:10px;padding:16px;border:2px solid #334155;border-radius:12px;background:#1E293B;color:#fff;">'
+      +'<div id="authMsg" style="font-size:15px;font-weight:800;color:#F87171;height:22px;margin-top:10px;"></div>'
+      +'<button id="authBtn" style="width:100%;margin-top:10px;padding:17px;background:#2563EB;color:#fff;border:none;border-radius:12px;font-size:19px;font-weight:900;cursor:pointer;font-family:inherit;">확인</button>'
+      +'</div>';
+    document.body.appendChild(ov);
+    var inp=document.getElementById('authInp'), msg=document.getElementById('authMsg');
+    function tryUnlock(){
+      var v=String(inp.value||'').replace(/[^0-9]/g,'');
+      if(v.length!==4){ msg.textContent='4자리를 입력해 주세요'; return; }
+      if(v===String(expect4)){
+        _authUnlocked=true;
+        try{ sessionStorage.setItem('view_auth_'+(eid||('car'+_last4Digits(car))),'1'); }catch(e){}
+        try{ ov.remove(); }catch(e){}
+        _logScan(car);          /* 인증 성공 후 기록 */
+        _markAuthed();
+      } else {
+        msg.textContent='번호가 일치하지 않습니다';
+        inp.value=''; inp.focus();
+      }
+    }
+    document.getElementById('authBtn').onclick=tryUnlock;
+    inp.addEventListener('keydown', function(ev){ if(ev.key==='Enter') tryUnlock(); });
+    setTimeout(function(){ try{ inp.focus(); }catch(e){} }, 200);
+  }
+  function _markAuthed(){
+    try{
+      if(!fdb || !code || !eid) return;
+      fdb.ref('kd_rooms/'+code+'/dispatch_scan/'+eid).update({ auth:true });
+    }catch(e){}
+  }
+  /* ★★ 인증 필요 여부 판단
+     · eid 있으면(QR) → dispatch_auth/{eid}
+     · eid 없으면(알림톡·문자 링크) → 차량번호 뒤4자리로 dispatch_auth_car/{last4} 조회
+       → 그 차의 최근 불출건 전화번호로 본인확인 + eid도 함께 받아 건별 집계 */
+  /* ★★ 잠금 판정 전 내용 노출 방지 — 먼저 가려놓고, 인증 불필요로 확인되면 걷어냄 */
+  function _showPreVeil(){
+    if(document.getElementById('preVeil')) return;
+    var v=document.createElement('div');
+    v.id='preVeil';
+    v.style.cssText='position:fixed;inset:0;z-index:99998;background:#0F172A;display:flex;align-items:center;justify-content:center;';
+    v.innerHTML='<div style="text-align:center;color:#94A3B8;font-size:13px;font-weight:800;">'
+      +'<div style="font-size:34px;margin-bottom:8px;">🔐</div>확인 중...</div>';
+    document.body.appendChild(v);
+  }
+  function _hidePreVeil(){ try{ var v=document.getElementById('preVeil'); if(v) v.remove(); }catch(e){} }
+  function _last4Digits(v){ var d=String(v||'').replace(/[^0-9]/g,''); return d.length>=4 ? d.slice(-4) : ''; }
+  function _checkAuthThenLog(carNo){
+    try{
+      _dbgScan('URL파라미터: '+String(location.search||'(없음)').slice(0,90));
+      _showPreVeil();   /* ★ 판정 끝날 때까지 가림 */
+      if(!fdb || !code){ _hidePreVeil(); _dbgScan('인증생략: DB/코드 없음'); _logScan(carNo); return; }
+      var c4 = _last4Digits(carNo);
+      var pA = fdb.ref('kd_rooms/'+code+'/pb_settings/viewAuth').once('value').then(function(s){return s.val();}).catch(function(){return null;});
+      var pB = eid ? fdb.ref('kd_rooms/'+code+'/dispatch_auth/'+eid).once('value').then(function(s){return s.val();}).catch(function(){return null;})
+                   : Promise.resolve(null);
+      var pC = (!eid && c4) ? fdb.ref('kd_rooms/'+code+'/dispatch_auth_car/'+c4).once('value').then(function(s){return s.val();}).catch(function(){return null;})
+                            : Promise.resolve(null);
+      Promise.all([pA,pB,pC]).then(function(r){
+        var need = (String(r[0])==='1');
+        var ph4  = (r[1] && r[1].ph4) || null;
+        if(!ph4 && r[2]){
+          ph4 = r[2].ph4 || null;
+          if(!eid && r[2].eid) eid = String(r[2].eid);   /* ★ 차량번호로 찾은 불출건 ID 사용 */
+        }
+        var sKey = 'view_auth_' + (eid || ('car'+c4));
+        _dbgScan('eid='+(eid||'없음')+' / 설정='+r[0]+' / ph4='+(ph4?'있음':'없음'));
+        if(sessionStorage.getItem(sKey)==='1'){ _authUnlocked=true; _hidePreVeil(); _dbgScan('인증생략: 이미 인증된 기기'); _logScan(carNo); return; }
+        if(need && ph4 && String(ph4).length===4){ _showAuthLock(String(ph4)); _hidePreVeil(); }
+        else { _hidePreVeil(); _logScan(carNo); }
+      }).catch(function(){ _hidePreVeil(); _logScan(carNo); });
+    }catch(e){ _hidePreVeil(); _logScan(carNo); }
+  }
+  function _logScan(carNo){
+    try{
+      if(!carNo){ _dbgScan('❌ 차량번호 없음 (서류·스캔 불가)'); return; }
+      if(!fdb){ _dbgScan('❌ DB 미연결'); return; }
+      if(!code){ _dbgScan('❌ 공유코드 없음'); return; }
+      var k = _docKeyFromCar(carNo);
+      if(!k) return;
+      var sKey = 'view_scan_'+code+'_'+k;
+      if(sessionStorage.getItem(sKey)) return; /* 같은 세션 중복 기록 방지 */
+      sessionStorage.setItem(sKey,'1');
+      /* ★ 불출건 ID가 있으면 건별로 기록 → 딜러/불출건마다 따로 집계 */
+      var _p = eid ? ('kd_rooms/'+code+'/dispatch_scan/'+eid) : ('kd_rooms/'+code+'/scan_log/'+k);
+      _scanPath = _p;
+      _dbgScan('기록 시도 car='+carNo);
+      fdb.ref(_p).update({ at: Date.now(), car: String(carNo||'') })
+        .then(function(){ _dbgScan('✅ 기록성공 car='+carNo); })
+        .catch(function(err){ _dbgScan('❌ 실패: '+(err&&err.message||'')); sessionStorage.removeItem(sKey); });
+    }catch(e){}
+  }
+  function _docKeyFromCar(car){
+    car = String(car||'').trim();
+    if(!car) return '';
+    return car.replace(/[.#$\[\]\/\s]/g,'_');
+  }
+  var _scanPath = '';   /* ★ 이번 조회의 기록 경로 (건별 or 차량별) */
+  var _docKeyCur = '';
+  var _docDataLoaded = false;
+  /* ★★ FIX: 현황판은 서류를 kd_docs(메타) + kd_docs_data(실제파일)로 나눠 저장한다.
+     view는 메타만 읽어 다운로드가 안 되던 문제 → 누를 때 실제 파일을 가져와 합친다. */
+  function _ensureDocData(cb){
+    if(_docDataLoaded || !_docKeyCur || !_carDocs){ cb(); return; }
+    try{
+      fdb.ref('kd_rooms/'+code+'/kd_docs_data/'+_docKeyCur).once('value').then(function(snap){
+        var dd = snap.val();
+        if(dd && typeof dd==='object'){
+          Object.keys(_carDocs).forEach(function(id){
+            var raw = dd[id];
+            if(!raw) return;
+            var dataStr = (typeof raw==='string') ? raw : (raw && raw.data);
+            if(dataStr && !_carDocs[id].data) _carDocs[id].data = dataStr;
+          });
+        }
+        _docDataLoaded = true; cb();
+      }).catch(function(){ _docDataLoaded = true; cb(); });
+    }catch(e){ _docDataLoaded = true; cb(); }
+  }
+  /* ★★ FIX: 현황판 QR은 슬롯의 차량번호(예:123가6678), 키불출앱 QR은 입력값(예:6678)을 보낸다.
+     서류는 차량번호 키로 저장되므로 정확히 안 맞으면 못 찾음 → 뒤 4자리로도 찾는 폴백 추가 */
+  function _findDocKeyByLast4(car, cb){
+    try{
+      var digits = String(car||'').replace(/[^0-9]/g,'');
+      if(digits.length < 4){ cb(''); return; }
+      var last4 = digits.slice(-4);
+      var base = String(db||'').replace(/\/+$/,'');
+      fetch(base + '/kd_rooms/' + encodeURIComponent(code) + '/kd_docs.json?shallow=true')
+        .then(function(r){ return r.json(); })
+        .then(function(keys){
+          if(!keys || typeof keys!=='object'){ cb(''); return; }
+          var found = '';
+          Object.keys(keys).forEach(function(k){
+            var kd = String(k).replace(/[^0-9]/g,'');
+            if(kd.length >= 4 && kd.slice(-4) === last4) found = k;
+          });
+          cb(found);
+        }).catch(function(){ cb(''); });
+    }catch(e){ cb(''); }
+  }
+  /* ★ 세이프6 배지 표시 — 링크(sf) 또는 실시간 슬롯/설정 값(isSafe6) 기준. 어느 쪽이 먼저 도착해도 반영되도록 별도 함수로 분리 */
+  function _applySafe6Badge(){
+    try{ var _s6=document.getElementById('safe6Badge'); if(_s6) _s6.style.display = isSafe6 ? 'inline-block' : 'none'; }catch(e){}
+  }
+  function _renderDocBox(v, car){
+    var box = document.getElementById('docBox');
+    if(box) box.style.display = 'block'; /* 서류 없어도 영역 표시 */
+    var cn = document.getElementById('docCarNo');
+    if(cn && car) cn.textContent = '차량번호:' + car;
+    _applySafe6Badge();
+    if(v && typeof v==='object' && Object.keys(v).length){
+      _carDocs = v;
+      var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
+      var none=document.getElementById('docNoneMsg'); if(none) none.style.display='none';
+      try{
+        var _dl=row&&row.querySelector('button[onclick*="Reg"]'); if(_dl) _dl.style.display='';
+        var _sh=row&&row.querySelector('button[onclick*="Insp"]'); if(_sh) _sh.style.display='';
+      }catch(e){}
+    } else {
+      var row2=document.getElementById('docBtnRow');
+      if(row2){
+        var dl=row2.querySelector('button[onclick*="Reg"]'); if(dl) dl.style.display='none';
+        var sh=row2.querySelector('button[onclick*="Insp"]'); if(sh) sh.style.display='none';
+      }
+      var none2=document.getElementById('docNoneMsg'); if(none2) none2.style.display='block';
+    }
+  }
+  function loadCarDocs(car, _retryKey){
+    var key = _retryKey || _docKeyFromCar(car);
+    if(!key) return;
+    _docKeyCur = key; _docDataLoaded = false;
+    try{
+      fdb.ref('kd_rooms/'+code+'/kd_docs/'+key).once('value').then(function(snap){
+        var v = snap.val();
+        /* ★ 정확 키로 못 찾으면 뒤 4자리로 재시도 (1회) */
+        if((!v || !Object.keys(v).length) && !_retryKey){
+          _findDocKeyByLast4(car, function(altKey){
+            if(altKey && altKey !== key){ loadCarDocs(car, altKey); }
+            else { _renderDocBox(null, car); }
+          });
+          return;
+        }
+        _renderDocBox(v, car);
+      }).catch(function(){});
+    }catch(e){}
+    /* ★ 공통서류(판매확인서) 로드 — 메타(이름/용량)만 먼저 받아서 버튼 표시 여부만 결정.
+       실제 파일(용량 큰 base64)은 사용자가 「판매확인서 다운」을 눌렀을 때만 받는다.
+       (예전 구조 common_docs가 아직 안 옮겨진 매장 대비 — 있으면 그대로 폴백 사용) */
+    try{
+      fdb.ref('kd_rooms/'+code+'/kd_common_meta').once('value').then(function(snap){
+        var v = snap.val();
+        if(v && typeof v==='object' && Object.keys(v).length){
+          _commonMeta = v;
+          var box = document.getElementById('docBox');
+          if(box) box.style.display = 'block';
+          var cb = document.getElementById('commonDocBtn');
+          if(cb) cb.style.display = 'block';
+          return;
+        }
+        /* ★ 폴백: 아직 이 매장 관리앱이 새 구조로 마이그레이션을 안 했으면 예전 경로도 확인 */
+        fdb.ref('kd_rooms/'+code+'/common_docs').once('value').then(function(snap2){
+          var v2 = snap2.val();
+          if(v2 && typeof v2==='object' && Object.keys(v2).length){
+            _commonLegacy = v2;
+            var box2 = document.getElementById('docBox');
+            if(box2) box2.style.display = 'block';
+            var cb2 = document.getElementById('commonDocBtn');
+            if(cb2) cb2.style.display = 'block';
+          }
+        }).catch(function(){});
+      }).catch(function(){});
+    }catch(e){}
+  }
+  var _commonMeta = null;   /* ★ {docId:{name,type,size,at}} — 실제 파일 데이터는 없음 */
+  var _commonLegacy = null; /* ★ 예전 구조 폴백용 — {docId:{name,type,size,at,data}} */
+  /* ★ 이 약도 링크 복사 */
+  window.copyViewLink = function(){
+    var url = location.href;
+    var btn = document.getElementById('viewCopyLinkBtn');
+    function done(ok){
+      if(!btn) return;
+      btn.textContent = ok ? '✅ 복사됨! (카톡·메모에 붙여넣기)' : '⚠️ 복사 실패 — 주소창을 길게 눌러 복사하세요';
+      btn.style.background = ok ? '#166534' : '#B45309';
+      setTimeout(function(){ btn.textContent='🔗 이 약도 링크 복사'; btn.style.background='#0369A1'; }, 2500);
+    }
+    function fallback(){
+      try{
+        var ta=document.createElement('textarea');
+        ta.value=url; ta.style.cssText='position:fixed;left:-9999px;top:0;';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        var ok=document.execCommand('copy'); ta.remove(); done(!!ok);
+      }catch(e){ done(false); }
+    }
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(function(){ done(true); }).catch(fallback);
+      } else fallback();
+    }catch(e){ fallback(); }
+  };
+  function _setDocStatus(msg){
+    if (_docPrepQuiet) return;   /* ★ 공유 준비(미리 변환) 중에는 문구를 건드리지 않는다 */
+    var el=document.getElementById('docStatus'); if(el) el.textContent=msg||'';
+  }
+  function _docsArray(){
+    if(!_carDocs) return [];
+    return Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
+      .filter(function(d){ return d && d.data; });
+  }
+  /* ★ 출고서류 다운로드 횟수 기록 — 키불출앱 이력에 표시 */
+  function _logDocDownload(){
+    try{
+      if(!fdb || !code) return;
+      var _base = _scanPath || (_docKeyCur ? ('kd_rooms/'+code+'/scan_log/'+_docKeyCur) : '');
+      if(!_base) return;
+      fdb.ref(_base+'/dl')
+        .transaction(function(cur){ return (cur||0)+1; })
+        .catch(function(){});
+      /* ★ 마지막 다운로드 시각도 함께 기록 — 키불출앱 이력에 "언제 받아갔는지" 표시용 */
+      fdb.ref(_base).update({ dlAt: Date.now() }).catch(function(){});
+    }catch(e){}
+  }
+  /* ★ FIX(2026-10-06): 서류 버튼을 누르면 「공유 / 다운로드」를 고르는 창을 띄운다. */
+var _docMode = 'dl';          /* 'share' = 공유, 'dl' = 다운로드 */
+var _docChooseEl = null;
 
-  $('ua').textContent = navigator.userAgent;
-})();
-
-/* ── 2. 실제로 눌러서 시험 ── */
-function tryText(){
-  if (!navigator.share){ say('① 글자 공유 — 이 브라우저에는 공유 기능이 아예 없습니다.'); return; }
-  try{
-    navigator.share({ title: '시험', text: '공유 시험입니다' })
-      .then(function(){ say('① 글자 공유 — 성공 ✅ (공유창이 떴고 보냈습니다)'); })
-      .catch(function(e){ say('① 글자 공유 — 실패 ❌\n오류이름: ' + (e && e.name) + '\n내용: ' + (e && e.message)); });
-  }catch(e){ say('① 글자 공유 — 바로 예외 ❌\n오류이름: ' + e.name + '\n내용: ' + e.message); }
+function _docCanShare(){
+  try{ return !!(navigator.share && navigator.canShare); }catch(e){ return false; }
 }
 
-function tryFile(kind){
-  var no = (kind === 'png') ? '②' : '③';
-  var nm = (kind === 'png') ? '사진(PNG)' : '서류(PDF)';
-  if (!navigator.share){ say(no + ' ' + nm + ' — 이 브라우저에는 공유 기능이 아예 없습니다.'); return; }
-  var f;
-  try{ f = toFile(kind === 'png' ? PNG : PDF, kind === 'png' ? '시험.png' : '시험.pdf'); }
-  catch(e){ say(no + ' ' + nm + ' — 파일을 만들지 못했습니다 ❌\n' + e.message); return; }
-
-  var can = '확인불가';
-  try{ if (navigator.canShare) can = navigator.canShare({ files: [f] }) ? '가능' : '불가'; }catch(e){ can = '예외 ' + e.name; }
-
-  try{
-    navigator.share({ files: [f], title: nm + ' 시험' })
-      .then(function(){ say(no + ' ' + nm + ' — 성공 ✅ (canShare 판정: ' + can + ')'); })
-      .catch(function(e){ say(no + ' ' + nm + ' — 실패 ❌ (canShare 판정: ' + can + ')\n오류이름: ' + (e && e.name) + '\n내용: ' + (e && e.message)); });
-  }catch(e){
-    say(no + ' ' + nm + ' — 바로 예외 ❌ (canShare 판정: ' + can + ')\n오류이름: ' + e.name + '\n내용: ' + e.message);
-  }
+function _docChooseClose(){
+  try{ if(_docChooseEl) _docChooseEl.style.display='none'; }catch(e){}
 }
 
-/* ── ④⑤⑥ 다른 방법으로 PDF 보내기 ── */
-function tryAlt(mode){
-  if (!navigator.share){ say('이 브라우저에는 공유 기능이 없습니다.'); return; }
-  var f, label;
+/* ★ FIX(2026-10-06): 판매확인서를 미리 받아 둔다 (누를 때 받아오면 공유가 막힌다) */
+var _commonCache = null;
+function _preloadCommon(cb){
   try{
-    var ci = PDF.indexOf(',');
-    var bin = atob(PDF.slice(ci + 1));
+    if (_commonCache){ cb(); return; }
+    if (_commonLegacy){
+      _commonCache = Object.keys(_commonLegacy).map(function(id){ return _commonLegacy[id]; })
+        .filter(function(d){ return d && d.data; });
+      cb(); return;
+    }
+    if (!_commonMeta){ cb(); return; }
+    var ids = Object.keys(_commonMeta);
+    if (!ids.length){ cb(); return; }
+    Promise.all(ids.map(function(id){
+      return fdb.ref('kd_rooms/' + code + '/kd_common_data/' + id).once('value')
+        .then(function(s){
+          var data = s.val(); if (!data) return null;
+          var m = _commonMeta[id] || {};
+          return { name: m.name, type: m.type, data: data };
+        }).catch(function(){ return null; });
+    })).then(function(list){
+      _commonCache = list.filter(function(d){ return d && d.data; });
+      cb();
+    }).catch(function(){ cb(); });
+  }catch(e){ cb(); }
+}
+
+/* ★ 서류를 다 받기 전에는 「공유하기」를 못 누르게 잠근다 */
+function _docSetShareBusy(busy){
+  try{
+    var sb = document.getElementById('docChooseShare');
+    if (!sb) return;
+    sb.disabled = !!busy;
+    sb.style.opacity = busy ? '.55' : '1';
+    sb.style.pointerEvents = busy ? 'none' : 'auto';
+    sb.innerHTML = busy
+      ? '⏳ 서류 불러오는 중...<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">잠시만 기다려 주세요</div>'
+      : '📤 공유하기<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">카카오톡 · 모바일팩스 · 메일</div>';
+  }catch(e){}
+}
+
+function _docChoose(kind){
+  var meta = { reg:   { label:'📘 차량등록증', fn:'downloadRegDocs' },
+               insp:  { label:'📗 성능점검표', fn:'downloadInspDocs' },
+               common:{ label:'📄 판매확인서', fn:'downloadCommonDocs' } }[kind];
+  if(!meta) return;
+  /* ★ 고르는 동안 서류 파일을 미리 받아둔다 — 공유는 터치 직후에만 열리기 때문 */
+  try{ if(!_docDataLoaded && _docKeyCur && _carDocs) _ensureDocData(function(){}); }catch(e){}
+
+  if(!_docChooseEl){
+    _docChooseEl = document.createElement('div');
+    _docChooseEl.id = 'docChooseOv';
+    _docChooseEl.style.cssText = 'position:fixed;inset:0;z-index:99500;background:rgba(2,6,23,.72);'
+      + 'display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;';
+    _docChooseEl.addEventListener('click', function(e){ if(e.target===_docChooseEl) _docChooseClose(); });
+    _docChooseEl.innerHTML =
+      '<div style="width:100%;max-width:340px;background:#0F2447;border:2px solid #2C4E7E;border-radius:16px;'
+      + 'padding:18px 16px 14px;box-shadow:0 10px 36px rgba(0,0,0,.55);">'
+      + '<div id="docChooseTitle" style="font-size:17px;font-weight:900;color:#DBEAFE;text-align:center;margin-bottom:14px;"></div>'
+      + '<button id="docChooseShare" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
+      + 'background:#16A34A;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
+      + '📤 공유하기<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">카카오톡 · 모바일팩스 · 메일</div></button>'
+      + '<button id="docChooseDl" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
+      + 'background:#2563EB;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
+      + '📥 다운로드<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">이 기기에 저장</div></button>'
+      + '<button id="docChooseCancel" type="button" style="width:100%;padding:11px;border:none;border-radius:10px;'
+      + 'background:transparent;color:#94A3B8;font-size:14px;font-weight:800;font-family:inherit;cursor:pointer;touch-action:manipulation;">취소</button>'
+      + '</div>';
+    document.body.appendChild(_docChooseEl);
+    document.getElementById('docChooseCancel').addEventListener('click', _docChooseClose);
+  }
+
+  document.getElementById('docChooseTitle').textContent = meta.label;
+  var sb = document.getElementById('docChooseShare');
+  sb.style.display = _docCanShare() ? 'block' : 'none';
+  /* ★ FIX(2026-10-06): 서류를 먼저 받아두고, 그 전에는 공유 버튼을 잠근다.
+     (삼성 인터넷은 누른 그 순간에만 공유를 허용하므로 미리 받아두어야 한다) */
+  var _ready = (kind === 'common') ? !!_commonCache
+                                   : (_docDataLoaded || !_docKeyCur || !_carDocs);
+  /* ★ FIX(2026-10-06): 서류를 받은 뒤, 필요하면 공유용 변환까지 미리 끝내 둔다 */
+  _docSetShareBusy(true);
+  if (!_ready){
+    if (kind === 'common') _preloadCommon(function(){ _docPrepShare(meta.fn); });
+    else                   _ensureDocData(function(){ _docPrepShare(meta.fn); });
+  }else{
+    _docPrepShare(meta.fn);
+  }
+  /* ★ FIX(2026-10-06): 공유를 먼저 부르고 창은 그 뒤에 닫는다.
+     버튼을 숨긴 뒤에 부르면 삼성 인터넷이 「누른 직후」로 인정하지 않아 공유창을 막는다. */
+  sb.onclick = function(){
+    _docMode = 'share';
+    try{ window[meta.fn](); }catch(e){}
+    setTimeout(_docChooseClose, 0);
+  };
+  document.getElementById('docChooseDl').onclick = function(){ _docChooseClose(); _docMode='dl'; try{ window[meta.fn](); }catch(e){} };
+  _docChooseEl.style.display = 'flex';
+}
+/* ★ 버튼 onclick 은 전역에서 실행된다 → 반드시 window 에 올려야 한다 */
+window._docChoose = _docChoose;
+
+/* ★ FIX(2026-10-06): 서류를 휴대폰 「공유하기」로 바로 넘긴다.
+     dataURL → 실제 파일로 바꿔 navigator.share 에 실어 보낸다.
+     (HTTPS 에서만 동작 — github.io 는 HTTPS 이므로 문제없음) */
+  function _dataUrlToFile(d, fallbackName){
+    var du = String((d && d.data) || '');
+    var ci = du.indexOf(',');
+    if (du.indexOf('data:') !== 0 || ci < 0) throw new Error('bad data');
+    var mime = (/^data:([^;,]+)/.exec(du) || [])[1] || 'application/octet-stream';
+    var bin = atob(du.slice(ci + 1));
     var arr = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-
-    if (mode === 'octet'){
-      f = new File([arr], '시험.pdf', { type: 'application/octet-stream' });
-      label = '④ PDF를 「일반파일」로';
-    } else if (mode === 'noType'){
-      f = new File([arr], '시험.pdf');
-      label = '⑤ PDF를 「종류없음」으로';
-    } else {
-      /* ⑥ 내용은 사진으로 — PDF 대신 그림 한 장을 보낸다 */
-      var ci2 = PNG.indexOf(',');
-      var b2 = atob(PNG.slice(ci2 + 1));
-      var a2 = new Uint8Array(b2.length);
-      for (var j = 0; j < b2.length; j++) a2[j] = b2.charCodeAt(j);
-      f = new File([a2], '시험_등록증.png', { type: 'image/png' });
-      label = '⑥ PDF 대신 사진으로';
+    var name = (d && d.name) || fallbackName || '서류';
+    if (!/\.[A-Za-z0-9]{2,5}$/.test(name)){
+      name += (mime.indexOf('pdf') >= 0 ? '.pdf' : (mime.indexOf('png') >= 0 ? '.png' : '.jpg'));
     }
-  }catch(e){ say('파일을 만들지 못했습니다 ❌\n' + e.message); return; }
+    return new File([arr], name, { type: mime });
+  }
 
-  var can = '확인불가';
-  try{ if (navigator.canShare) can = navigator.canShare({ files: [f] }) ? '가능' : '불가'; }catch(e){ can = '예외 ' + e.name; }
+  /* ═══ FIX(2026-10-06): 삼성 인터넷 PDF 공유 막힘 우회 ═══
+     삼성 인터넷은 navigator.canShare 가 true 를 돌려주면서도 PDF 를 보내면
+     NotAllowedError 로 거절한다(사진은 정상). → PDF 를 사진으로 바꿔 보낸다.
+     크롬은 PDF 공유가 되므로 변환하지 않고 원본 PDF 를 그대로 보낸다.
+     「다운로드」는 어느 브라우저에서도 늘 원본 파일 그대로다. */
+  var _LS_NOPDF   = 'kd_share_nopdf';
+  var _docImgCache = null;          /* { sig:'...', files:[File,...] } */
+  var _docImgBusy  = false;
 
+  function _shareNoPdf(){
+    try{ if (localStorage.getItem(_LS_NOPDF) === '1') return true; }catch(e){}
+    try{ if (/SamsungBrowser/i.test(navigator.userAgent || '')) return true; }catch(e){}
+    return false;
+  }
+  function _markNoPdf(){ try{ localStorage.setItem(_LS_NOPDF, '1'); }catch(e){} }
+
+  function _isPdfFile(f){
+    return /pdf/i.test((f && f.type) || '') || /\.pdf$/i.test((f && f.name) || '');
+  }
+  function _hasPdfFile(files){
+    for (var i = 0; i < files.length; i++){ if (_isPdfFile(files[i])) return true; }
+    return false;
+  }
+  function _docFilesSig(files){
+    return files.map(function(f){ return (f.name || '') + ':' + (f.size || 0); }).join('|');
+  }
+  function _docFilesOf(docs, label){
+    var files = [];
+    for (var i = 0; i < docs.length; i++){
+      try{ files.push(_dataUrlToFile(docs[i], label + (i + 1))); }catch(e){}
+    }
+    return files;
+  }
+
+  /* pdf.js 는 꼭 필요할 때만 불러온다 (크롬에서는 아예 안 불러온다) */
+  var _pdfLibP = null;
+  function _loadPdfLib(){
+    if (_pdfLibP) return _pdfLibP;
+    _pdfLibP = new Promise(function(res, rej){
+      try{
+        if (window.pdfjsLib){ res(window.pdfjsLib); return; }
+        var s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        s.onload = function(){
+          try{
+            if (!window.pdfjsLib){ rej(new Error('pdfjs 없음')); return; }
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+              'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            res(window.pdfjsLib);
+          }catch(e){ rej(e); }
+        };
+        s.onerror = function(){ rej(new Error('pdf.js 불러오기 실패')); };
+        document.head.appendChild(s);
+      }catch(e){ rej(e); }
+    });
+    return _pdfLibP;
+  }
+
+  function _pdfPageToFile(pdf, p, base, total){
+    return pdf.getPage(p).then(function(page){
+      var v1 = page.getViewport({ scale: 1 });
+      var sc = Math.min(2.4, Math.max(1.2, 1700 / Math.max(1, v1.width)));
+      var vp = page.getViewport({ scale: sc });
+      var cv = document.createElement('canvas');
+      cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+      var cx = cv.getContext('2d');
+      cx.fillStyle = '#FFFFFF'; cx.fillRect(0, 0, cv.width, cv.height);
+      return page.render({ canvasContext: cx, viewport: vp }).promise.then(function(){
+        var du  = cv.toDataURL('image/jpeg', 0.92);
+        var ci  = du.indexOf(',');
+        var bin = atob(du.slice(ci + 1));
+        var arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        var nm = base + (total > 1 ? ('_' + p) : '') + '.jpg';
+        return new File([arr], nm, { type: 'image/jpeg' });
+      });
+    }).catch(function(){ return null; });
+  }
+
+  function _onePdfToImages(file){
+    return _loadPdfLib().then(function(lib){
+      return file.arrayBuffer().then(function(buf){
+        return lib.getDocument({ data: new Uint8Array(buf) }).promise;
+      });
+    }).then(function(pdf){
+      var n    = Math.min((pdf && pdf.numPages) || 1, 10);
+      var base = String(file.name || '서류').replace(/\.pdf$/i, '');
+      var jobs = [];
+      for (var p = 1; p <= n; p++) jobs.push(_pdfPageToFile(pdf, p, base, n));
+      return Promise.all(jobs);
+    }).then(function(list){
+      return list.filter(function(f){ return !!f; });
+    });
+  }
+
+  /* PDF 는 사진으로, 사진은 그대로 — 전부 모아 돌려준다 */
+  function _pdfFilesToImages(files){
+    return Promise.all(files.map(function(f){
+      if (!_isPdfFile(f)) return Promise.resolve([f]);
+      return _onePdfToImages(f).catch(function(){ return []; });
+    })).then(function(groups){
+      var out = [];
+      groups.forEach(function(g){ (g || []).forEach(function(f){ if (f) out.push(f); }); });
+      return out;
+    });
+  }
+
+  function _startPdfToImages(files, sig){
+    if (_docImgBusy) return;
+    if (_docImgCache && _docImgCache.sig === sig && _docImgCache.files) return;
+    _docImgBusy  = true;
+    _docImgCache = null;
+    _pdfFilesToImages(files).then(function(out){
+      _docImgCache = (out && out.length) ? { sig: sig, files: out } : null;
+    }).catch(function(){ _docImgCache = null; })
+      .then(function(){
+        _docImgBusy = false;
+        try{ _docSetShareBusy(false); }catch(e){}
+        var _ovVis = false;
+        try{ _ovVis = !!(_docChooseEl && _docChooseEl.style.display !== 'none'); }catch(e){}
+        try{
+          if (!_docImgCache) _setDocStatus('⚠️ 공유용 변환 실패 — 「다운로드」를 눌러 주세요');
+          else if (!_ovVis)  _setDocStatus('📤 준비됐습니다 — 버튼을 다시 눌러 주세요');
+          else               _setDocStatus('');
+        }catch(e){}
+      });
+  }
+
+  /* 고르는 창이 떠 있는 동안 미리 변환해 둔다 → 탭 한 번에 공유창이 뜬다 */
+  var _docPrepQuiet = false;
+  function _docPrepShare(fn){
+    try{
+      if (!_shareNoPdf()){ _docSetShareBusy(false); return; }   /* 크롬 등 → 변환 불필요 */
+      _docPrepQuiet = true;
+      _docMode = 'prep';
+      try{ window[fn](); }catch(e){}
+      _docMode = 'dl';
+      _docPrepQuiet = false;
+      if (!_docImgBusy) _docSetShareBusy(false);
+    }catch(e){ _docMode = 'dl'; _docPrepQuiet = false; try{ _docSetShareBusy(false); }catch(e2){} }
+  }
+
+  function _sharePrep(docs, label){
+    try{
+      var files = _docFilesOf(docs || [], label);
+      if (!files.length || !_hasPdfFile(files)) return;
+      var sig = _docFilesSig(files);
+      if (_docImgCache && _docImgCache.sig === sig && _docImgCache.files) return;
+      _docSetShareBusy(true);
+      _startPdfToImages(files, sig);
+    }catch(e){}
+  }
+
+  function _docShareOrPrep(docs, label){
+    if (_docMode === 'prep'){ _sharePrep(docs, label); return; }
+    var r = _shareDocs(docs, label);
+    if (r === 'wait') return;              /* 변환 중 — 문구는 _shareDocs 가 이미 띄웠다 */
+    if (r){ _setDocStatus('📤 공유 화면을 여는 중...'); return; }
+    _setDocStatus('⚠️ ' + (_docShareWhy || '공유를 열 수 없습니다'));
+  }
+
+  /* 공유창을 띄웠으면 true, 못 띄웠으면 false (false 면 호출한 쪽이 다운로드로 처리)
+     'wait' = 공유용 변환을 시작했으니 잠시 뒤 다시 누르면 된다 */
+  /* ★ FIX(2026-10-06): 공유가 안 된 이유를 담아 둔다 */
+  var _docShareWhy = '';
+  function _shareDocs(docs, label){
+    _docShareWhy = '';
+    try{
+      if (!docs || !docs.length){ _docShareWhy = '보낼 서류가 없습니다'; return false; }
+      if (!navigator.share || !navigator.canShare){ _docShareWhy = '이 브라우저는 공유 기능이 없습니다'; return false; }
+      var files = _docFilesOf(docs, label);
+      if (!files.length){ _docShareWhy = '서류 파일을 만들지 못했습니다'; return false; }
+
+      /* ★ FIX(2026-10-06): PDF 공유를 막는 기기(삼성 인터넷)에서는 사진으로 바꿔 보낸다.
+         크롬처럼 PDF 공유가 되는 기기는 이 분기를 타지 않고 원본 PDF 를 그대로 보낸다. */
+      if (_shareNoPdf() && _hasPdfFile(files)){
+        var _sig = _docFilesSig(files);
+        if (_docImgCache && _docImgCache.sig === _sig && _docImgCache.files && _docImgCache.files.length){
+          files = _docImgCache.files;
+        }else{
+          _startPdfToImages(files, _sig);
+          _setDocStatus('⏳ 공유 준비 중... 잠시 뒤 버튼을 다시 눌러 주세요');
+          return 'wait';
+        }
+      }
+
+      if (!navigator.canShare({ files: files })){
+        /* 여러 장을 한 번에 못 보내는 기기면 첫 장만 */
+        if (files.length > 1 && navigator.canShare({ files: [files[0]] })) files = [files[0]];
+        else { _docShareWhy = '이 브라우저가 파일 공유를 막습니다 — 크롬으로 열어 주세요'; }
+          /* ★ FIX: canShare 가 거부해도 일단 공유를 시도한다 (보수적인 브라우저 대비) */
+      }
+      var _car = '';
+      try{ _car = (typeof qs === 'function' ? (qs('car') || '') : ''); }catch(e){}
+      var _sentPdf = _hasPdfFile(files);
+      navigator.share({ files: files, title: label, text: (_car ? (_car + ' ') : '') + label })
+        .then(function(){
+          _setDocStatus('📤 ' + label + ' 공유 완료');
+          try{ _logDocDownload(); }catch(e){}
+        })
+        .catch(function(err){
+          var nm = (err && err.name) || '알수없음';
+          /* ★ PDF 공유를 막는 기기로 확인됨 → 사진으로 바꿔 두고 다시 누르게 안내 */
+          if (nm === 'NotAllowedError' && _sentPdf){
+            _markNoPdf();
+            _startPdfToImages(files, _docFilesSig(files));
+            _setDocStatus('⏳ 공유 준비 중... 잠시 뒤 버튼을 다시 눌러 주세요');
+            return;
+          }
+          if (nm === 'AbortError' || nm === 'NotAllowedError'){
+            /* 사용자가 공유창을 닫았거나, 터치 직후가 아니라 막힘 → 다시 누르면 된다 */
+            _setDocStatus(nm === 'AbortError' ? '' : '📤 한 번 더 눌러 주세요');
+            return;
+          }
+          /* ★ FIX: 공유를 고르셨으면 다운로드로 넘어가지 않는다 — 이유만 보여준다 */
+          _setDocStatus('⚠️ 공유 실패(' + nm + ') — 「다운로드」를 눌러 주세요');
+        });
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function _dlOne(d, fallbackName){
+    var a=document.createElement('a');
+    a.href=d.data; a.download=d.name||fallbackName;
+    document.body.appendChild(a); a.click(); a.remove();
+    _logDocDownload();
+  }
+  /* ★ 출고서류 다운로드 — 리스트에서 골라 받기 */
+  var _pickListTimer = null;
+  function _renderPickList(){
+    var docs=_docsArray();
+    var box=document.getElementById('docPickList');
+    if(!box) return;
+    if(!docs.length){ _setDocStatus('첨부된 출고서류가 없습니다.'); return; }
+    if(box.style.display==='block'){
+      /* 토글: 이미 보이는 상태에서 다시 누르면 숨김 + 타이머 해제 */
+      box.style.display='none';
+      if(_pickListTimer){ clearTimeout(_pickListTimer); _pickListTimer=null; }
+      return;
+    }
+    box.innerHTML='<div style="font-size:12px;font-weight:900;color:#93C5FD;margin-bottom:8px;">📥 받을 서류를 선택하세요</div>';
+    docs.forEach(function(d,idx){
+      var isPdf=(d.type==='pdf'||/pdf/i.test(d.type||''));
+      var row=document.createElement('button');
+      row.type='button';
+      row.style.cssText='display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:#13315C;color:#fff;border:none;border-radius:8px;padding:10px 12px;margin-bottom:6px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;';
+      row.innerHTML='<span style="font-size:16px;">'+(isPdf?'📄':'🖼️')+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(d.name||('출고서류'+(idx+1)))+'</span><span style="flex-shrink:0;">⬇️</span>';
+      row.onclick=function(){ _dlOne(d,'출고서류'+(idx+1)); _setDocStatus('⬇️ '+(d.name||'서류')+' 다운로드됨'); };
+      box.appendChild(row);
+    });
+    if(docs.length>1){
+      var allBtn=document.createElement('button');
+      allBtn.type='button';
+      allBtn.style.cssText='width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:2px;';
+      allBtn.textContent='⬇️ 전체 다운로드 ('+docs.length+'개)';
+      allBtn.onclick=function(){ docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'출고서류'+(i+1)); },i*300); }); _setDocStatus('⬇️ '+docs.length+'개 전체 다운로드'); };
+      box.appendChild(allBtn);
+    }
+    box.style.display='block';
+    /* ★ 10초 후 자동 숨김 — 다시 「서류다운로드」를 누르면 재표시됨 */
+    if(_pickListTimer){ clearTimeout(_pickListTimer); }
+    _pickListTimer = setTimeout(function(){
+      box.style.display='none';
+      _pickListTimer = null;
+    }, 10000);
+  }
+  /* ★ 공통서류(판매확인서) 다운로드 — 메타만 갖고 있다가, 다운로드 버튼을 누른 이 순간에만
+     실제 파일(kd_common_data)을 받는다. (예전 구조 폴백이면 이미 데이터가 있으니 바로 받음) */
+  window.downloadCommonDocs = function(){
+    /* ★ FIX(2026-10-06): 미리 받아둔 것이 있으면 바로 쓴다 — 공유가 막히지 않게 */
+    if (_commonCache && _commonCache.length){
+      var cdocs = _commonCache;
+      if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(cdocs, '판매확인서'); return;
+      }
+      cdocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
+      _setDocStatus('📄 판매확인서 '+cdocs.length+'개 다운로드됨');
+      return;
+    }
+    if(_commonLegacy){
+      var legacyDocs=Object.keys(_commonLegacy).map(function(id){ return _commonLegacy[id]; }).filter(function(d){ return d&&d.data; });
+      if(!legacyDocs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(legacyDocs, '판매확인서'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+      }
+      legacyDocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
+      _setDocStatus('📄 판매확인서 '+legacyDocs.length+'개 다운로드됨');
+      return;
+    }
+    if(!_commonMeta){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+    var ids=Object.keys(_commonMeta);
+    if(!ids.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+    _setDocStatus('⏳ 판매확인서 불러오는 중...');
+    Promise.all(ids.map(function(id){
+      return fdb.ref('kd_rooms/'+code+'/kd_common_data/'+id).once('value')
+        .then(function(s){
+          var data=s.val();
+          if(!data) return null;
+          var m=_commonMeta[id]||{};
+          return { name:m.name, type:m.type, data:data };
+        }).catch(function(){ return null; });
+    })).then(function(list){
+      var docs=list.filter(function(d){ return d && d.data; });
+      if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '판매확인서'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+      }
+      docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
+      _setDocStatus('📄 판매확인서 '+docs.length+'개 다운로드됨');
+    });
+  };
+  /* ★ 성능점검표(cat==='insp') 서류만 골라 다운로드 — 서류공유 버튼 대체 */
+  window.downloadInspDocs = function(){
+    /* 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 재실행 */
+    if(!_docDataLoaded && _docKeyCur && _carDocs){
+      _setDocStatus('⏳ 서류 불러오는 중...');
+      _ensureDocData(function(){ _setDocStatus(''); window.downloadInspDocs(); });
+      return;
+    }
+    if(!_carDocs){ _setDocStatus('첨부된 출고서류가 없습니다.'); return; }
+    var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
+      .filter(function(d){ return d && d.data && d.cat==='insp'; });
+    if(!docs.length){ _setDocStatus('등록된 성능점검표가 없습니다.'); return; }
+    if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '성능점검표'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+    }
+    docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'성능점검표'+(i+1)); },i*300); });
+    _setDocStatus('📗 성능점검표 '+docs.length+'개 다운로드됨');
+  };
+  /* ★ 차량등록증(cat==='reg') 서류만 골라 다운로드 */
+  window.downloadRegDocs = function(){
+    /* 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 재실행 */
+    if(!_docDataLoaded && _docKeyCur && _carDocs){
+      _setDocStatus('⏳ 서류 불러오는 중...');
+      _ensureDocData(function(){ _setDocStatus(''); window.downloadRegDocs(); });
+      return;
+    }
+    if(!_carDocs){ _setDocStatus('첨부된 출고서류가 없습니다.'); return; }
+    var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
+      .filter(function(d){ return d && d.data && d.cat==='reg'; });
+    if(!docs.length){ _setDocStatus('등록된 차량등록증이 없습니다.'); return; }
+    if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '차량등록증'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+    }
+    docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'차량등록증'+(i+1)); },i*300); });
+    _setDocStatus('📘 차량등록증 '+docs.length+'개 다운로드됨');
+  };
+  window.docAction = function docAction(mode){
+    /* ★ 실제 파일(kd_docs_data)을 아직 안 받았으면 먼저 받아온 뒤 진행 */
+    if(!_docDataLoaded && _docKeyCur && _carDocs){
+      _setDocStatus('⏳ 서류 불러오는 중...');
+      _ensureDocData(function(){ _setDocStatus(''); window.docAction(mode); });
+      return;
+    }
+    var docs = _docsArray();
+    if(!docs.length){ _setDocStatus('첨부된 출고서류가 없습니다.'); return; }
+    _setDocStatus('');
+    if(mode==='download'){
+      _renderPickList();
+    }
+  };
+
+  function applyPromo(info){
+    if(!info) return;
+    try{
+      var box = document.getElementById('promoLines');
+      box.innerHTML = '';
+      var _lines = String(info).split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+      _lines.forEach(function(line, idx){
+        var m = line.match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        var row = document.createElement('div');
+        if(m){
+          /* 전화번호 줄: 좌측 텍스트(줄바꿈 허용) + 우측 전화걸기 버튼 (겹침 방지) */
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:15px;font-weight:800;color:#E2E8F0;line-height:1.3;padding:3px 0;'+(idx>0?'border-top:1px solid #24446E;':'');
+          var span = document.createElement('span');
+          span.style.cssText = 'flex:1;min-width:0;word-break:break-word;';
+          span.textContent = line;
+          var tel = m[0].replace(/[^0-9]/g,'');
+          var a = document.createElement('a');
+          a.href = 'tel:' + tel;
+          a.textContent = '📞 전화걸기';
+          a.style.cssText = 'flex-shrink:0;background:#16A34A;color:#fff;text-decoration:none;padding:8px 15px;border-radius:9px;font-size:14px;font-weight:900;white-space:nowrap;';
+          row.appendChild(span); row.appendChild(a);
+        } else {
+          /* 일반 줄(제목 등): 가운데 정렬 */
+          row.style.cssText = 'text-align:center;font-size:16px;font-weight:900;color:#FEE500;line-height:1.3;padding:0 0 4px;';
+          row.textContent = line;
+        }
+        box.appendChild(row);
+      });
+      if(box.children.length){
+        document.getElementById('promoBox').style.display = 'block';
+        window._promoActive = true; /* ★ 제휴점 표시됨 — 주차위치 접힘 시 복원 기준 */
+      }
+    }catch(e){}
+  }
+  applyPromo(qs('pt'));
+  /* ★ 제휴점 정보 폴백 — 링크에 pt가 없으면(키불출앱 QR 등) 설정(promoDetail)에서 읽어 표시 */
+  window._applyPromoFromSettings = function(st){
+    try{
+      var box = document.getElementById('promoBox');
+      if(box && box.style.display === 'block') return; /* 이미 표시됨(링크 pt 우선) */
+      var pd = st && (st.promoDetail || st.promoText);
+      if(pd) applyPromo(String(pd));
+    }catch(e){}
+  };
+
+  var statusEl = document.getElementById('statusMsg');
+  function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
+  function hideStatus(){ statusEl.style.display='none'; }
+  /* ★ 주차현황판 미사용(part 없음) 시 "주차위치 보기" 토글 버튼을 숨김 —
+     오류가 아니라 그 매장이 위치 안내 기능을 안 쓰는 정상 상태이므로 조용히 숨긴다 */
+  function _hideParkLocIfNoPart(){
+    /* ★ FIX(2026-10-02): 링크에 오프라인 약도 정보(cols/rows/col/row)가 있으면
+       그 매장은 주차현황판을 쓰는 것이 확실하다 — Firebase 를 안 쓰거나 방이
+       비어 있어도 약도는 URL 값만으로 이미 그려져 있으므로, 여는 버튼을
+       숨기면 손님이 약도를 볼 방법이 아예 없어진다. 그럴 때는 숨기지 않는다.
+       (주차현황판 미사용 매장은 이 값들이 없으므로 종전처럼 조용히 숨겨진다) */
+    try{
+      var _oc = parseInt(qs('cols'),10), _or = parseInt(qs('rows'),10);
+      var _ol = parseInt(qs('col'),10),  _ow = parseInt(qs('row'),10);
+      if(_oc > 0 && _or > 0 && _ol >= 1 && _ow >= 0){ return; }
+    }catch(e){}
+    try{ var b = document.getElementById('parkLocToggle'); if(b) b.style.display = 'none'; }catch(e){}
+  }
+
+  /* 차량번호/차량위치 헤더 — 링크 파라미터에서 즉시 표시 (통신 전에 먼저 보임) */
+  if(car || loc){
+    var h = document.getElementById('carHeader');
+    /* ★ 주차현황판 미사용(위치 없음)이면 '차량위치:-'를 띄우지 않고 차량번호만 표시
+       (아래 renderHeader와 동일 규칙 — 초기 표시에서 '-'가 잠깐 보이는 현상 제거) */
+    var _c0 = car ? '<span style="color:#16A34A;font-weight:900;">'+String(car).replace(/[&<>"]/g,'')+'</span>' : '-';
+    h.innerHTML = loc ? ('차량번호:' + _c0 + '  차량위치:' + String(loc).replace(/[<>]/g,'')) : ('차량번호:' + _c0);
+    h.style.display = 'block';
+  }
+
+  /* ★ 담당차주 — 링크 파라미터(on=이름, op=전화)에서 표시 + 전화걸기 */
+  var oName = qs('on');
+  var oPhone = (qs('op')||'').replace(/[^0-9]/g,'');
+
+  /* 헤더/담당차주 렌더 함수 (단축링크에서도 재사용) */
+  var keyNo = qs('kn'); /* ★ 차량 키번호 */
+  function _hEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+  function renderHeader(){
+    var h = document.getElementById('carHeader');
+    h.classList.remove('gone');
+    if(car || loc){
+      /* ★ 차량번호를 녹색 볼드로 강조 */
+      var _carHtml = car ? '<span style="color:#16A34A;font-weight:900;">'+_hEsc(car)+'</span>' : '-';
+      /* ★ 주차위치 정보가 없으면(주차현황판 미사용 매장) "차량위치:-"를 보여주지 않고
+         차량번호만 깔끔히 표시 — 위치는 선택 정보이지 오류가 아님 */
+      h.innerHTML = loc ? ('차량번호:' + _carHtml + '  차량위치:' + _hEsc(loc)) : ('차량번호:' + _carHtml);
+      /* ★ 키번호 — 녹색 글씨로 헤더 끝에 표시 */
+      if(keyNo){
+        h.innerHTML += ' <span style="color:#15803D;font-weight:900;">(키번호는 ' + _hEsc(keyNo) + '번입니다)</span>';
+      }
+      h.style.display = 'block';
+    }
+    if(oName || oPhone){
+      var fmtP = oPhone;
+      if(oPhone.length===11) fmtP = oPhone.replace(/(\d{3})(\d{4})(\d{4})/,'$1-$2-$3');
+      else if(oPhone.length===10) fmtP = oPhone.replace(/(\d{3})(\d{3})(\d{4})/,'$1-$2-$3');
+      document.getElementById('ownerTxt').innerHTML =
+        '<span style="font-size:13px;">👤 담당차주: ' + _esc(oName||'-') + '</span>' +
+        (oPhone ? ' <span style="font-size:16px;font-weight:900;white-space:nowrap;">📞 ' + _esc(fmtP) + '</span>' : '');
+      var oc = document.getElementById('ownerCall');
+      if(oPhone){ oc.href = 'tel:' + oPhone; oc.style.display = 'inline-block'; }
+      document.getElementById('ownerLine').style.display = 'flex';
+    } else {
+      document.getElementById('ownerLine').style.display = 'none';
+    }
+  }
+  /* ★ 슬롯 메모 — 요청에 따라 화면에 표시하지 않음 (항상 숨김) */
+  function renderMemo(memo){
+    var box = document.getElementById('slotMemoBox');
+    if(box) box.style.display = 'none';
+  }
+  /* ★ 차량이 더 이상 존재하지 않을 때(출고 등) — 위치/담당차주/메모/경로/약도 숨기고 안내만 표시 */
+  function showCarGone(){
+    var h = document.getElementById('carHeader');
+    h.classList.add('gone');
+    h.innerHTML = '🚫 차량이 출고되었거나 주차 위치 정보가 없습니다.<br>사무실로 문의 주세요.';
+    h.style.display = 'block';
+    document.getElementById('ownerLine').style.display = 'none';
+    document.getElementById('slotMemoBox').style.display = 'none';
+    document.getElementById('routePanel').style.display = 'none';
+    document.getElementById('mapBox').style.display = 'none';
+    _hideAutoMap(); /* ★ 자동 약도도 숨김 */
+  }
+  renderHeader();
+
+  if(!code || (!part && !lkey)){
+    showStatus('⚠️ 잘못된 링크입니다.<br>QR을 다시 스캔해 주세요.');
+    return;
+  }
+  /* ★ 직접 파라미터(?car=) 경로에서도 출고서류 조회 */
+  if(car){ try{ loadCarDocs(car); }catch(e){} }
+
+  var loadedAny = false;
+  /* ★ 자동 약도 상태 */
+  var _autoMapData = null;   /* 현재 차량의 격자 위치 정보 */
+  var _partHasPhoto = null;  /* null=미확인, true=사진있음, false=사진없음 */
+
+  /* ═══════════════════════════════════════════════════════════════
+     ★ 오프라인(로컬) 최대 표시 — Firebase 없이 스캔한 QR/링크의 값만으로
+       약도 도식 + 출고서류 목록 + 오프라인 안내까지 표시.
+       (인터넷 연결되면 이후 실데이터로 자동 보강됨) — 값 없으면 조용히 건너뜀
+     ═══════════════════════════════════════════════════════════════ */
+  (function _offlineMaxRender(){
+    try{
+      /* (1) 위치 도식 약도: URL에 열/칸/격자 정보가 있으면 Firebase 없이도 그린다
+         cols=파트 열수, rows=파트 칸수, col=열번호(1~), row=행(0~,위에서부터), pl=파트라벨, cn=열이름(|구분) */
+      var _oCols=parseInt(qs('cols'),10), _oRows=parseInt(qs('rows'),10);
+      var _oCol =parseInt(qs('col'),10),  _oRow =parseInt(qs('row'),10);
+      if(_oCols>0 && _oRows>0 && _oCol>=1 && _oRow>=0 && _oCol<=_oCols && _oRow<_oRows && _autoMapData===null){
+        var _oPl=qs('pl')||(part?part+'파트':'');
+        var _oCn=null; try{ var _r=qs('cn'); if(_r) _oCn=decodeURIComponent(_r).split('|'); }catch(e){}
+        _autoMapData={ partLabel:_oPl, cols:_oCols, rows:_oRows, col:_oCol, row:_oRow,
+                       fb:(_oRows-_oRow), colNames:_oCn, colColors:null,
+                       hdrBg:'#F2D900', hdrTx:'#FFFFFF', colGaps:[], cellCars:{}, cellDisabled:{} };
+        try{ drawAutoMap(); }catch(e){}
+      }
+      /* (2) 출고서류 목록: dm=base64url(JSON 배열 [{name,cat}]) 있으면 이름만 표시 */
+      try{
+        var _dmRaw=qs('dm');
+        if(_dmRaw){
+          var _dm=JSON.parse(_b64urlDecode(_dmRaw));
+          if(Array.isArray(_dm) && _dm.length){
+            var _dbox=document.getElementById('docBox');
+            if(_dbox){
+              var _nm=_dm.map(function(x){
+                return (x&&x.cat==='reg')?'차량등록증':(x&&x.cat==='insp')?'성능점검표':((x&&x.name)||'서류'); });
+              var _uq=_nm.filter(function(v,i){return _nm.indexOf(v)===i;});
+              _dbox.innerHTML='<div style="font-size:12px;font-weight:800;color:#0369A1;background:#E0F2FE;border-radius:8px;padding:8px 10px;line-height:1.5;">'
+                + '📄 등록된 출고서류: '+_uq.join(', ')
+                + '<br><span style="font-size:11px;color:#64748B;font-weight:700;">※ 오프라인 상태 — 원본 다운로드는 인터넷 연결 후 가능합니다.</span></div>';
+              _dbox.style.display='block';
+            }
+          }
+        }
+      }catch(e){}
+      /* (4) 길찾기 버튼 — 좌표(glat/glng)만 있으면 Firebase/주소 없이도 오프라인 표시 */
+      try{
+        var _gy=qs('glat'), _gx=qs('glng');
+        if(_gy && _gx && !isNaN(parseFloat(_gy)) && !isNaN(parseFloat(_gx))){
+          var _rs=document.getElementById('routeSteps'), _rp=document.getElementById('routePanel');
+          if(_rs && _rp && !document.getElementById('offlineNav')){
+            var _nm=encodeURIComponent((typeof bz!=='undefined'&&bz)?bz:(car?car+' 차량 위치':'목적지'));
+            var _apn=encodeURIComponent(location.hostname||'parkview');
+            var _opts=[
+              ['\uD83D\uDDFA\uFE0F \uCE74\uCE74\uC624\uB9F5','https://map.kakao.com/link/to/'+_nm+','+_gy+','+_gx,'#16A34A'],
+              ['\uD83D\uDFE2 \uB124\uC774\uBC84\uC9C0\uB3C4','nmap://route/car?dlat='+_gy+'&dlng='+_gx+'&dname='+_nm+'&appname='+_apn,'#03C75A'],
+              ['\uD83E\uDDED \uD2F0\uB9F5','tmap://route?goalname='+_nm+'&goalx='+_gx+'&goaly='+_gy,'#8B5CF6'],
+              ['\uD83C\uDF10 \uAD6C\uAE00\uC9C0\uB3C4','https://www.google.com/maps/dir/?api=1&destination='+_gy+','+_gx,'#2563EB']
+            ];
+            var _wrap=document.createElement('div'); _wrap.id='offlineNav'; _wrap.style.cssText='margin:6px 0;';
+            var _lab=document.createElement('div'); _lab.style.cssText='font-size:12px;font-weight:800;color:#0369A1;margin-bottom:6px;'; _lab.textContent='\uD83D\uDCCD \uC8FC\uCC28\uC7A5 \uAE38\uCC3E\uAE30';
+            var _tg=document.createElement('button'); _tg.type='button'; _tg.textContent='\uD83E\uDDED \uAE38\uCC3E\uAE30 \uC571 \uC120\uD0DD \u25BE';
+            _tg.style.cssText='display:inline-block;background:#0EA5E9;color:#fff;border:none;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;';
+            var _mn=document.createElement('div'); _mn.style.cssText='display:none;margin-top:7px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:7px;max-width:220px;';
+            _opts.forEach(function(o){ var a=document.createElement('a'); a.href=o[1]; a.target='_blank'; a.rel='noopener'; a.textContent=o[0];
+              a.style.cssText='display:block;margin:4px 0;background:'+o[2]+';color:#fff;text-decoration:none;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:900;text-align:center;'; _mn.appendChild(a); });
+            _tg.addEventListener('click',function(e){ e.stopPropagation(); var open=(_mn.style.display!=='none'&&_mn.style.display!==''); _mn.style.display=open?'none':'block'; _tg.textContent=open?'\uD83E\uDDED \uAE38\uCC3E\uAE30 \uC571 \uC120\uD0DD \u25BE':'\uD83E\uDDED \uAE38\uCC3E\uAE30 \uC571 \uC120\uD0DD \u25B4'; });
+            _wrap.appendChild(_lab); _wrap.appendChild(_tg); _wrap.appendChild(_mn); _rs.appendChild(_wrap); _rp.style.display='block';
+          }
+        }
+      }catch(e){}
+      /* (3) 오프라인 안내 배지 — 기본정보는 있는데 인터넷이 끊긴 경우 */
+      if((car||loc) && typeof navigator!=='undefined' && navigator.onLine===false){
+        var _hh=document.getElementById('carHeader');
+        if(_hh && _hh.parentNode && !document.getElementById('offlineTag')){
+          var _tg=document.createElement('div'); _tg.id='offlineTag';
+          _tg.style.cssText='margin:6px 0;text-align:center;font-size:11px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:8px;padding:5px 9px;';
+          _tg.textContent='📴 오프라인 — 스캔한 QR에 저장된 정보로 표시 중입니다';
+          _hh.parentNode.insertBefore(_tg, _hh.nextSibling);
+        }
+      }
+    }catch(e){}
+  })();
+  var _autoMapShown = false;
+  var fdb = null;
+  /* ★ FIX(요청): 카카오 승인 템플릿 버튼 URL엔 변수 1개(k)만 허용돼 db=가 아예
+     빠져 있음 — 이 시스템의 모든 업체가 결국 같은 Firebase 프로젝트를 쓰므로,
+     db가 없으면 이 기본값으로 안전하게 접속한다(URL에 db가 있으면 그 값이 우선). */
+  if(!db){ db = 'https://kp-system-8e4eb-default-rtdb.firebaseio.com'; }
   try{
-    navigator.share({ files: [f], title: '시험' })
-      .then(function(){ say(label + ' — 성공 ✅ (canShare 판정: ' + can + ')'); })
-      .catch(function(e){ say(label + ' — 실패 ❌ (canShare 판정: ' + can + ')\n오류이름: ' + (e && e.name) + '\n내용: ' + (e && e.message)); });
-  }catch(e){ say(label + ' — 바로 예외 ❌\n오류이름: ' + e.name); }
-}
-</script>
+    firebase.initializeApp({ databaseURL: db });
+    fdb = firebase.database();
+  }catch(e){
+    showStatus('⚠️ 연결 오류가 발생했습니다.<br>다시 스캔해 주세요.');
+    return;
+  }
+
+  /* ★★ 실시간 반영 — 위치/키번호/담당차주/메모를 pb_slots·pb_settings 실시간 리스너로 추적
+     (링크에 담긴 스냅샷이 아니라, 지금 이 순간의 현황판 데이터를 그대로 따라감)
+     차량이 슬롯에서 사라지면(출고 등) 안내 문구로 전환됨 */
+  var _lastPartLoaded = null;
+  function _maybeReloadPart(newPart){
+    if(newPart && String(newPart) !== String(_lastPartLoaded)){
+      _lastPartLoaded = newPart;
+      part = String(newPart);
+      loadedAny = false;
+      document.getElementById('mapBox').style.display = 'none';
+      document.getElementById('routePanel').style.display = 'none';
+      loadPart();
+    }
+  }
+  function startLiveTracking(targetCar){
+    var carD = String(targetCar||'').replace(/[^0-9]/g,'');
+    if(!carD || !fdb) return;
+    var _liveSlots=null, _liveSettings=null;
+    function recompute(){
+      if(_liveSlots===null || _liveSettings===null) return; /* 두 값 다 도착할 때까지 대기 */
+      var slots=_liveSlots, st=_liveSettings;
+      var slotKey=null, slot=null, keys=Object.keys(slots);
+      for(var i=0;i<keys.length;i++){
+        var s0=slots[keys[i]];
+        var d0=String((s0&&s0.car)||'').replace(/[^0-9]/g,'');
+        if(d0 && d0===carD){ slotKey=keys[i]; slot=s0; break; }
+      }
+      if(!slot && carD.length>=4){
+        var l4=carD.slice(-4);
+        for(var j=0;j<keys.length;j++){
+          var s1=slots[keys[j]];
+          var d1=String((s1&&s1.car)||'').replace(/[^0-9]/g,'');
+          if(d1 && d1.slice(-4)===l4){ slotKey=keys[j]; slot=s1; break; }
+        }
+      }
+      /* ★ 주차현황판 미사용 링크(part 없음)는 애초에 주차칸을 쓰지 않는 매장이므로,
+         슬롯에 없다고 해서 "차량이 사라졌다"고 안내하면 안 된다.
+         (키불출앱만 쓰거나 서류앱에 등록되지 않은 차량 → 기존 표시를 그대로 유지) */
+      if(!slot){ if(!part){ return; } showCarGone(); return; }
+      var numParts=parseInt(st.numParts)||3, defC=parseInt(st.colsPerPart)||10, defR=parseInt(st.rowsPerPart)||4;
+      var pC=[],pR=[],pO=[],off=0;
+      for(var p=1;p<=numParts;p++){
+        var c=parseInt(st.partColCounts&&st.partColCounts[String(p)])||defC;
+        var r=parseInt(st.partRowCounts&&st.partRowCounts[String(p)])||defR;
+        pC.push(c);pR.push(r);pO.push(off);off+=c*r;
+      }
+      var pi=-1, col=0, row=-1;
+      var cm=String(slotKey||'').match(/^C_(\d+)_(\d+)_(\d+)$/);
+      if(cm){
+        pi=parseInt(cm[1],10)-1; col=parseInt(cm[2],10); row=parseInt(cm[3],10)-1;
+      } else {
+        var gi=parseInt(slotKey,10);
+        if(!isNaN(gi)){
+          for(var q=0;q<numParts;q++){ if(gi>=pO[q]&&gi<pO[q]+pC[q]*pR[q]){pi=q;break;} }
+          if(pi>=0){ var local=gi-pO[pi]; col=(local%pC[pi])+1; row=Math.floor(local/pC[pi]); }
+        }
+      }
+      var newLoc='', newPart=null;
+      if(pi>=0 && pi<numParts && col>=1 && row>=0){
+        var fb=pR[pi]-row;
+        var pl=(st.partLabels&&(st.partLabels[String(pi+1)]||st.partLabels[pi+1]))||((pi+1)+'파트');
+        var cn=(st.colNames&&st.colNames['p'+(pi+1)+'c'+col])||(col+'열');
+        newLoc=pl+'-'+cn+'번 (줄)'+(fb>=1&&fb<=pR[pi]?' '+fb+'번째 칸':'');
+        newPart=pi+1;
+        /* ★ 자동 약도용 격자 정보 저장 */
+        var _cnames=[];
+        for(var _cc=1;_cc<=pC[pi];_cc++){
+          _cnames.push((st.colNames&&st.colNames['p'+(pi+1)+'c'+_cc])||(_cc+'열'));
+        }
+        var _ccolors=[];
+        for(var _cd=1;_cd<=pC[pi];_cd++){
+          _ccolors.push((st.colColors&&st.colColors['p'+(pi+1)+'c'+_cd])||null);
+        }
+        /* ★ 열헤더 기본색 — 앱과 동일하게: 파트별 지정색 → 없으면 전체 기본색(#F2D900) */
+        var _hdrBg = (st.colPartColors && st.colPartColors['p'+(pi+1)]) || st.colHcColor || '#F2D900';
+        var _hdrTx = (st.colPartTextColors && st.colPartTextColors['p'+(pi+1)]) || '#FFFFFF';
+        _autoMapData = { partLabel:pl, cols:pC[pi], rows:pR[pi], col:col, row:row, fb:fb, colNames:_cnames, colColors:_ccolors, hdrBg:_hdrBg, hdrTx:_hdrTx };
+        /* ★ 열 간격(열 띄우기) 정보 — 본 앱과 동일하게 약도에도 표시 (mm>0만) */
+        var _cgaps=[];
+        for(var _cg=1;_cg<=pC[pi];_cg++){
+          var _graw=(st.colGaps&&st.colGaps['p'+(pi+1)+'c'+_cg])||null;
+          var _gn=_normViewGap(_graw);
+          _cgaps[_cg]=(_gn&&_gn.mm>0)?_gn:null;
+        }
+        _autoMapData.colGaps=_cgaps;
+        /* ★ 같은 파트의 다른 칸 차량번호 지도 (자동 약도 주변 표시용) + 사용안함 칸 지도 */
+        var _cellCars={};
+        var _cellDisabled={};
+        for(var z=0;z<keys.length;z++){
+          var sz=slots[keys[z]]; if(!sz) continue;
+          var pz=-1,cz=0,rz=-1;
+          var cmz=String(keys[z]).match(/^C_(\d+)_(\d+)_(\d+)$/);
+          if(cmz){ pz=parseInt(cmz[1],10)-1; cz=parseInt(cmz[2],10); rz=parseInt(cmz[3],10)-1; }
+          else{
+            var giz=parseInt(keys[z],10);
+            if(!isNaN(giz)){
+              for(var qz=0;qz<numParts;qz++){ if(giz>=pO[qz]&&giz<pO[qz]+pC[qz]*pR[qz]){pz=qz;break;} }
+              if(pz>=0){ var lz=giz-pO[pz]; cz=(lz%pC[pz])+1; rz=Math.floor(lz/pC[pz]); }
+            }
+          }
+          if(pz!==pi || cz<1 || rz<0) continue;
+          if(sz.disabled===true){ _cellDisabled[cz+'_'+rz]=true; continue; }
+          var carRaw=String(sz.car||'').trim(); if(!carRaw) continue;
+          var carz=carRaw.replace(/[^0-9]/g,'');
+          /* ★ 표시 라벨: 숫자 차량번호면 끝 4자리, "청운임대1" 같은 이름이면 원문 그대로(최대 6자) */
+          var _lbl;
+          if(carz && carz.length>=3 && carRaw.length<=carz.length+1){ _lbl=carz.slice(-4); }
+          else { _lbl=carRaw.length>8 ? carRaw.slice(0,8) : carRaw; }
+          _cellCars[cz+'_'+rz]=_lbl;
+        }
+        _autoMapData.cellCars=_cellCars;
+        _autoMapData.cellDisabled=_cellDisabled;
+      }
+      /* ★ 실시간 값으로 전역 상태 갱신 */
+      car = targetCar;
+      loc = newLoc;
+      keyNo = String((slot&&slot.num)||'').trim();
+      oName = String((slot&&slot.owner)||'').trim();
+      oPhone = String((slot&&slot.ownerPhone)||'').replace(/[^0-9]/g,'');
+      if(!oPhone){
+        var m=(String((slot&&slot.memo)||'')+' '+String((slot&&slot.owner)||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/);
+        if(m) oPhone=m[0].replace(/[^0-9]/g,'');
+      }
+      /* ★ 세이프6 실시간 반영 — 알림톡 링크(서버 생성)에는 sf가 없으므로 슬롯(safe6)/제휴점 전체설정(safe6Partner)에서 직접 판단 */
+      isSafe6 = !!((slot && slot.safe6) || (st && st.safe6Partner));
+      _applySafe6Badge();
+      renderHeader();
+      renderMemo(String((slot&&slot.memo)||'').trim());
+      drawAutoMap(); /* ★ 사진 유무와 상관없이 항상 자동 약도 갱신 */
+      if(newPart) _maybeReloadPart(newPart);
+    }
+    fdb.ref('kd_rooms/'+code+'/pb_slots').once('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
+    fdb.ref('kd_rooms/'+code+'/pb_settings').once('value', function(snap){ _liveSettings = snap.val()||{}; try{ if(window._applyPromoFromSettings) window._applyPromoFromSettings(_liveSettings); }catch(e){} recompute(); });
+  }
+
+  /* 파트의 경로 안내 + 약도 사진 로드
+     ★ 사진(합성 약도)에는 경로안내가 이미 포함되어 있으므로,
+       사진이 있으면 페이지 경로 패널에는 주소 줄(길찾기 버튼)만 표시해 중복 제거 */
+  function _isAddr(t){
+    t = String(t||'');
+    if(/주소\s*[:：]/.test(t)) return true;
+    var hasArea = /(시|군|구)\s*[가-힣]/.test(t);
+    var hasRoad = /(로|길)\s*\d/.test(t);              /* 도로명: ~로/길 + 번지 */
+    var hasJibun = /[가-힣](동|리|읍|면|가)\s*\d/.test(t); /* 지번: ~동/리 + 번지 */
+    return hasArea && (hasRoad || hasJibun);
+  }
+  function _renderSteps(steps, addrOnly){
+    var valid = (steps||[]).filter(function(x){ return x && x.text && String(x.text).trim(); });
+    var rows = addrOnly ? valid.filter(function(x){ return _isAddr(x.text); }) : valid;
+    if(!rows.length) return false;
+    var box = document.getElementById('routeSteps');
+    box.innerHTML = '';
+    rows.forEach(function(x,i){
+      var row = document.createElement('div'); row.className='step-row';
+      var num = document.createElement('div'); num.className='step-num';
+      num.textContent = addrOnly ? '📍' : (i+1);
+      if(addrOnly){ num.style.background='#16A34A'; }
+      var txt = document.createElement('div'); txt.className='step-txt';
+      var stepText = String(x.text).trim();
+      txt.textContent = stepText;
+      if(_isAddr(stepText)){
+        var q = stepText.replace(/^.*?주소\s*[:：]\s*/,'').trim();
+        var eq = encodeURIComponent(q);
+        /* ★ 좌표(위경도)가 링크에 있으면 정밀 길찾기(현재위치→목적지 자동), 없으면 주소검색.
+           구글지도는 주소만으로도 현재위치 길찾기가 바로 됨. */
+        var _gy = qs('glat'), _gx = qs('glng');
+        var _geo = (_gy && _gx && !isNaN(parseFloat(_gy)) && !isNaN(parseFloat(_gx)));
+        var _apn = encodeURIComponent((location.hostname||'parkview'));
+        var _opts = [
+          ['🗺️ 카카오맵', _geo ? ('https://map.kakao.com/link/to/'+eq+','+_gy+','+_gx) : ('https://map.kakao.com/link/search/'+eq), '#16A34A'],
+          ['🟢 네이버지도', _geo ? ('nmap://route/car?dlat='+_gy+'&dlng='+_gx+'&dname='+eq+'&appname='+_apn) : ('https://map.naver.com/p/search/'+eq), '#03C75A'],
+          ['🧭 티맵', _geo ? ('tmap://route?goalname='+eq+'&goalx='+_gx+'&goaly='+_gy) : ('tmap://search?name='+eq), '#8B5CF6'],
+          ['🌐 구글지도', _geo ? ('https://www.google.com/maps/dir/?api=1&destination='+_gy+','+_gx) : ('https://www.google.com/maps/dir/?api=1&destination='+eq), '#2563EB']
+        ];
+        var _navToggle = document.createElement('button');
+        _navToggle.type = 'button';
+        _navToggle.textContent = '🧭 길찾기 ▾';
+        _navToggle.style.cssText = 'display:inline-block;margin-left:8px;background:#0EA5E9;color:#fff;border:none;padding:5px 13px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;vertical-align:middle;white-space:nowrap;';
+        var _navMenu = document.createElement('div');
+        _navMenu.style.cssText = 'display:none;margin-top:7px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:7px;min-width:150px;';
+        _opts.forEach(function(o){
+          var a = document.createElement('a');
+          a.href = o[1]; a.target = '_blank'; a.rel = 'noopener'; a.textContent = o[0];
+          a.style.cssText = 'display:block;margin:4px 0;background:'+o[2]+';color:#fff;text-decoration:none;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:900;text-align:center;white-space:nowrap;';
+          _navMenu.appendChild(a);
+        });
+        _navToggle.addEventListener('click', function(e){
+          e.stopPropagation();
+          var open = (_navMenu.style.display !== 'none' && _navMenu.style.display !== '');
+          _navMenu.style.display = open ? 'none' : 'block';
+          _navToggle.textContent = open ? '🧭 길찾기 ▾' : '🧭 길찾기 ▴';
+        });
+        txt.appendChild(_navToggle);
+        txt.appendChild(_navMenu);
+      }
+      row.appendChild(num); row.appendChild(txt);
+      box.appendChild(row);
+    });
+    document.getElementById('routePanel').style.display = 'block';
+    return true;
+  }
+  /* ★ HTML 이스케이프 (열 이름 등 안전 출력) */
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+  /* ★ 배경색 밝기에 따라 글자색(검정/흰색) 자동 선택 */
+  function _pickTextColor(hex){
+    try{
+      var h=String(hex).replace('#','');
+      if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      var r=parseInt(h.substr(0,2),16), g=parseInt(h.substr(2,2),16), b=parseInt(h.substr(4,2),16);
+      var yiq=(r*299+g*587+b*114)/1000;
+      return yiq>=140 ? '#1e293b' : '#ffffff';
+    }catch(e){ return '#1e293b'; }
+  }
+  /* ★ 자동 약도 숨기기 */
+  function _hideAutoMap(){
+    var box=document.getElementById('autoMapBox');
+    if(box) box.style.display='none';
+    _autoMapShown=false;
+  }
+  /* ★ 열 간격 값 정규화 — 본 앱 _normColGap 과 동일 구조(mm,text,color,textColor) */
+  function _normViewGap(v){
+    if(!v) return null;
+    if(v===true) return {mm:8,text:'',color:'',textColor:''};
+    if(typeof v==='object' && v.mm!==undefined){
+      return {
+        mm: Math.max(0, Math.min(30, parseInt(v.mm)||0)),
+        text: String(v.text||''),
+        color: String(v.color||''),
+        textColor: String(v.textColor||'')
+      };
+    }
+    return null;
+  }
+  /* ★ 자동 약도 그리기 — 현황판 격자(열×줄) 기반, 본인 차 칸만 📍 표시.
+     데이터 준비 전이면 false 반환(호출측이 안내문구 유지).
+     ★ FIX: 관리자가 등록한 사진/약도가 있어도 함께 표시하도록 변경
+       (실시간으로 정확한 현재 위치를 보여주는 자동 약도는 항상 유용하므로) */
+  function drawAutoMap(){
+    var box=document.getElementById('autoMapBox');
+    if(!box) return false;
+    var d=_autoMapData;
+    if(!d || !d.cols || !d.rows || d.col<1 || d.row<0){ return false; }
+    var cols=d.cols, rows=d.rows, html='';
+    if(_partHasPhoto===true){
+      html+='<div style="text-align:center;font-size:11px;font-weight:900;color:#0369A1;background:#E0F2FE;border-radius:8px;padding:5px 8px;margin-bottom:8px;">🔴 실시간 자동 약도 (현재 정확한 위치)</div>';
+    }
+    html+='<div style="text-align:center;font-weight:900;color:#1e293b;font-size:15px;margin-bottom:2px;">🅿️ '+_esc(d.partLabel||'')+'</div>';
+    html+='<div style="text-align:center;color:#64748b;font-size:11px;font-weight:700;margin-bottom:10px;">📍 빨간 칸이 고객님 차량 위치입니다</div>';
+    html+='<div style="overflow-x:auto;"><table><tbody>';
+    var _gaps = d.colGaps || [];
+    var _gapSpan = rows + 1; /* 데이터행 전체 + 하단 열이름행까지 세로로 이어지는 띠 */
+    for(var r=0;r<rows;r++){
+      var kan=rows-r; /* 칸 번호(아래부터) */
+      html+='<tr><td style="font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;">'+kan+'칸</td>';
+      for(var c2=1;c2<=cols;c2++){
+        var isT=(c2===d.col && r===d.row);
+        if(isT){ html+='<td class="amCell amTarget">📍</td>'; }
+        else{
+          /* ★ 모든 주차 칸의 차량번호 표시 (특수문자 포함). 차주정보는 표시 안 함 */
+          var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
+          var _isDis2 = d.cellDisabled ? d.cellDisabled[c2+'_'+r] : false;
+          if(_cn2){ html+='<td class="amCell amNear">'+_esc(_cn2)+'</td>'; }
+          else if(_isDis2){ html+='<td class="amCell amDisabled">✕<br>사용안함</td>'; }  /* ★ 사용안함 칸 */
+          else{ html+='<td class="amCell amEmpty">🅿️</td>'; }  /* ★ 차량번호 없는 칸 → 🅿️ */
+        }
+        /* ★ 이 열 뒤에 간격(열 띄우기)이 있으면 세로 띠로 표시 — 첫 행에서만 rowspan 셀 생성,
+           나머지 행/하단 열이름행은 rowspan 이 덮으므로 셀을 넣지 않는다(열 정렬 유지) */
+        var _g=_gaps[c2];
+        if(_g && r===0){
+          var _gst='';
+          if(_g.color){ _gst='background:'+_esc(_g.color)+';border-color:'+_esc(_g.color)+';'; }
+          var _gtc=_g.textColor || (_g.color ? _pickTextColor(_g.color) : '#92400E');
+          _gst+='color:'+_esc(_gtc)+';';
+          html+='<td class="amGap" rowspan="'+_gapSpan+'" style="'+_gst+'">'+_esc(_g.text||'')+'</td>';
+        }
+      }
+      html+='</tr>';
+    }
+    /* ★ 하단에도 열 이름 반복 표시 (열헤더 기본색 + 지정된 열 색상 반영 — 현황판과 동일) */
+    html+='<tr><td></td>';
+    var _hdrBg = d.hdrBg || '#F2D900';
+    var _hdrTx = d.hdrTx || _pickTextColor(_hdrBg);
+    for(var cf=1;cf<=cols;cf++){
+      var cnf=(d.colNames&&d.colNames[cf-1])||(cf+'열');
+      var ccl=(d.colColors&&d.colColors[cf-1])||null;
+      var _bg = ccl || _hdrBg;
+      var _tc = ccl ? _pickTextColor(ccl) : _hdrTx;
+      var _cstyle='font-size:10px;font-weight:800;color:'+_esc(_tc)+';text-align:center;padding:3px 4px;white-space:nowrap;background:'+_esc(_bg)+';border-radius:5px;';
+      html+='<td style="'+_cstyle+'">'+_esc(cnf)+'</td>';
+    }
+    html+='</tr>';
+    html+='</tbody></table></div>';
+    html+='<div style="text-align:center;font-size:11px;color:#94A3B8;font-weight:700;padding:6px 0 0;">🔍 약도를 누르면 크게 볼 수 있습니다</div>';
+    box.innerHTML=html;
+    box.style.display='block';
+    hideStatus();
+    loadedAny=true;
+    _autoMapShown=true;
+    return true;
+  }
+  /* ★ 경로안내·약도사진 실시간 구독 — 관리자가 내용을 수정하면 열려있는 화면에도 즉시 반영.
+     파트가 바뀌면 이전 파트 구독을 해제하고 새 파트를 구독(중복 구독 방지) */
+  var _stepsRef=null, _photoRef=null, _liveStepsRaw=null, _livePhoto=null, _partRecv=0;
+  function _renderPartData(){
+    if(_partRecv < 2) return; /* steps·photo 둘 다 최소 1회 수신 후 렌더 */
+    var stepsRaw=_liveStepsRaw, photo=_livePhoto;
+    var steps = [];
+    try{
+      if(typeof stepsRaw === 'string'){ steps = JSON.parse(stepsRaw||'[]'); }
+      else if(Array.isArray(stepsRaw)){ steps = stepsRaw; }
+    }catch(e){}
+    var hasPhoto = (typeof photo === 'string' && photo.indexOf('data:image') === 0);
+    _partHasPhoto = hasPhoto; /* ★ 사진 유무 기록 */
+
+    /* 사진 표시 — ★ FIX: 사진이 있어도 자동 약도를 숨기지 않고 함께 표시 */
+    if(hasPhoto){
+      var img = document.getElementById('mapImg');
+      img.src = photo;
+      document.getElementById('mapBox').style.display = 'block';
+      loadedAny = true; hideStatus();
+    } else {
+      document.getElementById('mapBox').style.display = 'none';
+    }
+    /* 경로 패널: 사진 있으면 주소만(중복 제거), 없으면 전체 표시 */
+    /* ★ 경로안내는 항상 전체 표시 — 「경로안내만 저장」 문구가 사진 유무와 무관하게 보이도록 */
+    var shown = _renderSteps(steps, false);
+    if(shown){ loadedAny = true; hideStatus(); }
+
+    /* ★ FIX: 사진 유무와 상관없이 항상 자동 약도(격자)도 함께 표시 —
+       사진/경로 안내로도 아무것도 못 보여줄 때만 안내문구 표시 */
+    if(!drawAutoMap() && !hasPhoto && !loadedAny){
+      showStatus('약도 사진이 아직 등록되지 않았습니다.<br>위 경로 안내를 참고해 주세요.');
+    }
+  }
+  function loadPart(){
+    /* 이전 파트 구독 해제 */
+    try{ if(_stepsRef) _stepsRef.off(); }catch(e){}
+    try{ if(_photoRef) _photoRef.off(); }catch(e){}
+    _liveStepsRaw=null; _livePhoto=null; _partRecv=0;
+    var _recvS=false, _recvP=false;
+    _stepsRef = fdb.ref('kd_rooms/'+code+'/pb_part_steps/'+part);
+    _photoRef = fdb.ref('kd_rooms/'+code+'/pb_part_photos/'+part);
+    _stepsRef.once('value', function(s){
+      _liveStepsRaw = s.val();
+      if(!_recvS){ _recvS=true; _partRecv++; }
+      _renderPartData();
+    }, function(){ if(!_recvS){ _recvS=true; _partRecv++; } _renderPartData(); });
+    _photoRef.once('value', function(s){
+      _livePhoto = s.val();
+      if(!_recvP){ _recvP=true; _partRecv++; }
+      _renderPartData();
+    }, function(){ if(!_recvP){ _recvP=true; _partRecv++; } _renderPartData(); });
+    /* 네트워크 문제로 아무것도 못 받는 경우 안내 (8초) */
+    setTimeout(function(){
+      if(_partRecv<2 && !loadedAny && !car && !loc) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
+    }, 8000);
+  }
+
+  /* ★ 하이브리드: URL에 담긴 기본정보(d=) 우선 반영 — Firebase 없어도 차량/위치/차주/좌표 표시 */
+  var _urlShown = false;
+  try{
+    var _dParam = qs('d');
+    if(_dParam){
+      var _up = JSON.parse(_b64urlDecode(_dParam));
+      if(_up && typeof _up === 'object'){
+        var _okU = true;
+        if(_up.t){ if(Date.now() - Number(_up.t) > 24*60*60*1000){ _okU = false; showStatus('⏰ 유효기간이 만료된 링크입니다.<br>발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.'); } }
+        if(_okU){
+          part = String(_up.part||part||'');
+          car = String(_up.car||car||'');
+          if(_up.sf) isSafe6 = true;
+          loc = String(_up.loc||loc||'');
+          oName = String(_up.on||oName||'');
+          oPhone = String(_up.op||oPhone||'').replace(/[^0-9]/g,'');
+          keyNo = String(_up.kn||keyNo||'');
+          applyBiz(_up.bz); applyBizInfo(_up.bi); applyPromo(_up.pt);
+          try{ if(!eid && _up.eid) eid = String(_up.eid); }catch(e){}
+          renderHeader();
+          _urlShown = true;
+        }
+      }
+    }
+  }catch(e){}
+
+  if(_urlShown){
+    /* URL로 기본정보 표시됨 → 지도/서류/추적만 로드 (Firebase 연결 시 보강, 끊겨도 기본정보 유지) */
+    loadCarDocs(car);
+    if(car){ startLiveTracking(car); _checkAuthThenLog(car); } else { _logScan(''); }
+    _lastPartLoaded = part;
+    if(part){ loadPart(); } else { _hideParkLocIfNoPart(); }
+  } else if(lkey){
+    /* ★ FIX(카카오 템플릿 c= 고정 문제 대응): link_index에서 이 k(단축키)의
+       "진짜 코드"를 먼저 확인하고, URL의 c= 값과 다르면 진짜 값으로 바로잡는다.
+       (기존 구조는 그대로 두고, 조회 직전에 code만 보정) */
+    fdb.ref('link_index/'+lkey).once('value').then(function(idxSnap){
+      var _trueCode = idxSnap.val();
+      if(_trueCode && _trueCode !== code){
+        console.log('[코드보정] URL의 c=' + code + ' → 실제 ' + _trueCode + ' 로 보정');
+        code = _trueCode;
+      }
+      return fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value');
+    }).catch(function(){
+      /* link_index 조회 실패해도 원래 code로 그대로 진행(하위 호환) */
+      return fdb.ref('kd_rooms/'+code+'/links/'+lkey).once('value');
+    }).then(function(snap){
+      var d = snap.val();
+      /* ★ FIX: 링크 데이터가 아예 없는 경우 = 24시간 자동정리로 이미 삭제됐거나 잘못된 키.
+         예전에는 아무 안내 없이 "약도를 불러오는 중입니다..." 스피너에서 멈춰
+         고객에게는 먹통처럼 보였다. → 만료 안내를 명확히 표시한다.
+         (URL에 part/car가 직접 담긴 구형 링크는 그대로 진행) */
+      if(!d && !car && !part){
+        showStatus('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
+        return;
+      }
+      /* ★ 유효기간 24시간 — 생성(d.t) 후 24시간 지나면 만료 안내 */
+      if(d && typeof d === 'object' && d.t){
+        var _ageMs = Date.now() - Number(d.t);
+        var _limitMs = 24 * 60 * 60 * 1000; /* 24시간 */
+        if(_ageMs > _limitMs){
+          showStatus('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
+          return;
+        }
+      }
+      if(d && typeof d === 'object'){
+        part = String(d.part||part||'');
+        car = String(d.car||car||'');
+        if(d.sf) isSafe6 = true;
+        loc = String(d.loc||loc||'');
+        oName = String(d.on||oName||'');
+        oPhone = String(d.op||oPhone||'').replace(/[^0-9]/g,'');
+        keyNo = String(d.kn||keyNo||''); /* ★ 키번호 */
+        loadCarDocs(car); /* ★ 출고서류 — 차량번호 기준 조회 */
+        applyBiz(d.bz); /* ★ 업체명 */
+        applyBizInfo(d.bi); /* ★ 업체정보 */
+        applyPromo(d.pt); /* ★ 제휴점 정보 */
+        try{ if(!eid && d.eid) eid = String(d.eid); }catch(e){} /* ★ 단축링크 payload의 eid도 인정 */
+        renderHeader();
+      }
+      if(car){ startLiveTracking(car); _checkAuthThenLog(car); } else { _logScan(''); } /* ★ 실시간 반영 + 본인확인/기록 */
+      _lastPartLoaded = part;
+      if(part){ loadPart(); }
+      else { _hideParkLocIfNoPart(); }   /* ★ 주차현황판 미사용 매장 — 오류 메시지 대신 위치 섹션만 조용히 숨김 */
+    }).catch(function(){
+      showStatus('⚠️ 링크 정보를 불러오지 못했습니다.<br>네트워크를 확인해 주세요.');
+    });
+  } else {
+    if(car){ startLiveTracking(car); _checkAuthThenLog(car); } /* ★ 실시간 반영 + 본인확인/기록 */
+    _lastPartLoaded = part;
+    if(part){ loadPart(); } else { _hideParkLocIfNoPart(); }
+  }
+
+  /* 12초 안전장치 */
+  setTimeout(function(){
+    if(!loadedAny && !car && !loc) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인 후 다시 스캔해 주세요.');
+  }, 12000);
+})();
+</script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-10-06 · OEM view v23 (세이프6 알림톡 배지 반영)</div>
 </body>
 </html>
