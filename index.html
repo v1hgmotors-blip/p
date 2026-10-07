@@ -10648,7 +10648,14 @@ function _initBadgeSlider(slotEl){
   var sid = slotEl.id;
   /* ★ 배지 내용이 이전과 같고 이미 슬라이더가 있으면 재초기화 생략 (다른 칸 배지 리셋 방지) */
   var _bSig = Array.prototype.slice.call(slotEl.querySelectorAll('.slot-status, .slot-inspect-badge, .slot-encar-badge')).map(function(b){ return b.className + '|' + (b.textContent||'').trim(); }).join('##');
-  if(slotEl.dataset.badgeSig === _bSig && slotEl.querySelector('.slot-badge-wrap')){ return; }
+  /* ★ FIX(배지 멈춤 2026-10-07): 내용이 같아도 '타이머가 죽은' 다중배지 슬롯은 재시작해야 한다.
+     (키불출/키반납확인 배지 표시·제거 시 타이머만 clearInterval 되고 wrap은 남아 있어,
+      종전 조건으로는 재초기화가 생략되어 계약중↔D-n 순환이 멈춘 채 고정됨)
+     단, wrap을 일부러 숨겨 둔 상태(검색/반납확인 배지 표시 중)는 그대로 유지한다. */
+  var _w0 = slotEl.querySelector('.slot-badge-wrap');
+  if(slotEl.dataset.badgeSig === _bSig && _w0){
+    if(_w0.classList.contains('single') || _w0.style.display === 'none' || _badgeSliderTimers[sid]){ return; }
+  }
   slotEl.dataset.badgeSig = _bSig;
   if(_badgeSliderTimers[sid]){ clearInterval(_badgeSliderTimers[sid]); delete _badgeSliderTimers[sid]; }
   /* ★ FIX: wrap 제거 전 배지들을 slot으로 먼저 복귀시킴
