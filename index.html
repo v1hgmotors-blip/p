@@ -1204,6 +1204,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
     display:none !important;
   }
 }
+/* ★ 슬롯 상태배지(계약중/상품화중/판매완료/출고대기/세이프6 등) 및 엔카·성능 배지: 배지 안 텍스트 가운데 정렬 */
+.slot-status, .slot-encar-badge, .slot-inspect-badge{
+  text-align:center !important;
+}
 @keyframes blinkInspectRed{0%,100%{opacity:1;background:#EF4444;}50%{opacity:0.15;background:#EF4444;}}
 
 /* ══ PC 슬롯 레이아웃 개선 ══
@@ -2880,7 +2884,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <!-- ① 기본값 -->
     <div class="fb-restore-card default">
       <div class="fb-restore-card-title">🏠 기본값</div>
-      <div class="fb-restore-card-val" id="fbDefaultUrlTxt">🔥 https://kp-system-8e4eb-default-rtdb.firebaseio.com/<br>🔑 hangyul2024</div>
+      <div class="fb-restore-card-val" id="fbDefaultUrlTxt">🔥https://kp-system-8e4eb-default-rtdb.firebaseio.com/<br>🔑 hangyul2024</div>
     </div>
     <button class="fb-restore-btn default" onclick="fbChooseDefault()">① 기본값으로 연결</button>
 
@@ -4075,15 +4079,15 @@ var _safe6Partner = false;
    ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
   { n:'김준성',         p:'01090454247', t:'myshop-key-9000' },
-  { n:'이서찬',         p:'01036871785' },
-  { n:'김경수',         p:'01046971883' },
-  { n:'송욱',           p:'01037168602' },
-  { n:'송일석',         p:'01096666588' },
-  { n:'신정우',         p:'01089273421' },
-  { n:'김진희',         p:'01091394655' },
-  { n:'박윤상',         p:'01094174097' },
-  { n:'KANVLADIMIR',   p:'01058083711' },
-  { n:'TSOYYURIYGEORGIEVICH', p:'01076097787' }
+  { n:'이서찬',         p:'01036871785', t:'' },
+  { n:'송 욱',           p:'01037168602', t:'' },
+  { n:'송일석',         p:'01096666588', t:'' },
+  { n:'신정우',         p:'01089273421', t:'' },
+  { n:'김진희',         p:'01091394655', t:'' },
+  { n:'박윤상',         p:'01094174097', t:'' },
+  { n:'KIMALEKSANDR',   p:'01024728927', t:'' },
+  { n:'KANVLADIMIR',   p:'01058083711', t:''},
+  { n:'TSOYYURIYGEORGIEVICH', p:'01076097787', t:'' }
 ];
 
 function getOwnerList() {
