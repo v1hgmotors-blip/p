@@ -900,6 +900,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .slot-empty{font-size:var(--slot-empty-fs,14px);opacity:.15;margin-top:var(--slot-num-sz,22px);line-height:1;overflow:hidden;max-height:calc(var(--slot-h,70px) - var(--slot-num-sz,24px) - 8px);display:flex;align-items:center;justify-content:center;}
 
 .slot-status .b-emo,.slot-encar-badge .b-emo,.slot-inspect-badge .b-emo{display:var(--slot-badge-emo,inline);}
+/* ★ _kdBadgeCenter FIX(2026-10-09): 배지 상자는 칸 전체 폭인데 글자 정렬이
+   없어 왼쪽 끝에 붙어 있었다. 배지 안에서 가운데로 놓는다.
+   (성능검사·키불출 배지는 이미 가운데였고 상태배지·엔카배지만 빠져 있었다) */
+.slot-status,.slot-encar-badge,.slot-inspect-badge{text-align:center;}
 .slot-status{font-size:7.5px;font-weight:900;border-radius:4px;padding:1px 4px;margin-top:2px;line-height:1.1;letter-spacing:var(--slot-badge-ls,-.2px);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;max-width:100%;box-sizing:border-box;}
 .slot-status.contract{background:var(--contract-bg);color:var(--contract-tx);border:1px solid var(--contract-bd);}
 .slot-status.product {background:var(--product-bg); color:var(--product-tx); border:1px solid var(--product-bd);}
@@ -1203,10 +1207,6 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   .slot-inspect-badge{
     display:none !important;
   }
-}
-/* ★ 슬롯 상태배지(계약중/상품화중/판매완료/출고대기/세이프6 등) 및 엔카·성능 배지: 배지 안 텍스트 가운데 정렬 */
-.slot-status, .slot-encar-badge, .slot-inspect-badge{
-  text-align:center !important;
 }
 @keyframes blinkInspectRed{0%,100%{opacity:1;background:#EF4444;}50%{opacity:0.15;background:#EF4444;}}
 
@@ -2884,7 +2884,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <!-- ① 기본값 -->
     <div class="fb-restore-card default">
       <div class="fb-restore-card-title">🏠 기본값</div>
-      <div class="fb-restore-card-val" id="fbDefaultUrlTxt">🔥https://kp-system-8e4eb-default-rtdb.firebaseio.com/<br>🔑 hangyul2024</div>
+      <div class="fb-restore-card-val" id="fbDefaultUrlTxt">🔥 https://kp-system-8e4eb-default-rtdb.firebaseio.com/<br>🔑 hangyul2024</div>
     </div>
     <button class="fb-restore-btn default" onclick="fbChooseDefault()">① 기본값으로 연결</button>
 
@@ -3348,12 +3348,25 @@ function _fbSettingsRetrySchedule(){
 function _fbSafeUpdate(updObj, label){
   if(!fbSlotsRef) return;
   try{ if(updObj && updObj._localTs){ _myUploadTs = parseInt(updObj._localTs); _lastAppliedTs = _myUploadTs; } if(updObj && updObj._gridConfig){ _myGridSig = JSON.stringify(updObj._gridConfig); _lastGridSig = _myGridSig; } }catch(e){}
+  /* ★ _kdDeltaSync: 바뀐 칸 목록을 함께 올리고, 올라가는 동안 그 칸을 보호한다 */
+  _chgStamp(updObj, false);
+  var _ifKeys = [], _ifAt = Date.now();
+  try{ Object.keys(updObj).forEach(function(k){ if(k.charAt(0) !== '_'){ _ifKeys.push(k); _inflightAt[k] = _ifAt; } }); }catch(e){}
   fbSlotsRef.update(updObj)
     .then(function(){
       _fbFailStreak = 0;
       _fbRetryNotifyClear();
+      var _ackNow = Date.now(); _ifKeys.forEach(function(k){ _ackAt[k] = _ackNow; });
+      _ifKeys.forEach(function(k){ if(_inflightAt[k] === _ifAt) delete _inflightAt[k]; });
+      /* ★ 올리는 동안 건너뛴 칸은 서버 최종값을 다시 확인한다 (같은 칸 동시 저장 대비) */
+      var _re = _ifKeys.filter(function(k){ return _skipFlight[k] && !_isInflight(k); });
+      _re.forEach(function(k){ delete _skipFlight[k]; });
+      if(_re.length && typeof _applySlotDelta === 'function') _applySlotDelta(_re);
     })
     .catch(function(e){
+      /* ★ _kdDeltaSync: 못 올린 칸은 dirty 로 남겨, 앱을 껐다 켜도 다음 연결 때 칸 단위로 올린다 */
+      try{ var _dd = _getDirtySlots(); _ifKeys.forEach(function(k){ var _v = updObj[k]; _dd[k] = (_v && _v._ts) ? parseInt(_v._ts) : _tsNow(); });
+           localStorage.setItem(LS_OFFLINE_DIRTY, JSON.stringify(_dd)); }catch(e2){}
       console.warn('[FB 저장실패] '+(label||''), e);
       _fbFailStreak++;
       _fbRetryQueue.push({upd: updObj, retries: 0, label: label||'', ts: Date.now()});
@@ -3452,6 +3465,7 @@ function _doFbSafeSet(dataObj,label){
       if(_rescued > 0) console.warn('[유실방지] '+(label||'')+' — 차량슬롯 '+_rescued+'건 자동 복구 후 저장(빈값 덮어쓰기 차단)');
     }catch(e){ console.warn('[유실방지 가드 예외]', e); }
   }
+  _chgStamp(dataObj, true);   /* ★ _kdDeltaSync: 받는 기기는 전체를 받는다 */
   fbSlotsRef.set(dataObj)
     .then(function(){
       _fbFailStreak = 0;
@@ -3485,10 +3499,16 @@ function _fbRetryFlush(){
   /* ★ FIX: 재시도 시 _localTs 갱신 */
   if(item.upd && typeof item.upd === 'object'){
     item.upd._localTs = _tsNow();
+    _chgStamp(item.upd, !!item.isSet);   /* ★ _kdDeltaSync */
   }
   var op = item.isSet ? fbSlotsRef.set(item.upd) : fbSlotsRef.update(item.upd);
   op.then(function(){
     _fbFailStreak = 0;
+    /* ★ _kdDeltaSync: 이번에 올라간 칸의 dirty 정리 (그 사이 또 바뀐 칸은 남김) */
+    try{ if(!item.isSet){ var _dd = _getDirtySlots(), _ch = false;
+      Object.keys(item.upd).forEach(function(k){ if(k.charAt(0)==='_') return; var _v = item.upd[k];
+        var _ts = (_v && _v._ts) ? parseInt(_v._ts) : 0; if(_dd[k] && parseInt(_dd[k]) <= _ts){ delete _dd[k]; _ch = true; } });
+      if(_ch){ if(Object.keys(_dd).length) localStorage.setItem(LS_OFFLINE_DIRTY, JSON.stringify(_dd)); else localStorage.removeItem(LS_OFFLINE_DIRTY); } } }catch(e){}
     console.log('[FB 재시도 성공] '+item.label+' ('+item.retries+'회째)');
     if(!_fbRetryQueue.length) _fbRetryNotifyClear();
     else _fbRetrySchedule();
@@ -3611,12 +3631,13 @@ function _buildDirtyUpload(dirtySlots, localData, fbData){
    - dirty 슬롯이 하나라도 있으면 → 무조건 슬롯 단위 sync 필요
    - dirty 없으면 → 전체 TS 비교 (기존 로직) */
 function _tsLocalIsNewer(fbTs){
+  /* ★ _kdDeltaSync FIX(2026-10-09): 예전에는 「이 기기 시계로 찍은 마지막 저장 시각이 서버보다
+     5초 이상 크면 내가 최신」으로 봤다. 시계가 빠른 기기는 켤 때마다 자기가 최신이라 판단해
+     서버 전체를 자기 데이터로 덮어써, 다른 기기의 저장을 지웠다.
+     이제는 「아직 서버에 못 올린 칸(dirty)이 있는가」로만 판단한다.
+     (온라인 저장은 즉시 올라가고, 실패한 칸은 dirty 로 남는다) */
   var dirty = _getDirtySlots();
-  if(Object.keys(dirty).length > 0) return true; /* dirty 슬롯 있으면 항상 sync */
-  var local = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
-  if(!local) return false;
-  if(!fbTs)  return true;
-  return (local - fbTs) > 5000; /* fallback: 5초 기준 유지 */
+  return Object.keys(dirty).length > 0;
 }
 
 /* ══ 오프라인 상태 감지 플래그 ══ */
@@ -3815,6 +3836,7 @@ function _fbLocalFirstMerge(localData, localIds, localTs){
         _clearDirtyBatch(dirty);
         var fbTs2 = parseInt(fbData._localTs||'0');
         if(fbTs2 > 0) localStorage.setItem(LS_LOCAL_TS, String(fbTs2));
+        _autoFullLoad('after-dirty-merge');   /* ★ _kdDeltaSync: 다른 기기 변경도 받는다 */
         return;
       }
 
@@ -3825,7 +3847,7 @@ function _fbLocalFirstMerge(localData, localIds, localTs){
 
       /* update로 변경 슬롯만 전송 (전체 덮어쓰기 방지) */
       _showExchange(true); /* ★ 양방향 데이터 교환중 표시 ON */
-      fbSlotsRef.update(uploadPatch).then(function(){
+      fbSlotsRef.update(_chgStamp(uploadPatch, false)).then(function(){
         _showExchange(false); /* 업로드 완료 → 표시 OFF */
         console.log('[슬롯단위sync] '+patchCount+'개 슬롯 Firebase 업로드 완료');
         _clearDirtyBatch(dirty); /* ★ 업로드한 슬롯만 삭제(그 사이 저장분 보존) */
@@ -3837,6 +3859,7 @@ function _fbLocalFirstMerge(localData, localIds, localTs){
       }
     });
         _saveData(latestLocal);
+        _autoFullLoad('after-dirty-merge');   /* ★ _kdDeltaSync: 끊긴 사이 다른 기기 변경도 받는다 */
       }).catch(function(e){
         _showExchange(false); /* 실패 시에도 표시 OFF */
         console.warn('[슬롯단위sync] 업로드 실패 → 큐에 적재', e);
@@ -3859,7 +3882,7 @@ function _fbLocalFirstMerge(localData, localIds, localTs){
               모든 슬롯 데이터(구버전 S / 좌표ID C_ 모두)를 보존하도록 수정. */
       var fbSlotData = {};
       for(var k in fbData){
-        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||
+        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||k==='_chg'||
            k==='pb_search_return'||k==='pb_settings'||fbData[k]===null) continue;
         fbSlotData[k] = fbData[k];
       }
@@ -4079,15 +4102,15 @@ var _safe6Partner = false;
    ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
   { n:'김준성',         p:'01090454247', t:'myshop-key-9000' },
-  { n:'이서찬',         p:'01036871785', t:'' },
-  { n:'송 욱',           p:'01037168602', t:'' },
-  { n:'송일석',         p:'01096666588', t:'' },
-  { n:'신정우',         p:'01089273421', t:'' },
-  { n:'김진희',         p:'01091394655', t:'' },
-  { n:'박윤상',         p:'01094174097', t:'' },
-  { n:'KIMALEKSANDR',   p:'01024728927', t:'' },
-  { n:'KANVLADIMIR',   p:'01058083711', t:''},
-  { n:'TSOYYURIYGEORGIEVICH', p:'01076097787', t:'' }
+  { n:'이서찬',         p:'01036871785' },
+  { n:'김경수',         p:'01046971883' },
+  { n:'송욱',           p:'01037168602' },
+  { n:'송일석',         p:'01096666588' },
+  { n:'신정우',         p:'01089273421' },
+  { n:'김진희',         p:'01091394655' },
+  { n:'박윤상',         p:'01094174097' },
+  { n:'KANVLADIMIR',   p:'01058083711' },
+  { n:'TSOYYURIYGEORGIEVICH', p:'01076097787' }
 ];
 
 function getOwnerList() {
@@ -4657,7 +4680,7 @@ function _fbV7Update(updObj){
   if(needIdsSync){
     /* 새로 생성된 _ids를 Firebase에 먼저 push한 뒤 데이터 저장 */
     var _idsUpd = {_ids:_getIds(), _localTs: _tsToSend};
-    fbSlotsRef.update(_idsUpd).then(function(){
+    fbSlotsRef.update(_chgStamp(_idsUpd, false)).then(function(){   /* ★ _kdDeltaSync: 칸ID 변경 → 받는 기기는 전체 받기 */
       if(Object.keys(fbUpd).length){
         fbUpd._localTs = _tsToSend;
         _fbSafeUpdate(fbUpd, 'v7-ids-sync');
@@ -9926,12 +9949,19 @@ function swapSlotsData(a, b){
   /* ID는 그대로, 각 ID가 가리키는 데이터만 교환 */
   data[idA]=dB;
   data[idB]=dA;
+  /* ★ _kdDeltaSync FIX(2026-10-09): 맞바꾼 두 칸도 「방금 바뀐 칸」으로 시각을 찍고, 변경 시각(_localTs)을
+     함께 올린다. 예전에는 빠져 있어 다른 기기가 맞바꾼 것을 알 수 없었다(팝업도 안 떴다). */
+  var _swNow = _tsNow();
+  if(data[idA]) data[idA] = Object.assign({}, data[idA], {_ts:_swNow}); else delete data[idA];
+  if(data[idB]) data[idB] = Object.assign({}, data[idB], {_ts:_swNow}); else delete data[idB];
   _saveData(data);
+  try{ _tsMarkLocalWrite(); }catch(e){}
   /* Firebase: 변경된 ID 데이터만 업데이트 */
   if(fbSlotsRef){
     var upd={};
-    upd[idA]=data[idA];
-    upd[idB]=data[idB];
+    upd[idA]=(data[idA]==null)?null:data[idA];
+    upd[idB]=(data[idB]==null)?null:data[idB];
+    upd._localTs=String(_swNow);
     _fbSafeUpdate(upd,'swap');
   }
 
@@ -10422,6 +10452,10 @@ function buildGridSoft(){
   try{ _restoreSearchReturn(); }catch(e){}
   try{ _updateKeyIssueBanner(); }catch(e){}
   try{ updateCarCountBadge(); }catch(e){}
+  /* ★ _kdBadgeStuckFix FIX(2026-10-09): 다시 그리면 배지 상자가 사라지므로
+     여기서 스스로 다시 만든다. 예전에는 부르는 쪽이 깜빡 잊으면 배지가 겹쳐 멈췄다.
+     (250ms 디바운스 + 내용 같은 칸은 건너뛰므로 중복 호출해도 부담 없음) */
+  try{ if(typeof _initAllBadgeSliders === 'function') _initAllBadgeSliders(); }catch(e){}
 }
 function buildGrid(){
   try{ window._lastRenderTs = Date.now(); }catch(e){}
@@ -10487,6 +10521,9 @@ function buildGrid(){
     _fitSlotBadgeFs();
     setTimeout(function(){ _fitSlotBadgeFs(); }, 130);
   }
+  /* ★ _kdBadgeStuckFix FIX(2026-10-09): 전부 새로 만들었으므로 배지 상자도 다시 만든다.
+     (부르는 쪽에서 또 불러도 디바운스로 한 번만 실행된다) */
+  try{ if(typeof _initAllBadgeSliders === 'function') _initAllBadgeSliders(); }catch(e){}
 }
 /* ★ 검색 하이라이트만 조용히 재적용 (자동 스크롤·파트 강제펼침 없음)
    → 그리드 재생성 후에도 검색 표시가 유지되며, 사용자의 현재 화면 위치를 방해하지 않음 */
@@ -10652,14 +10689,15 @@ function _initBadgeSlider(slotEl){
   var sid = slotEl.id;
   /* ★ 배지 내용이 이전과 같고 이미 슬라이더가 있으면 재초기화 생략 (다른 칸 배지 리셋 방지) */
   var _bSig = Array.prototype.slice.call(slotEl.querySelectorAll('.slot-status, .slot-inspect-badge, .slot-encar-badge')).map(function(b){ return b.className + '|' + (b.textContent||'').trim(); }).join('##');
-  /* ★ FIX(배지 멈춤 2026-10-07): 내용이 같아도 '타이머가 죽은' 다중배지 슬롯은 재시작해야 한다.
-     (키불출/키반납확인 배지 표시·제거 시 타이머만 clearInterval 되고 wrap은 남아 있어,
-      종전 조건으로는 재초기화가 생략되어 계약중↔D-n 순환이 멈춘 채 고정됨)
-     단, wrap을 일부러 숨겨 둔 상태(검색/반납확인 배지 표시 중)는 그대로 유지한다. */
-  var _w0 = slotEl.querySelector('.slot-badge-wrap');
-  if(slotEl.dataset.badgeSig === _bSig && _w0){
-    if(_w0.classList.contains('single') || _w0.style.display === 'none' || _badgeSliderTimers[sid]){ return; }
-  }
+  /* ★ _kdBadgeTimerFix FIX(2026-10-09): 내용이 같아도 「회전이 멈춰 있으면」 다시 살린다.
+     🔑키불출·키반납확인 배지를 붙일 때는 상자를 숨기고 회전을 일부러 멈추는데,
+     배지를 뗀 뒤 이 조건에 걸려 타이머가 다시 안 켜져서 그 칸만 배지가 멈춰 있었다.
+     (상자가 숨겨져 있으면 = 일부러 멈춘 상태이므로 예전처럼 그대로 둔다) */
+  var _wrapNow  = slotEl.querySelector('.slot-badge-wrap');
+  var _paused   = !!(_wrapNow && _wrapNow.style.display === 'none');
+  var _itemCnt  = _wrapNow ? _wrapNow.querySelectorAll('.slot-badge-item').length : 0;
+  var _spinning = (typeof _badgeSliderTimers !== 'undefined') && !!_badgeSliderTimers[sid];
+  if(slotEl.dataset.badgeSig === _bSig && _wrapNow && (_paused || _itemCnt < 2 || _spinning)){ return; }
   slotEl.dataset.badgeSig = _bSig;
   if(_badgeSliderTimers[sid]){ clearInterval(_badgeSliderTimers[sid]); delete _badgeSliderTimers[sid]; }
   /* ★ FIX: wrap 제거 전 배지들을 slot으로 먼저 복귀시킴
@@ -10690,6 +10728,14 @@ function _initBadgeSlider(slotEl){
     wrap.appendChild(item);
   });
   slotEl.appendChild(wrap);
+
+  /* ★ _kdBadgePinFix FIX(2026-10-09): 🔑키불출·키반납확인 배지가 붙어 있는 칸은
+     그 배지가 같은 자리(아래쪽)를 쓰므로, 상태배지 상자는 숨긴 채 두고 회전도 걸지 않는다.
+     (예전에는 화면을 다시 그릴 때 상자가 되살아나 두 배지가 겹쳐 보였다) */
+  if(slotEl.querySelector('.slot-search-issue-badge,.slot-search-return-badge,.slot-dispatch-badge')){
+    wrap.style.display = 'none';
+    return;
+  }
 
   /* 1개: CSS로 항상 표시 */
   if(badges.length === 1) return;
@@ -14318,8 +14364,14 @@ function _applyGridConfigFromSlots(data) {
    → 새 기기/초기화 후 재연결 시 올바른 그리드 구조로 렌더링 보장 */
 function _ensureGridConfigInFirebase() {
   if (!fbSlotsRef) return;
-  fbSlotsRef.once('value').then(function(snap) {
-    var d = snap.val() || {};
+  /* ★ _kdGridCfgSlim FIX(2026-10-09): 예전에는 _gridConfig·_ids 두 값만 보려고
+     주차칸 전체를 내려받았다(앱 열 때마다 13KB 낭비). 두 값만 따로 읽는다.
+     아래 판정·쓰기 로직은 그대로다. 읽어오는 범위만 좁혔다. */
+  Promise.all([
+    fbSlotsRef.child('_gridConfig').once('value'),
+    fbSlotsRef.child('_ids').once('value')
+  ]).then(function(snaps) {
+    var d = { _gridConfig: snaps[0].val(), _ids: snaps[1].val() };
     var upd = {};
     /* _gridConfig 없으면 추가 */
     if (!d._gridConfig) { upd._gridConfig = _getGridConfig(); }
@@ -14755,6 +14807,172 @@ var _gridWatchRef = null;        /* 구조(_gridConfig) 감시용 */
 var _lastGridSig = '';           /* 마지막 적용한 구조 서명 */
 var _myGridSig = '';             /* 내가 방금 올린 구조 서명 */
 
+/* ═══ ★ _kdDeltaSync (2026-10-09): 바뀐 칸만 받기 ═══
+   쓰는 기기는 자기 알림칸 pb_slots/_chg/{기기표식} 에 {t:_localTs, n:순번, ids:[바뀐 칸]} 을
+   함께 올리고, 받는 기기는 그 칸만 받아 바로 반영한다(팝업 없음).
+   · 기기마다 자기 칸에만 쓰므로 여러 기기가 동시에 저장해도 서로의 알림을 가리지 않는다
+   · 기기별 순번이 1씩 이어지지 않으면 = 중간 변경을 놓쳤다 → 전체를 받는다
+   · _chg 없이 _localTs 만 바뀌면(구버전 기기 등) → 1.5초 뒤 전체를 받는다
+   · 시각의 「크고 작음」을 비교하지 않으므로 기기 시계가 틀려도 놓치지 않는다 */
+var _pbDevId = 'd' + Math.random().toString(36).slice(2,10) + (Date.now()%1e6).toString(36);
+var _chgWatchRef = null;
+var _tsLastSeen = '';
+var _chgApplied = {};             /* 이미 반영한(또는 내가 올린) _localTs 값 */
+var _tsSeenOnce = false;
+var _initLoaded = false, _initTs = '';
+var _tsPending = {}, _tsPendTimer = null;
+var _inflightAt = {};             /* 올리는 중인 칸: 그 사이 들어온 값으로 되돌리지 않는다 */
+var _afTimer = null;
+var _skipFlight = {};             /* 올리는 중이라 건너뛴 칸 → 끝나면 다시 확인 */
+var _ackAt = {};                  /* 내 저장이 서버에 반영된 시각(이 기기 기준) */
+var _fullReadStart = 0;          /* 전체 받기가 서버를 읽기 시작한 시각 */
+var _myChgN = 0;                  /* 내 알림 순번 */
+var _seenN = {};                  /* 기기별로 반영을 마친 순번 */
+var _chgSeenAt = {};              /* 기기별 알림이 마지막으로 바뀐 것을 본 시각(이 기기 시계) */
+var _chgDeferred = null;          /* 첫 전체 받기 전에 온 알림 → 끝난 뒤 처리 */
+var _CHG_STALE = 30*60*1000;      /* 30분 넘게 조용한 기기 알림칸은 정리한다 */
+function _isInflight(id){ var t = _inflightAt[id]; return !!(t && (Date.now() - t) < 120000); }
+function _chgStamp(obj, isSet){
+  try{
+    if(!obj || typeof obj !== 'object' || obj._localTs == null) return obj;
+    var t = String(obj._localTs), ids = [], meta = false;
+    Object.keys(obj).forEach(function(k){
+      if(k === '_localTs' || k === '_chg' || k.indexOf('_chg/') === 0) return;
+      if(k.charAt(0) === '_'){ meta = true; return; }
+      ids.push(k);
+    });
+    var c = { t: t, n: ++_myChgN };
+    if(isSet || meta || !ids.length || ids.length > 40) c.full = 1; else c.ids = ids;
+    if(isSet){
+      var m = {}; m[_pbDevId] = c; obj._chg = m;      /* 통째 저장: 알림칸도 내 것만 남는다 */
+    } else {
+      Object.keys(obj).forEach(function(k){ if(k.indexOf('_chg/') === 0) delete obj[k]; });
+      obj['_chg/' + _pbDevId] = c;
+      /* 오래 조용한 기기(앱을 닫은 기기)의 알림칸 정리 — 지워도 그 기기가 다시 쓰면 받는 쪽은 전체를 받아 맞춘다 */
+      var now = Date.now(), cut = 0;
+      Object.keys(_chgSeenAt).forEach(function(d){
+        if(d !== _pbDevId && cut < 5 && (now - _chgSeenAt[d]) > _CHG_STALE){ obj['_chg/' + d] = null; delete _chgSeenAt[d]; cut++; }
+      });
+    }
+    _tsLastSeen = t;
+    _chgApplied[t] = 1;
+  }catch(e){}
+  return obj;
+}
+function _autoFullLoad(reason){
+  if(_afTimer) clearTimeout(_afTimer);
+  /* ★ _kdChainFull: 바뀐 칸 받기와 같은 줄에 세워, 읽고 반영하는 순서를 지킨다 */
+  _afTimer = setTimeout(function(){ _afTimer = null;
+    _deltaChain = _deltaChain.then(function(){ try{ return _loadSlotsOnce(reason || 'auto'); }catch(e){} }).catch(function(){});
+  }, 350);
+}
+function _queueTsCheck(v){
+  _tsPending[v] = 1;
+  if(_tsPendTimer) return;
+  _tsPendTimer = setTimeout(function(){
+    _tsPendTimer = null;
+    var need = false;
+    Object.keys(_tsPending).forEach(function(k){ if(!_chgApplied[k]) need = true; });
+    _tsPending = {};
+    if(need) _autoFullLoad('ts-fallback');
+  }, 1500);
+}
+function _onTsEvent(v){
+  v = (v == null) ? '' : String(v);
+  if(!v) return;
+  if(!_tsSeenOnce){
+    _tsSeenOnce = true;
+    if(!_tsLastSeen) _tsLastSeen = v;
+    if(_initLoaded && v !== _initTs && !_chgApplied[v]) _queueTsCheck(v);
+    else _chgApplied[v] = 1;
+    return;
+  }
+  if(v === _tsLastSeen) return;
+  _tsLastSeen = v;
+  if(v === String(_myUploadTs)) _chgApplied[v] = 1;
+  if(_chgApplied[v]) return;
+  _queueTsCheck(v);
+}
+/* 전체 받기로 받은 _chg 지도 → 그 순번까지는 반영된 것으로 기록 */
+function _chgBaseline(m){
+  if(!m || typeof m !== 'object') return;
+  var now = Date.now();
+  Object.keys(m).forEach(function(d){
+    var c = m[d]; if(!c || typeof c !== 'object') return;
+    var n = parseInt(c.n) || 0;
+    if(c.t != null) _chgApplied[String(c.t)] = 1;
+    if(d === _pbDevId) return;
+    if(_seenN[d] == null || n > _seenN[d]) _seenN[d] = n;
+    if(_chgSeenAt[d] == null) _chgSeenAt[d] = now;
+  });
+}
+function _onChgMap(m){
+  if(!_initLoaded){ _chgDeferred = m || {}; return; }   /* 첫 전체 받기가 끝나면 다시 본다 */
+  if(!m || typeof m !== 'object') return;
+  var now = Date.now(), ids = {}, full = false;
+  Object.keys(m).forEach(function(d){
+    var c = m[d]; if(!c || typeof c !== 'object' || d === _pbDevId) return;
+    var n = parseInt(c.n) || 0, s = _seenN[d];
+    if(s != null && n <= s) return;                       /* 이미 반영함 */
+    _chgSeenAt[d] = now;
+    if(c.t != null) _chgApplied[String(c.t)] = 1;
+    var next = (s != null) ? (n === s + 1) : (n === 1);   /* 순번이 이어지는가 */
+    _seenN[d] = n;
+    if(!next || c.full || !c.ids || !c.ids.length){ full = true; return; }
+    c.ids.forEach(function(id){ if(typeof id === 'string' && id.charAt(0) !== '_') ids[id] = 1; });
+  });
+  if(full){ _autoFullLoad('chg-full'); return; }
+  var list = Object.keys(ids);
+  if(list.length) _applySlotDelta(list);
+}
+var _deltaChain = Promise.resolve();
+function _applySlotDelta(ids){
+  var _rs = 0;
+  _deltaChain = _deltaChain.then(function(){
+    _rs = Date.now();
+    return Promise.all(ids.map(function(id){
+      return fbSlotsRef.child(id).once('value').then(function(s){ return [id, s.val()]; });
+    }));
+  }).then(function(pairs){
+    var data = _getData(), dirty = _getDirtySlots(), changed = [], _again = [];
+    pairs.forEach(function(pr){
+      var id = pr[0], v = pr[1];
+      if(_isInflight(id)){ _skipFlight[id] = 1; return; }       /* 내 저장이 올라가는 중 → 끝나면 다시 확인 */
+      if(_ackAt[id] && _ackAt[id] >= _rs){ _again.push(id); return; }  /* 읽은 뒤에 내 저장이 끝남 → 다시 확인 */
+      if(dirty[id]){                                            /* 내가 아직 못 올린 변경 */
+        var rts = (v && v._ts) ? parseInt(v._ts) : 0;
+        if(parseInt(dirty[id]) >= rts) return;
+      }
+      if(JSON.stringify(data[id] || null) === JSON.stringify(v || null)) return;
+      if(v == null) delete data[id]; else data[id] = v;
+      changed.push(id);
+      try{ if(window._fbPrevSlotCache){ if(v == null) delete window._fbPrevSlotCache[id];
+           else window._fbPrevSlotCache[id] = JSON.parse(JSON.stringify(v)); } }catch(e){}
+    });
+    if(_again.length) setTimeout(function(){ _applySlotDelta(_again); }, 0);
+    if(!changed.length) return;
+    _saveData(data);
+    var hit = false, openHit = false;
+    for(var i = 0; i < TOTAL; i++){
+      var gid = _gidx2id(i);
+      if(gid && changed.indexOf(gid) >= 0){
+        refreshSlot(i); hit = true;
+        if(typeof activeSlot !== 'undefined' && activeSlot === i) openHit = true;
+      }
+    }
+    if(!hit){ try{ _fbSoftRedraw(false); }catch(e){} }
+    try{ updateCarCountBadge(); }catch(e){}
+    try{ if(typeof updatePartCarCountBadges === 'function') updatePartCarCountBadges(); }catch(e){}
+    try{ _encarUpdateCount(); _encarApplyBlinks(); }catch(e){}
+    try{ if(typeof _inspectApplyBlinks === 'function') _inspectApplyBlinks(); }catch(e){}
+    if(openHit){ try{ showToast('⚠️ 다른 기기에서 지금 열어 둔 칸이 바뀌었습니다', 'info'); }catch(e){} }
+    console.log('[바뀐칸 받기] ' + changed.length + '칸 반영');
+  }).catch(function(e){
+    console.warn('[바뀐칸 받기 실패 → 전체 받기]', e);
+    _autoFullLoad('delta-fail');
+  });
+}
+
 /* 기존 on('value') 콜백 본체 — 이름만 붙여 재사용 (로직 변경 없음) */
 function _applySlotSnapshot(snap){
     window._fbGotRealData = true;   /* ★ Firebase 실제 데이터 수신됨 (스플래시 해제 판단용) */
@@ -14863,7 +15081,7 @@ function _applySlotSnapshot(snap){
       var recvSlots={};
       for(var k in data){
         /* ★ 슬롯 데이터 키만 포함 — 메타/키불출 관련 키 제외 */
-        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||
+        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||k==='_chg'||
            k==='pb_search_return'||k==='pb_settings'||data[k]===null) continue;
         recvSlots[k]=data[k];
       }
@@ -14896,16 +15114,19 @@ function _applySlotSnapshot(snap){
           _newData[_targetId] = recvSlots[_rk];
         }
         /* 로컬에만 있는 최신 데이터 보존 */
-        var _localTs2 = parseInt(localStorage.getItem(LS_LOCAL_TS)||'0');
-        var _fbTs2    = parseInt(data._localTs||'0');
-        if(_localTs2 > _fbTs2 + 5000){
-          var _localExisting = _getData();
-          for(var _lk in _localExisting){
-            if(_localExisting[_lk] && _localExisting[_lk].car && !_newData[_lk]){
-              _newData[_lk] = _localExisting[_lk];
-            }
-          }
-        }
+        /* ★ _kdDeltaSync FIX: 시계 비교 대신 「지금 올라가는 중이거나 아직 못 올린 칸」만
+           이 기기 값을 유지한다. 나머지는 서버(최신) 값을 그대로 쓴다. */
+        var _localExisting = _getData(), _dirtyNow = _getDirtySlots();
+        var _fAgain = [];
+        Object.keys(_inflightAt).concat(Object.keys(_dirtyNow), Object.keys(_ackAt)).forEach(function(_lk){
+          var _late = !!(_ackAt[_lk] && _ackAt[_lk] >= _fullReadStart);   /* 읽은 뒤에 끝난 내 저장 */
+          if(!_isInflight(_lk) && !_dirtyNow[_lk] && !_late) return;
+          if(_late && !_isInflight(_lk) && _fAgain.indexOf(_lk) < 0) _fAgain.push(_lk);
+          if(_isInflight(_lk)) _skipFlight[_lk] = 1;
+          if(_localExisting[_lk]) _newData[_lk] = _localExisting[_lk];
+          else delete _newData[_lk];
+        });
+        if(_fAgain.length) setTimeout(function(){ try{ _applySlotDelta(_fAgain); }catch(e){} }, 0);
         _saveData(_newData);
         _saveIds(_safeIds);
         console.log('[ID] Firebase _ids 적용 + 좌표 ID 변환 완료');
@@ -14917,7 +15138,7 @@ function _applySlotSnapshot(snap){
       /* _ids 없음(구형): 파트키/전역인덱스 변환 */
       var recvSlots2={};
       for(var k in data){
-        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||
+        if(k==='_cleared'||k==='_gridConfig'||k==='_ids'||k==='_localTs'||k==='_chg'||
            k==='pb_search_return'||k==='pb_settings'||data[k]===null)continue;
         recvSlots2[k]=data[k];
       }
@@ -15051,16 +15272,24 @@ function _computeGridSig(snapVal){
 /* ★★ 원격 슬롯 1회 로드 → 기존 로직 적용 (확인/구조변경 시 호출) ★★ */
 function _loadSlotsOnce(reason){
   if(!fbSlotsRef) return;
-  fbSlotsRef.once('value').then(function(snap){
+  _fullReadStart = Date.now();
+  return fbSlotsRef.once('value').then(function(snap){   /* ★ _kdChainFull: 끝을 기다릴 수 있게 반환 */
     try{
       var d = snap.val();
       var ts = (d && d._localTs) ? parseInt(d._localTs) : 0;
       _lastAppliedTs = ts || _lastAppliedTs;
       _lastGridSig = _computeGridSig(d);   /* 구조 서명도 갱신 */
+      /* ★ _kdDeltaSync: 방금 받은 상태를 기준으로 기록 */
+      var _lt = (d && d._localTs != null) ? String(d._localTs) : '';
+      if(_lt){ _chgApplied[_lt] = 1; if(!_tsLastSeen) _tsLastSeen = _lt; }
+      _chgBaseline(d && d._chg);
+      if(reason === 'initial'){ _initTs = _lt; }
     }catch(e){}
     _applySlotSnapshot(snap);
     _pendingRemoteUpdate = false;
     _hideRemoteUpdateModal();
+    /* ★ _kdDeltaSync: 첫 전체 받기 전에 온 알림은 이제 처리한다 */
+    if(!_initLoaded){ _initLoaded = true; if(_chgDeferred){ var _cd = _chgDeferred; _chgDeferred = null; try{ _onChgMap(_cd); }catch(e){} } }
     console.log('[LOWDL] 슬롯 1회 로드 완료 ('+(reason||'')+')');
   }).catch(function(err){ _slotsListenerError(err); });
 }
@@ -15112,27 +15341,16 @@ function _registerSlotsOnListener(){
 
   var code = localStorage.getItem(LS_CODE)||'';
 
-  /* 2) _localTs(슬롯 변경) 감시 → 모달 (일반 차량이동/불출은 확인 후 반영) */
+  /* 2) ★ _kdDeltaSync: 바뀐 칸 목록(_chg) 감시 → 그 칸만 받아 즉시 반영 (팝업 없음) */
+  _tsSeenOnce = false;
+  try{ if(_chgWatchRef) _chgWatchRef.off('value'); }catch(e){}
+  _chgWatchRef = fbDb.ref('kd_rooms/'+code+'/pb_slots/_chg');
+  _chgWatchRef.on('value', function(cs){ try{ _onChgMap(cs.val()); }catch(e){ console.warn('[바뀐칸]', e); } }, _slotsListenerError);
+
+  /* 2-b) _localTs 감시 — _chg 없이 바뀐 경우(구버전 기기·일괄 작업)는 전체를 자동으로 받는다 */
   try{ if(_tsWatchRef) _tsWatchRef.off('value'); }catch(e){}
   _tsWatchRef = fbDb.ref('kd_rooms/'+code+'/pb_slots/_localTs');
-  _tsWatchRef.on('value', function(tsSnap){
-    var remoteTs = parseInt(tsSnap.val()||'0');
-    if(!remoteTs) return;
-    if(remoteTs === _myUploadTs){ _lastAppliedTs = remoteTs; return; }
-    if(!_lastAppliedTs){ _lastAppliedTs = remoteTs; return; }
-    if(remoteTs > _lastAppliedTs){
-      /* ★ 모달을 바로 띄우지 않고 0.6초 지연 → 같은 변경이 구조변경(_gridConfig)이면
-         그 사이 _gridWatch가 즉시 로드하며 _lastAppliedTs를 올려 모달이 취소됨.
-         (열밀기/당기기는 _localTs·_gridConfig 동시 변경 → 모달 중복 방지) */
-      var _tsAtSchedule = remoteTs;
-      setTimeout(function(){
-        /* 지연 사이 이미 로드됐으면(구조변경 등) 모달 안 띄움 */
-        if(_lastAppliedTs >= _tsAtSchedule) return;
-        if(_pendingRemoteUpdate) return;
-        _showRemoteUpdateModal();
-      }, 600);
-    }
-  }, _slotsListenerError);
+  _tsWatchRef.on('value', function(tsSnap){ try{ _onTsEvent(tsSnap.val()); }catch(e){} }, _slotsListenerError);
 
   /* 3) ★방법A: _gridConfig(구조) 감시 → 열밀기/당기기/열간격 변경은 '모달 없이 즉시' 반영 */
   try{ if(_gridWatchRef) _gridWatchRef.off('value'); }catch(e){}
@@ -15151,7 +15369,8 @@ function _registerSlotsOnListener(){
       _lastGridSig = sig;
       _hideRemoteUpdateModal();   /* 혹시 먼저 뜬 모달 닫기 */
       _pendingRemoteUpdate = false;
-      _loadSlotsOnce('grid-change');  /* 내부에서 _lastAppliedTs 갱신 → 이후 _tsWatch 모달 안뜸 */
+      /* ★ _kdChainFull: 다른 수신과 같은 줄에서 순서대로 */
+      _deltaChain = _deltaChain.then(function(){ return _loadSlotsOnce('grid-change'); }).catch(function(){});
     }
   }, _slotsListenerError);
 }
@@ -15669,18 +15888,9 @@ function _handleGoOnline(){
         if(_st2) _st2.textContent = '📤 변경된 슬롯 동기화 중...';
         _fbLocalFirstMerge(_getData(), _getIds(), localTs);
       } else {
-        fbSlotsRef.once('value').then(function(snap){
-          var _fbTs = parseInt((snap.val()||{})._localTs||'0');
-          if(_tsLocalIsNewer(_fbTs)){
-            var _ld = _getData();
-            if(Object.keys(_ld).some(function(k){ return _ld[k]&&_ld[k].car; })){
-              console.log('[온라인복귀] 로컬→Firebase 동기화 (TS 비교)');
-              var _st3 = document.getElementById('syncStatus');
-              if(_st3) _st3.textContent = '📤 오프라인 데이터 업로드 중...';
-              _fbLocalFirstMerge(_ld, _getIds(), localTs);
-            }
-          }
-        }).catch(function(e){ console.warn('[온라인복귀] Firebase 읽기 실패', e); });
+        /* ★ _kdDeltaSync FIX: 못 올린 칸이 없으면, 끊겨 있던 사이 다른 기기가 바꾼 것을 받는다.
+           (예전에는 시계로 「내가 최신」을 판정해 서버를 덮어쓰거나, 아무것도 받지 않았다) */
+        _autoFullLoad('online');
       }
     }
   }, 1500);
@@ -16604,6 +16814,7 @@ function doBackup2Import(input){
       /* Firebase에 슬롯 + 설정 + 엔카 동시 push */
       if(fbSlotsRef && fbSettingsRef){
         restoredSlots._localTs = _tsNow();
+        _chgStamp(restoredSlots, true);   /* ★ _kdDeltaSync: 복원 → 받는 기기는 전체 받기 */
         fbSlotsRef.set(restoredSlots)
           .then(function(){ return fbSettingsRef.update(settingsToFb); })
           .then(function(){
@@ -24140,16 +24351,11 @@ setTimeout(function(){ try{ if(typeof _restoreOwnerBackupIfEmpty==='function') _
 /* ★★ PC에서 창 닫기/새로고침 시 — 모든 데이터 안전 저장(localStorage + Firebase) + 확인창 */
 function _saveAllOnClose(){
   try{ _saveData(_getData()); }catch(e){}
-  try{
-    if(typeof fbSlotsRef!=='undefined' && fbSlotsRef && typeof _fbSafeSet==='function'){
-      var _full = Object.assign({}, _getData(), {
-        _ids:        (typeof _getIds==='function' ? _getIds() : undefined),
-        _gridConfig: (typeof _getGridConfig==='function' ? _getGridConfig() : undefined),
-        _localTs:    (typeof _tsNow==='function' ? _tsNow() : Date.now())
-      });
-      _fbSafeSet(_full, 'close-save');
-    }
-  }catch(e){}
+  /* ★ _kdDeltaSync FIX(2026-10-09): 예전에는 여기서 서버 전체를 이 기기 데이터로 통째로
+     덮어썼다(set). 휴대폰에서 다른 앱으로 넘어가기만 해도(pagehide) 실행돼, 옛 데이터를 가진
+     기기가 다른 기기의 최신 저장을 서버에서 지웠다.
+     온라인 저장은 이미 칸마다 즉시 올라가고, 못 올린 칸은 dirty 로 남아 다음 연결 때 칸 단위로
+     안전하게 올라가므로, 닫을 때는 이 기기에만 저장한다. */
 }
 (function(){
   /* ★ 조용히 저장 — 확인창 없이 localStorage + Firebase 저장만 수행 */
