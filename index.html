@@ -2502,6 +2502,13 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button type="button" id="smsModeBtn" onclick="toggleSmsMode()" style="padding:5px 10px;border:none;border-radius:8px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;background:#1D4ED8;color:#fff;letter-spacing:-.3px;">🔗 링크 49.5원</button>
       <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;width:100%;">🗺️알림톡=키불출 시 딜러에 알림톡(문자대체) · 📲문자=약도 문자 · 🔳QR만=자동발송 안 함, 팝업/수동전송만 (문자서버 연동 필요)</span>
     </div>
+    <!-- ★ 알림 채널 선택 (2026-10-15): 카카오 알림톡 / 네이버 톡톡 — 공유방 공통(kd_msg_channel) -->
+    <div class="storage-mode-row" id="kdChRow" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
+      <span class="storage-mode-label">💬 알림채널</span>
+      <button type="button" id="kdCh_kakao" onclick="kdSetMsgChannel('kakao')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">💛 카카오 알림톡</button>
+      <button type="button" id="kdCh_naver" onclick="kdSetMsgChannel('naver')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">💚 네이버 톡톡</button>
+      <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;width:100%;">알림톡 발송 시 고른 채널로 먼저 보내고, 안 되면 다른 채널 → 문자로 대신 발송 · 키불출앱과 같은 설정(모든 기기 공통) · 네이버는 문자서버에 톡톡 아이디·템플릿 등록 후 동작</span>
+    </div>
   </div>
 </div>
 
@@ -4115,15 +4122,15 @@ var _safe6Partner = false;
    ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
   { n:'김준성',         p:'01090454247', t:'myshop-key-9000' },
-  { n:'이서찬',         p:'01036871785', t:'' },
-  { n:'송욱',           p:'01037168602', t:'' },
-  { n:'송일석',         p:'01096666588', t:'' },
-  { n:'신정우',         p:'01089273421', t:'' },
-  { n:'김진희',         p:'01091394655', t:'' },
-  { n:'박윤상',         p:'01094174097', t:'' },
-  { n:'KIMALEKSANDR',   p:'01024728927', t:'' },
-  { n:'KANVLADIMIR',   p:'01058083711', t:'' },
-  { n:'TSOYYURIYGEORGIEVICH', p:'01076097787', t:'' }
+  { n:'이서찬',         p:'01036871785' },
+  { n:'김경수',         p:'01046971883' },
+  { n:'송욱',           p:'01037168602' },
+  { n:'송일석',         p:'01096666588' },
+  { n:'신정우',         p:'01089273421' },
+  { n:'김진희',         p:'01091394655' },
+  { n:'박윤상',         p:'01094174097' },
+  { n:'KANVLADIMIR',   p:'01058083711' },
+  { n:'TSOYYURIYGEORGIEVICH', p:'01076097787' }
 ];
 
 function getOwnerList() {
@@ -12357,15 +12364,9 @@ function _renderDocList(){
     dlBtn.textContent='⬇️';
     dlBtn.title='다운로드';
     dlBtn.style.cssText='flex-shrink:0;border:none;background:#DBEAFE;color:#2563EB;border-radius:6px;padding:4px 9px;font-size:13px;cursor:pointer;';
-    dlBtn.onclick=function(){
-      _miniConfirmType='download_doc';
-      _miniConfirmPayload={doc:d, docId:id};
-      document.getElementById('miniConfirmIcon').textContent='📥';
-      document.getElementById('miniConfirmMsg').textContent='이 서류를 다운로드하시겠습니까?\n'+(d.name||'서류');
-      var _dlOkBtn=document.getElementById('miniConfirmOkBtn');
-      _dlOkBtn.className='mini-confirm-ok sale'; _dlOkBtn.style.cssText=''; _dlOkBtn.textContent='다운로드';
-      document.getElementById('miniConfirmOv').classList.add('show');
-    };
+    dlBtn.title='미리보기 · 다운로드 · 인쇄';
+    /* ★ (2026-10-16) 누르면 「👁️ 미리보기 · ⬇️ 다운로드 · 🖨️ 인쇄」 선택 창 */
+    dlBtn.onclick=function(){ _pbDocActions(d, id); };
     var delBtn=document.createElement('button');
     delBtn.type='button';
     delBtn.textContent='🗑️';
@@ -25310,6 +25311,393 @@ function _kdShowCodeGate(appName, needFn, saveFn){
 }
 _kdShowCodeGate('주차현황판', function(){ var c=(localStorage.getItem(LS_CODE)||'').trim(); var dc=(typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS && _PB_DEFAULTS.code)||''; return !c && !dc; },
   function(code){ localStorage.setItem(LS_CODE, code); });
+</script>
+<style id="kdPressCss">
+/* ★ (2026-10-12) 탭 눌림 표시 + 탭 지연 제거
+   · 누르는 순간 그 버튼(가장 안쪽의 누를 수 있는 요소 하나)만 살짝 어둡게, 작은 버튼은 살짝 작게
+   · 두 번 탭 확대 대기(약 0.3초)를 없애 탭하자마자 반응 (두 손가락 확대는 그대로) */
+html{touch-action:manipulation;}
+.kd-pressed{filter:brightness(.86) !important;}
+.kd-pressed-s{scale:.97;}
+</style>
+<script>
+(function(){
+  if(window.__kdPressInit) return; window.__kdPressInit = true;
+  var SEL = 'button,a[href],[role="button"],[onclick],input[type="button"],input[type="submit"],label[for],summary,.btn';
+  var cur = null, t0 = 0;
+  function pick(t){
+    try{
+      var el = (t && t.closest) ? t.closest(SEL) : null;
+      if(!el || el === document.body || el === document.documentElement) return null;
+      if(el.disabled) return null;
+      var r = el.getBoundingClientRect();
+      /* 화면 대부분을 덮는 요소(팝업 배경 등)는 표시하지 않는다 — 안쪽을 눌렀을 때 팝업 전체가 어두워지지 않게 */
+      if(r.width * r.height > window.innerWidth * window.innerHeight * 0.35) return null;
+      return el;
+    }catch(e){ return null; }
+  }
+  function release(){
+    if(!cur) return;
+    var el = cur; cur = null;
+    var wait = Math.max(0, 90 - (Date.now() - t0));   /* 아주 짧은 탭도 눈에 보이게 최소 0.09초 */
+    setTimeout(function(){ try{ el.classList.remove('kd-pressed', 'kd-pressed-s'); }catch(e){} }, wait);
+  }
+  function press(e){
+    if(e.button && e.button !== 0) return;
+    release();
+    var el = pick(e.target); if(!el) return;
+    cur = el; t0 = Date.now();
+    try{
+      el.classList.add('kd-pressed');
+      var r = el.getBoundingClientRect();
+      if(r.width * r.height < 40000) el.classList.add('kd-pressed-s');
+    }catch(e2){}
+  }
+  var o = { capture:true, passive:true };
+  document.addEventListener('pointerdown', press, o);
+  document.addEventListener('pointerup', release, o);
+  document.addEventListener('pointercancel', release, o);
+  document.addEventListener('dragstart', release, o);
+  window.addEventListener('blur', release);
+})();
+</script>
+<style id="kdFastCss">
+/* ★ (2026-10-12) 팝업 열고 닫기 애니메이션 단축 (0.2~0.3초 → 0.12초) — 탭하자마자 화면이 바뀌게 */
+.modal-ov,.modal-ov.show,.modal-ov .modal,.mini-confirm-ov,.mini-confirm-ov.show,.mini-confirm-box,.fb-restore-ov,.fb-restore-ov.show,.fb-restore-box,
+.memo-edit-ov,.memo-edit-ov.show,.promo-edit-ov,.promo-edit-ov.show,.key-return-popup-ov,.key-return-popup-ov.show,.dispatch-popup,.dispatch-popup.show{transition-duration:.12s !important;}
+</style>
+<script>
+/* ═══ ★ 알림 채널 선택 (2026-10-15) — 💛 카카오 알림톡 / 💚 네이버 톡톡
+   · 공유방 공통 설정: kd_rooms/{code}/kd_msg_channel = 'kakao' | 'naver' (없으면 카카오)
+   · 문자서버가 발송할 때 이 값을 읽어 고른 채널로 먼저 보냄
+     (키불출앱·주차현황판 어디서 바꿔도 같은 값 → 모든 기기에 바로 반영)
+   · 연결 전에 바꾸면 이 기기에 기억해 두었다가 연결되면 올림
+   · 값 1개짜리 작은 노드라 통신량 부담 없음 ═══ */
+var _kdCh = { ref:null, key:'', db:null, val:'kakao' };
+try{ if(localStorage.getItem('kd_msg_channel')==='naver') _kdCh.val='naver'; }catch(e){}
+function _kdChCtx(){
+  try{ if(typeof _ss!=='undefined' && _ss && _ss.fbDb && typeof _getCode==='function'){ var c=_getCode(); if(c) return {db:_ss.fbDb, code:c}; } }catch(e){}
+  try{ if(typeof fbDb!=='undefined' && fbDb){ var c2=localStorage.getItem(typeof LS_CODE!=='undefined'?LS_CODE:'pb_code')||''; if(c2) return {db:fbDb, code:c2}; } }catch(e){}
+  return null;
+}
+function _kdChPaint(){
+  var v=(_kdCh.val==='naver')?'naver':'kakao';
+  [['kakao','#FEE500','#3A1D1D'],['naver','#03C75A','#FFFFFF']].forEach(function(a){
+    var b=document.getElementById('kdCh_'+a[0]); if(!b) return;
+    var on=(a[0]===v);
+    b.style.background=on?a[1]:'#E5E7EB'; b.style.color=on?a[2]:'#6B7280';
+    b.style.fontWeight=on?'900':'700'; b.setAttribute('aria-pressed', on?'true':'false');
+  });
+}
+function _kdChAttach(){
+  var c=_kdChCtx(); var k=c?c.code:''; var d=c?c.db:null;
+  if(k===_kdCh.key && d===_kdCh.db) return;
+  if(_kdCh.ref){ try{ _kdCh.ref.off(); }catch(e){} _kdCh.ref=null; }
+  _kdCh.key=k; _kdCh.db=d;
+  if(!c) return;
+  var r=d.ref('kd_rooms/'+k+'/kd_msg_channel'); _kdCh.ref=r;
+  var pend=null; try{ pend=localStorage.getItem('kd_msg_channel_pending'); }catch(e){}
+  if(pend==='kakao'||pend==='naver'){
+    r.set(pend).then(function(){ try{ localStorage.removeItem('kd_msg_channel_pending'); }catch(e){} }).catch(function(){});
+  }
+  r.on('value', function(s){
+    var v=s.val(); _kdCh.val=(v==='naver')?'naver':'kakao';
+    try{ localStorage.setItem('kd_msg_channel', _kdCh.val); }catch(e){}
+    _kdChPaint();
+  }, function(){});
+}
+function _kdChNotify(m){
+  try{ if(typeof showToast==='function'){ showToast(m,'success'); return; } }catch(e){}
+  try{ if(typeof showAlert==='function'){ showAlert(m); return; } }catch(e){}
+}
+function kdSetMsgChannel(ch){
+  ch=(ch==='naver')?'naver':'kakao';
+  _kdCh.val=ch; try{ localStorage.setItem('kd_msg_channel', ch); }catch(e){}
+  _kdChPaint();
+  var c=_kdChCtx();
+  var msg=(ch==='naver')?'💚 네이버 톡톡 우선 발송으로 바꿨습니다':'💛 카카오 알림톡 우선 발송으로 바꿨습니다';
+  if(c){
+    try{ localStorage.removeItem('kd_msg_channel_pending'); }catch(e){}
+    c.db.ref('kd_rooms/'+c.code+'/kd_msg_channel').set(ch).catch(function(){
+      try{ localStorage.setItem('kd_msg_channel_pending', ch); }catch(e){}
+    });
+  } else {
+    try{ localStorage.setItem('kd_msg_channel_pending', ch); }catch(e){}
+    msg+=' (연결되면 모든 기기에 저장)';
+  }
+  _kdChNotify(msg);
+}
+(function(){
+  /* 키불출앱 설정은 접힌 칸을 화면에서 떼어 두었다가 펼칠 때 다시 붙이므로, 붙일 때마다 선택 표시를 다시 칠함 */
+  try{
+    if(typeof _refreshSettingsInputs==='function' && !_refreshSettingsInputs._kdCh){
+      var _o=_refreshSettingsInputs;
+      _refreshSettingsInputs=function(){ var r=_o.apply(this,arguments); try{ _kdChPaint(); }catch(e){} return r; };
+      _refreshSettingsInputs._kdCh=true;
+    }
+  }catch(e){}
+  function go(){ _kdChPaint(); _kdChAttach(); setInterval(function(){ _kdChAttach(); _kdChPaint(); }, 3000); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', go); else go();
+})();
+</script>
+
+<script>
+/* ═══ ★ (2026-10-16) 서류 첨부 칸의 ⬇️ 버튼 → 「미리보기 · 다운로드 · 인쇄」
+   · 파일 원본(kd_docs_data)은 누른 뒤 1번만 받는다 (_fetchDocData, 기존 다운로드와 같은 경로)
+   · PDF 미리보기·인쇄는 pdf.js 로 장별 그림으로 그려서 보여 주고 인쇄한다 ═══ */
+/* ═══ ★ (2026-10-16) 공유 · 인쇄 공통
+   · 📤 공유: 휴대폰의 공유 창(카카오톡·문자·메일·드라이브·인쇄 앱 등)으로 원본 파일을 그대로 넘긴다.
+     공유를 지원하지 않는 기기(대부분의 PC 브라우저)에서는 버튼을 숨기고 다운로드·인쇄를 쓴다.
+   · 🖨️ 인쇄: 화면에 그린 서류 그림만 인쇄 창으로 보낸다(앱 화면은 인쇄되지 않음). ═══ */
+function _kdDataUrlToFile(dataUrl, name){
+  var s=String(dataUrl||''), head=s.slice(0, s.indexOf(',')), b64=s.slice(s.indexOf(',')+1);
+  var mime=(head.match(/data:([^;]+)/)||[])[1] || 'application/octet-stream';
+  var bin=atob(b64), u8=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+  var nm=String(name||'서류').trim() || '서류';
+  if(!/\.[a-z0-9]{2,4}$/i.test(nm)) nm += (mime.indexOf('pdf')>=0 ? '.pdf' : (mime.indexOf('png')>=0 ? '.png' : '.jpg'));
+  try{ return new File([u8], nm, {type:mime}); }catch(e){ var b=new Blob([u8],{type:mime}); b.name=nm; return b; }
+}
+function _kdIsMobile(){
+  try{ return /Android|iPhone|iPad|iPod|Mobile|SamsungBrowser/i.test(navigator.userAgent||'') || (window.matchMedia && matchMedia('(pointer:coarse)').matches); }catch(e){ return false; }
+}
+/* 공유 버튼을 보여 줄지: 공유가 되는 기기이거나, 휴대폰(안 되면 이유를 안내) */
+function _kdShowShareBtn(){ return _kdCanShareFiles() || _kdIsMobile(); }
+/* 공유가 안 될 때 이유 + 대신 할 수 있는 방법 안내 */
+function _kdShareHelp(dataUrl, name, reason){
+  var old=document.getElementById('_kdShareHelp'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='_kdShareHelp';
+  ov.style.cssText='position:fixed;inset:0;z-index:100011;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  var box=document.createElement('div');
+  box.style.cssText='width:100%;max-width:360px;background:#fff;border-radius:16px;padding:16px;font-size:13.5px;font-weight:700;color:#1E293B;line-height:1.65;box-shadow:0 12px 40px rgba(0,0,0,.35);';
+  var local = !window.isSecureContext || /^(file|content):/i.test(location.protocol);
+  box.innerHTML='<div style="font-size:15px;font-weight:900;margin-bottom:8px;">📤 공유 창을 열 수 없습니다</div>'
+    + (local
+       ? '지금 앱이 <b>휴대폰에 저장된 파일</b>로 열려 있어서(주소가 <b>https://</b> 가 아님) 휴대폰이 공유를 막고 있습니다.<br>'
+         + '<b>인터넷 주소(https://…)로 연 앱</b>에서는 공유 창이 열립니다.<br><br>'
+       : (reason==='unsupported'
+          ? '이 브라우저는 파일 공유를 지원하지 않습니다. <b>크롬(Chrome)</b>으로 열면 공유 창이 열립니다.<br><br>'
+          : '휴대폰이 공유 요청을 거절했습니다. 잠시 후 다시 눌러 보세요.<br><br>'))
+    + '지금은 아래 <b>⬇️ 다운로드</b> 후, 다운로드 알림이나 <b>내 파일 → 다운로드</b>에서 파일을 길게 눌러 <b>공유</b>할 수 있습니다.';
+  var row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:12px;';
+  var d=document.createElement('button'); d.type='button'; d.textContent='⬇️ 다운로드';
+  d.style.cssText='flex:1;padding:11px;border:none;border-radius:10px;background:#2563EB;color:#fff;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;';
+  d.onclick=function(){ ov.remove(); try{ var f=_kdDataUrlToFile(dataUrl, name); var u=URL.createObjectURL(f); var a=document.createElement('a'); a.href=u; a.download=f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(u); }, 30000); }catch(e){ var a2=document.createElement('a'); a2.href=dataUrl; a2.download=name||'서류'; document.body.appendChild(a2); a2.click(); a2.remove(); } };
+  var c=document.createElement('button'); c.type='button'; c.textContent='닫기';
+  c.style.cssText='flex:1;padding:11px;border:none;border-radius:10px;background:#E2E8F0;color:#475569;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;';
+  c.onclick=function(){ ov.remove(); };
+  row.appendChild(d); row.appendChild(c); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov);
+}
+function _kdCanShareFiles(){
+  try{
+    if(!window.isSecureContext) return false;
+    if(!navigator.share || !navigator.canShare) return false;
+    var f=new File([new Uint8Array([1])], 't.pdf', {type:'application/pdf'});
+    return navigator.canShare({files:[f]});
+  }catch(e){ return false; }
+}
+function _kdShareDataUrl(dataUrl, name, onMsg){
+  var msg=onMsg||function(m){ try{ (typeof toast==='function'?toast:showAlert)(m); }catch(e){} };
+  if(!_kdCanShareFiles()){ _kdShareHelp(dataUrl, name, 'unsupported'); return; }
+  var file;
+  try{ file=_kdDataUrlToFile(dataUrl, name); }catch(e){ msg('⚠️ 파일 준비 실패'); return; }
+  try{ if(!navigator.canShare({files:[file]})){ msg('⚠️ 이 파일 형식은 공유할 수 없습니다 — 다운로드를 이용해 주세요'); return; } }catch(e){}
+  navigator.share({files:[file], title:file.name}).catch(function(e){
+    if(e && e.name==='AbortError') return;          /* 사용자가 취소 */
+    if(e && e.name==='NotAllowedError' && !_kdShareHelp._again){   /* 준비하는 동안 터치 인식이 끊긴 경우 → 한 번 더 누르게 */
+      _kdShareTapAgain(file, msg, dataUrl); return;
+    }
+    _kdShareHelp(dataUrl, file.name, 'denied');
+  });
+}
+function _kdShareTapAgain(file, msg, dataUrl){
+  var old=document.getElementById('_kdShareAgain'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='_kdShareAgain';
+  ov.style.cssText='position:fixed;inset:0;z-index:100010;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
+  var b=document.createElement('button'); b.type='button'; b.textContent='📤 공유 준비 완료 — 눌러서 공유';
+  b.style.cssText='padding:16px 22px;border:none;border-radius:14px;background:#16A34A;color:#fff;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 10px 30px rgba(0,0,0,.35);';
+  b.onclick=function(){ ov.remove(); navigator.share({files:[file], title:file.name}).catch(function(e){ if(!e || e.name!=='AbortError') _kdShareHelp(dataUrl, file.name, 'denied'); }); };
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.appendChild(b); document.body.appendChild(ov);
+}
+/* 그림(dataURL) 목록만 인쇄 */
+function _kdPrintImages(srcs, onMsg){
+  var msg=onMsg||function(m){ try{ (typeof toast==='function'?toast:showAlert)(m); }catch(e){} };
+  if(!srcs || !srcs.length){ msg('⚠️ 인쇄할 내용이 없습니다'); return; }
+  var old=document.getElementById('_kdPrintArea'); if(old) old.remove();
+  var oldSt=document.getElementById('_kdPrintStyle'); if(oldSt) oldSt.remove();
+  var area=document.createElement('div'); area.id='_kdPrintArea';
+  srcs.forEach(function(src, i){ var im=document.createElement('img'); im.src=src;
+    im.style.cssText='display:block;width:100%;height:auto;'+(i<srcs.length-1?'page-break-after:always;break-after:page;':''); area.appendChild(im); });
+  var st=document.createElement('style'); st.id='_kdPrintStyle';
+  st.textContent='#_kdPrintArea{display:none;}'
+    + '@media print{ body>*:not(#_kdPrintArea){display:none !important;} #_kdPrintArea{display:block !important;} '
+    + 'html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;overflow:visible !important;} @page{margin:8mm;} }';
+  document.head.appendChild(st); document.body.appendChild(area);
+  var ims=area.querySelectorAll('img'), left=ims.length;
+  function go(){ setTimeout(function(){
+      try{ window.print(); }catch(e){ msg('⚠️ 이 기기에서는 인쇄를 열 수 없습니다 — 📤 공유로 인쇄 앱을 이용해 주세요'); }
+      setTimeout(function(){ try{ area.remove(); st.remove(); }catch(e){} }, 1500);
+    }, 150); }
+  ims.forEach(function(im){ if(im.complete){ if(--left===0) go(); } else { im.onload=im.onerror=function(){ if(--left===0) go(); }; } });
+}
+var _pbPdfJsP=null;
+function _pbLoadPdfJs(){
+  if(_pbPdfJsP) return _pbPdfJsP;
+  _pbPdfJsP=new Promise(function(res, rej){
+    if(window.pdfjsLib){ res(window.pdfjsLib); return; }
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=function(){
+      if(!window.pdfjsLib){ _pbPdfJsP=null; rej(new Error('pdfjs')); return; }
+      try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }catch(e){}
+      res(window.pdfjsLib);
+    };
+    s.onerror=function(){ _pbPdfJsP=null; rej(new Error('load')); };
+    document.head.appendChild(s);
+  });
+  return _pbPdfJsP;
+}
+function _pbIsPdf(doc){ return !!doc && (doc.type==='pdf' || String(doc.data||'').indexOf('application/pdf')>=0 || /\.pdf$/i.test(doc.name||'')); }
+/* 서류를 그림(dataURL) 목록으로: 사진은 그대로, PDF는 장별로 그려서 (최대 20장) */
+function _pbDocToImages(doc, maxW){
+  if(!_pbIsPdf(doc)) return Promise.resolve([String(doc.data)]);
+  return _pbLoadPdfJs().then(function(lib){
+    var b64=String(doc.data).split(',')[1]||'', bin=atob(b64), u8=new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    return lib.getDocument({data:u8}).promise;
+  }).then(function(pdf){
+    var n=Math.min(pdf.numPages||1, 20), out=[], chain=Promise.resolve();
+    for(var p=1;p<=n;p++){ (function(p){
+      chain=chain.then(function(){ return pdf.getPage(p); }).then(function(page){
+        var vp0=page.getViewport({scale:1}), sc=Math.max(1.5, (maxW||1200)/vp0.width);
+        var vp=page.getViewport({scale:sc});
+        var cv=document.createElement('canvas'); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+        return page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise.then(function(){ out.push(cv.toDataURL('image/jpeg', 0.92)); });
+      });
+    })(p); }
+    return chain.then(function(){ out._more = (pdf.numPages>n) ? (pdf.numPages-n) : 0; return out; });
+  });
+}
+function _pbGetFullDoc(doc, id, cb){
+  if(doc && doc.data){ cb(doc); return; }
+  try{ _fetchDocData(doc, id, function(full){ cb(full||null); }); }catch(e){ cb(null); }
+}
+function _pbSheetClose(){ var o=document.getElementById('_pbDocSheet'); if(o) o.remove(); }
+function _pbDocActions(doc, id){
+  _pbSheetClose();
+  var ov=document.createElement('div'); ov.id='_pbDocSheet';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.onclick=function(e){ if(e.target===ov) _pbSheetClose(); };
+  var box=document.createElement('div');
+  box.style.cssText='width:100%;max-width:340px;background:#fff;border-radius:16px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit;';
+  var t=document.createElement('div');
+  t.style.cssText='font-size:14px;font-weight:900;color:#1E293B;margin-bottom:12px;word-break:break-all;line-height:1.5;';
+  t.textContent=((doc&&doc.type==='pdf')?'📄 ':'🖼️ ')+((doc&&doc.name)||'서류');
+  box.appendChild(t);
+  function btn(label, bg, fn){
+    var b=document.createElement('button'); b.type='button'; b.textContent=label;
+    b.style.cssText='display:block;width:100%;margin:0 0 8px;padding:13px;border:none;border-radius:11px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;font-family:inherit;background:'+bg+';';
+    b.onclick=fn; box.appendChild(b);
+  }
+  if(_kdShowShareBtn()) btn('📤 공유 (카톡·문자·메일·인쇄 앱 등)', '#16A34A', function(){ _pbSheetClose(); _pbDocShare(doc, id); });
+  btn('👁️ 미리보기', '#F59E0B', function(){ _pbSheetClose(); _pbDocPreview(doc, id); });
+  btn('⬇️ 다운로드', '#2563EB', function(){ _pbSheetClose(); _pbDocDownload(doc, id); });
+  btn('🖨️ 인쇄', '#0F766E', function(){ _pbSheetClose(); _pbDocPrint(doc, id); });
+  var c=document.createElement('button'); c.type='button'; c.textContent='닫기';
+  c.style.cssText='display:block;width:100%;padding:11px;border:none;border-radius:11px;font-size:14px;font-weight:800;color:#475569;background:#E2E8F0;cursor:pointer;font-family:inherit;';
+  c.onclick=_pbSheetClose; box.appendChild(c);
+  ov.appendChild(box); document.body.appendChild(ov);
+}
+function _pbDocDownload(doc, id){
+  showAlert('⏳ 다운로드 중...');
+  _pbGetFullDoc(doc, id, function(full){
+    if(!full){ hideAlert(); return; }
+    if(downloadDoc(full)){ showAlert('✅ 다운로드 완료'); setTimeout(hideAlert, 1500); } else hideAlert();
+  });
+}
+function _pbDocShare(doc, id){
+  var _m=function(x){ showAlert(x); setTimeout(function(){ try{ hideAlert(); }catch(e){} }, 2600); };
+  try{ if((!doc || !doc.data) && typeof _curDocs!=='undefined' && _curDocs && _curDocs[id] && _curDocs[id].data) doc=_curDocs[id]; }catch(e){}
+  if(doc && doc.data){ _kdShareDataUrl(doc.data, doc.name, _m); return; }
+  showAlert('⏳ 공유 준비 중...');
+  _pbGetFullDoc(doc, id, function(full){
+    try{ hideAlert(); }catch(e){}
+    if(!full || !full.data) return;
+    _kdShareDataUrl(full.data, full.name||doc.name, _m);
+  });
+}
+function _pbPvClose(){ var o=document.getElementById('_pbDocPv'); if(o) o.remove(); }
+function _pbDocPreview(doc, id){
+  _pbPvClose();
+  var ov=document.createElement('div'); ov.id='_pbDocPv';
+  ov.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.94);display:flex;flex-direction:column;';
+  var head=document.createElement('div');
+  head.style.cssText='display:flex;align-items:center;gap:6px;padding:10px 12px;background:#1E293B;color:#fff;';
+  var nm=document.createElement('div');
+  nm.style.cssText='flex:1;min-width:0;font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  nm.textContent='👁️ '+((doc&&doc.name)||'서류'); head.appendChild(nm);
+  function hb(label,bg,fn){ var b=document.createElement('button'); b.type='button'; b.textContent=label;
+    b.style.cssText='flex-shrink:0;padding:8px 10px;border:none;border-radius:9px;background:'+bg+';color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;';
+    b.onclick=fn; head.appendChild(b); }
+  if(_kdShowShareBtn()) hb('📤 공유', '#16A34A', function(){ _pbDocShare(doc, id); });
+  hb('⬇️ 저장', '#2563EB', function(){ _pbDocDownload(doc, id); });
+  hb('🖨️ 인쇄', '#0F766E', function(){ _pbDocPrint(doc, id); });
+  hb('✕ 닫기', '#475569', _pbPvClose);
+  var body=document.createElement('div');
+  body.style.cssText='flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px;text-align:center;color:#E2E8F0;font-size:14px;font-weight:800;';
+  body.textContent='⏳ 불러오는 중...';
+  ov.appendChild(head); ov.appendChild(body); document.body.appendChild(ov);
+  _pbGetFullDoc(doc, id, function(full){
+    if(!document.getElementById('_pbDocPv')) return;
+    if(!full || !full.data){ body.textContent='⚠️ 서류 데이터를 찾을 수 없습니다'; return; }
+    body.textContent=_pbIsPdf(full)?'⏳ PDF 여는 중...':'';
+    _pbDocToImages(full, Math.min(1400, (window.innerWidth||400)*2)).then(function(imgs){
+      if(!document.getElementById('_pbDocPv')) return;
+      body.innerHTML='';
+      imgs.forEach(function(src){ var im=document.createElement('img'); im.src=src;
+        im.style.cssText='display:block;width:100%;max-width:900px;height:auto;margin:0 auto 10px;background:#fff;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.4);';
+        body.appendChild(im); });
+      if(imgs._more){ var d2=document.createElement('div'); d2.textContent='… 앞 20장만 표시 (전체는 다운로드로 확인)'; body.appendChild(d2); }
+    }).catch(function(){
+      if(!document.getElementById('_pbDocPv')) return;
+      body.innerHTML='⚠️ 이 기기에서는 PDF 미리보기를 열 수 없습니다.<br><br>위의 <b>⬇️ 다운로드</b>로 확인해 주세요.';
+    });
+  });
+}
+function _pbDocPrint(doc, id){
+  showAlert('⏳ 인쇄 준비 중...');
+  _pbGetFullDoc(doc, id, function(full){
+    if(!full || !full.data){ hideAlert(); showAlert('⚠️ 서류 데이터를 찾을 수 없습니다'); return; }
+    _pbDocToImages(full, 1600).then(function(imgs){
+      hideAlert();
+      var old=document.getElementById('_pbPrintArea'); if(old) old.remove();
+      var oldSt=document.getElementById('_pbPrintStyle'); if(oldSt) oldSt.remove();
+      var area=document.createElement('div'); area.id='_pbPrintArea';
+      imgs.forEach(function(src, i){ var im=document.createElement('img'); im.src=src;
+        im.style.cssText='display:block;width:100%;height:auto;'+(i<imgs.length-1?'page-break-after:always;break-after:page;':''); area.appendChild(im); });
+      var st=document.createElement('style'); st.id='_pbPrintStyle';
+      st.textContent='#_pbPrintArea{display:none;}'
+        + '@media print{ body>*:not(#_pbPrintArea){display:none !important;} #_pbPrintArea{display:block !important;} '
+        + 'html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;overflow:visible !important;} @page{margin:8mm;} }';
+      document.head.appendChild(st); document.body.appendChild(area);
+      /* 그림이 다 읽힌 뒤 인쇄 */
+      var ims=area.querySelectorAll('img'), left=ims.length;
+      function go(){
+        setTimeout(function(){
+          try{ window.print(); }catch(e){ showAlert('⚠️ 이 기기에서는 인쇄를 열 수 없습니다'); }
+          setTimeout(function(){ try{ area.remove(); st.remove(); }catch(e){} }, 1500);
+        }, 150);
+      }
+      if(!left) go();
+      ims.forEach(function(im){ if(im.complete){ if(--left===0) go(); } else { im.onload=im.onerror=function(){ if(--left===0) go(); }; } });
+    }).catch(function(){
+      hideAlert();
+      showAlert('⚠️ PDF를 인쇄용으로 열 수 없습니다 — 다운로드 후 인쇄해 주세요');
+    });
+  });
+}
 </script>
 </body>
 </html>
