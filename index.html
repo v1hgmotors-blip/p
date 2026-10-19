@@ -25477,7 +25477,12 @@ function _kdShareHelp(dataUrl, name, reason){
        ? '지금 앱이 <b>휴대폰에 저장된 파일</b>로 열려 있어서(주소가 <b>https://</b> 가 아님) 휴대폰이 공유를 막고 있습니다.<br>'
          + '<b>인터넷 주소(https://…)로 연 앱</b>에서는 공유 창이 열립니다.<br><br>'
        : (reason==='unsupported'
-          ? '이 브라우저는 파일 공유를 지원하지 않습니다. <b>크롬(Chrome)</b>으로 열면 공유 창이 열립니다.<br><br>'
+          ? '이 브라우저는 파일 공유를 지원하지 않습니다. <b>크롬(Chrome)</b>으로 열면 공유 창이 열립니다.<br>'
+            + '<span style="color:#64748B;font-size:12.5px;">※ 카카오톡·네이버 등에서 링크를 눌러 열린 화면이면 오른쪽 위 ⋮ → 「다른 브라우저로 열기」</span><br><br>'
+          : reason==='type'
+          ? '이 브라우저는 이 서류 형식의 공유를 지원하지 않습니다. <b>크롬(Chrome)</b>으로 열면 공유 창이 열립니다.<br><br>'
+          : reason==='nopdf'
+          ? '이 브라우저(' + (_kdIsSamsung()?'삼성 인터넷':'현재 브라우저') + ')는 <b>PDF 공유를 지원하지 않고</b>, 사진으로 바꾸는 것도 실패했습니다. <b>크롬(Chrome)</b>으로 열면 PDF 그대로 공유됩니다.<br><br>'
           : '휴대폰이 공유 요청을 거절했습니다. 잠시 후 다시 눌러 보세요.<br><br>'))
     + '지금은 아래 <b>⬇️ 다운로드</b> 후, 다운로드 알림이나 <b>내 파일 → 다운로드</b>에서 파일을 길게 눌러 <b>공유</b>할 수 있습니다.';
   var row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;margin-top:12px;';
@@ -25489,35 +25494,93 @@ function _kdShareHelp(dataUrl, name, reason){
   c.onclick=function(){ ov.remove(); };
   row.appendChild(d); row.appendChild(c); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov);
 }
-function _kdCanShareFiles(){
+/* ★ (2026-10-18) 공유 가능 여부를 「실제 서류 종류」로 확인
+   - 예전엔 늘 PDF 샘플로 확인해서, 삼성 인터넷에서는 사진 서류까지 공유가 막혔다
+   - 삼성 인터넷은 PDF 공유를 지원하지 않음 → PDF를 장별 사진(jpg)으로 바꿔 공유 (약도 페이지와 같은 방식)
+   - 다운로드는 어느 브라우저에서도 늘 원본 파일 그대로 */
+function _kdIsSamsung(){ try{ return /SamsungBrowser/i.test(navigator.userAgent||''); }catch(e){ return false; } }
+function _kdNoPdfShare(){ try{ if(localStorage.getItem('kd_share_nopdf')==='1') return true; }catch(e){} return _kdIsSamsung(); }
+function _kdMarkNoPdf(){ try{ localStorage.setItem('kd_share_nopdf','1'); }catch(e){} }
+function _kdIsPdfFile(f){ return !!f && (/pdf/i.test(f.type||'') || /\.pdf$/i.test(f.name||'')); }
+function _kdCanShareFiles(file){
   try{
     if(!window.isSecureContext) return false;
     if(!navigator.share || !navigator.canShare) return false;
-    var f=new File([new Uint8Array([1])], 't.pdf', {type:'application/pdf'});
-    return navigator.canShare({files:[f]});
+    if(file) return navigator.canShare({files:(Array.isArray(file)?file:[file])});
+    /* 버튼 표시용: 사진이나 PDF 중 하나라도 공유되면 공유 가능 */
+    var t=[['t.jpg','image/jpeg'],['t.pdf','application/pdf']];
+    for(var i=0;i<t.length;i++){ if(navigator.canShare({files:[new File([new Uint8Array([1])], t[i][0], {type:t[i][1]})]})) return true; }
+    return false;
   }catch(e){ return false; }
 }
+function _kdPdfLib(){
+  if(typeof _pvLoadPdfJs==='function') return _pvLoadPdfJs();
+  if(typeof _pbLoadPdfJs==='function') return _pbLoadPdfJs();
+  return Promise.reject(new Error('no pdfjs'));
+}
+/* PDF(dataURL) → 장별 jpg File 목록 (최대 20장) */
+function _kdPdfToImageFiles(dataUrl, name){
+  var base=String(name||'서류').replace(/\.pdf$/i,'');
+  return _kdPdfLib().then(function(lib){
+    var ci=dataUrl.indexOf(','); var bin=atob(dataUrl.slice(ci+1)); var u8=new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    return lib.getDocument({data:u8}).promise;
+  }).then(function(pdf){
+    var n=Math.min(pdf.numPages, 20), out=[], chain=Promise.resolve();
+    for(var p=1;p<=n;p++){ (function(p){ chain=chain.then(function(){
+      return pdf.getPage(p).then(function(pg){
+        var v0=pg.getViewport({scale:1}); var sc=Math.min(2.5, 1500/v0.width); var vp=pg.getViewport({scale:sc});
+        var cv=document.createElement('canvas'); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+        var cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,cv.width,cv.height);
+        return pg.render({canvasContext:cx, viewport:vp}).promise.then(function(){
+          return new Promise(function(res){ cv.toBlob(function(b){ res(b); }, 'image/jpeg', 0.88); });
+        }).then(function(b){ if(b) out.push(new File([b], base+(n>1?('_'+p):'')+'.jpg', {type:'image/jpeg'})); });
+      }); }); })(p); }
+    return chain.then(function(){ if(!out.length) throw new Error('empty'); return out; });
+  });
+}
+var _kdShareImgCache={};
 function _kdShareDataUrl(dataUrl, name, onMsg){
   var msg=onMsg||function(m){ try{ (typeof toast==='function'?toast:showAlert)(m); }catch(e){} };
-  if(!_kdCanShareFiles()){ _kdShareHelp(dataUrl, name, 'unsupported'); return; }
+  if(!window.isSecureContext || !navigator.share || !navigator.canShare){ _kdShareHelp(dataUrl, name, 'unsupported'); return; }
   var file;
   try{ file=_kdDataUrlToFile(dataUrl, name); }catch(e){ msg('⚠️ 파일 준비 실패'); return; }
-  try{ if(!navigator.canShare({files:[file]})){ msg('⚠️ 이 파일 형식은 공유할 수 없습니다 — 다운로드를 이용해 주세요'); return; } }catch(e){}
+  var isPdf=_kdIsPdfFile(file);
+  /* PDF 공유를 막는 브라우저(삼성 인터넷 등) → 사진으로 바꿔서 공유 */
+  if(isPdf && (_kdNoPdfShare() || !_kdCanShareFiles(file))){ _kdSharePdfAsImages(dataUrl, file.name, msg); return; }
+  if(!_kdCanShareFiles(file)){ _kdShareHelp(dataUrl, file.name, 'type'); return; }
   navigator.share({files:[file], title:file.name}).catch(function(e){
     if(e && e.name==='AbortError') return;          /* 사용자가 취소 */
     if(e && e.name==='NotAllowedError' && !_kdShareHelp._again){   /* 준비하는 동안 터치 인식이 끊긴 경우 → 한 번 더 누르게 */
-      _kdShareTapAgain(file, msg, dataUrl); return;
+      _kdShareTapAgain([file], msg, dataUrl, isPdf); return;
     }
     _kdShareHelp(dataUrl, file.name, 'denied');
   });
 }
-function _kdShareTapAgain(file, msg, dataUrl){
+function _kdSharePdfAsImages(dataUrl, name, msg){
+  var key=String(name)+':'+String(dataUrl).length;
+  var go=function(files){
+    var fs=files;
+    try{ if(!navigator.canShare({files:fs}) && fs.length>1 && navigator.canShare({files:[fs[0]]})) fs=[fs[0]]; }catch(e){}
+    _kdShareTapAgain(fs, msg, dataUrl, false, '📤 사진으로 바꿨습니다 — 눌러서 공유' + (fs.length>1?(' ('+fs.length+'장)'):''));
+  };
+  if(_kdShareImgCache[key]){ go(_kdShareImgCache[key]); return; }
+  msg('⏳ 공유 준비 중... (PDF를 사진으로 바꾸는 중)');
+  _kdPdfToImageFiles(dataUrl, name).then(function(files){ _kdShareImgCache[key]=files; go(files); })
+    .catch(function(){ _kdShareHelp(dataUrl, name, 'nopdf'); });
+}
+function _kdShareTapAgain(files, msg, dataUrl, wasPdf, label){
   var old=document.getElementById('_kdShareAgain'); if(old) old.remove();
   var ov=document.createElement('div'); ov.id='_kdShareAgain';
   ov.style.cssText='position:fixed;inset:0;z-index:100010;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
-  var b=document.createElement('button'); b.type='button'; b.textContent='📤 공유 준비 완료 — 눌러서 공유';
+  var b=document.createElement('button'); b.type='button'; b.textContent=label||'📤 공유 준비 완료 — 눌러서 공유';
   b.style.cssText='padding:16px 22px;border:none;border-radius:14px;background:#16A34A;color:#fff;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 10px 30px rgba(0,0,0,.35);';
-  b.onclick=function(){ ov.remove(); navigator.share({files:[file], title:file.name}).catch(function(e){ if(!e || e.name!=='AbortError') _kdShareHelp(dataUrl, file.name, 'denied'); }); };
+  var nm=(files[0]&&files[0].name)||'서류';
+  b.onclick=function(){ ov.remove(); navigator.share({files:files, title:nm}).catch(function(e){
+    if(e && e.name==='AbortError') return;
+    /* PDF를 두 번 거절한 브라우저 → 다음부터는 사진으로 바꿔 공유 */
+    if(wasPdf && e && e.name==='NotAllowedError'){ _kdMarkNoPdf(); _kdSharePdfAsImages(dataUrl, nm, msg); return; }
+    _kdShareHelp(dataUrl, nm, 'denied'); }); };
   ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
   ov.appendChild(b); document.body.appendChild(ov);
 }
