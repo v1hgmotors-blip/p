@@ -3055,7 +3055,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 <div id="searchIssueInfoOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8600;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);" onclick="if(event.target===this)_cancelSearchIssueInfo()">
   <div style="background:#fff;border-radius:16px;padding:22px 20px;max-width:320px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35);">
     <div id="searchIssueInfoTitle" style="font-size:15px;font-weight:900;color:#1E293B;margin-bottom:4px;letter-spacing:-.2px;">차량번호:- 키불출이력</div>
-    <div style="font-size:12px;color:#64748B;margin-bottom:14px;">딜러 정보를 입력하고 저장하면 약도가 표시됩니다.</div>
+    <div style="font-size:12px;color:#64748B;margin-bottom:14px;">딜러 정보를 입력하고 저장하면 약도가 표시됩니다.<br>💛/💚 버튼은 저장과 함께 딜러 번호로 약도를 보냅니다.</div>
     <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;">
       <input id="searchIssueInfoName" type="text" placeholder="이름" style="border:1.5px solid #CBD5E1;border-radius:9px;padding:10px 12px;font-size:14px;font-weight:700;color:#1E293B;outline:none;box-sizing:border-box;width:100%;">
       <input id="searchIssueInfoPhone" type="tel" placeholder="전화번호" style="border:1.5px solid #CBD5E1;border-radius:9px;padding:10px 12px;font-size:14px;font-weight:700;color:#1E293B;outline:none;box-sizing:border-box;width:100%;">
@@ -3064,6 +3064,11 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
     <div style="display:flex;gap:8px;">
       <button type="button" onclick="_cancelSearchIssueInfo()" style="flex:1;background:#F1F5F9;color:#64748B;border:none;border-radius:10px;padding:11px 0;font-size:14px;font-weight:800;cursor:pointer;">취소</button>
       <button type="button" onclick="_saveSearchIssueInfo()" style="flex:1.4;background:#3B82F6;color:#fff;border:none;border-radius:10px;padding:11px 0;font-size:14px;font-weight:900;cursor:pointer;">저장</button>
+    </div>
+    <!-- ★ (2026-10-27) 저장 + 약도 전송: 카카오 알림톡 / 네이버 톡톡 중 골라서 딜러 번호로 전송 -->
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button type="button" onclick="_saveSearchIssueInfo('kakao')" style="flex:1;background:#FAE100;color:#3C1E1E;border:none;border-radius:10px;padding:11px 0;font-size:13.5px;font-weight:900;cursor:pointer;">💛 저장+알림톡</button>
+      <button type="button" onclick="_saveSearchIssueInfo('naver')" style="flex:1;background:#03C75A;color:#fff;border:none;border-radius:10px;padding:11px 0;font-size:13.5px;font-weight:900;cursor:pointer;">💚 저장+톡톡</button>
     </div>
   </div>
 </div>
@@ -11203,6 +11208,20 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
 }
 /* 검색 키반납확인 시 — 키불출앱 쪽에도 반납되었음을 알림(returned 배열에 추가)
    ★ FIX: returned 경로만 읽고 쓰도록 변경 (방 전체 다운로드 방지) */
+/* ★ (2026-10-23) 키 반납 시간 기록 — 키불출앱 이력 카드에 「🔑 반납 10/22 23:11」로 표시됨
+   kd_rooms/{code}/returnAt/{불출건id} = 반납시각(ms), 7일 지난 기록은 자동 정리 */
+function _pbMarkReturnAt(code, ids){
+  try{
+    if(!fbDb || !code || !ids || !ids.length) return;
+    var now=Date.now();
+    fbDb.ref('kd_rooms/'+code+'/returnAt').transaction(function(cur){
+      var o=(cur && typeof cur==='object')?cur:{}, lim=Date.now()-7*86400000;
+      Object.keys(o).forEach(function(k){ if(!(o[k]>lim)) delete o[k]; });
+      ids.forEach(function(id){ if(!o[String(id)]) o[String(id)]=now; });
+      return o;
+    });
+  }catch(e){}
+}
 function _cleanupSearchDispatchHist(slotIdx){
   var id = _searchHistIds[slotIdx];
   if(!id) return;
@@ -11222,7 +11241,7 @@ function _cleanupSearchDispatchHist(slotIdx){
       return retArr;
     }, function(error, committed){
       if(error){ console.error('[검색키반납확인 전달 실패]', error); return; }
-      if(committed) fbDb.ref('kd_rooms/' + code + '/updatedAt').set(Date.now());
+      if(committed){ fbDb.ref('kd_rooms/' + code + '/updatedAt').set(Date.now()); _pbMarkReturnAt(code, [id]); }
     });
   }catch(e){}
 }
@@ -11329,7 +11348,7 @@ function _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr){
     }
   } catch(e){ console.warn('[검색키불출 차주ntfy] 예외', e); }
 }
-function _saveSearchIssueInfo(){
+function _saveSearchIssueInfo(ch){  /* ★ (2026-10-27) ch: 'kakao' | 'naver' — 저장 후 그 채널로 약도 전송 (없으면 저장만) */
   var slotIdx = _pendingSearchIssueSlot;
   if(slotIdx===null || typeof slotIdx==='undefined') return;
   var _nEl = document.getElementById('searchIssueInfoName');
@@ -11343,6 +11362,20 @@ function _saveSearchIssueInfo(){
   _pendingSearchIssueSlot = null;
   _doSearchIssueConfirmed(slotIdx, dealerName, dealerPhone, dealerPr);
   _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr);
+  if(ch==='kakao' || ch==='naver'){ try{ _searchSendRoute(slotIdx, dealerName, dealerPhone, ch); }catch(e){ console.warn('[검색키불출 약도전송]', e); } }
+}
+/* ★ (2026-10-27) 검색키불출 — 딜러 번호로 약도 전송 (서버가 위치 계산, 고른 채널 우선) */
+function _searchSendRoute(slotIdx, dealerName, dealerPhone, ch){
+  var phone = String(dealerPhone||'').replace(/[^0-9]/g,'');
+  var chName = ch==='naver' ? '💚 네이버 톡톡' : '💛 카카오 알림톡';
+  if(phone.length<10 || phone.length>11){ if(typeof showAlert==='function'){ showAlert('📲 전화번호가 없거나 올바르지 않아 '+chName+'을 보내지 않았습니다'); setTimeout(function(){ try{hideAlert();}catch(e){} }, 3000); } return; }
+  if(window._isFeeBlocked && window._isFeeBlocked()){ if(typeof showAlert==='function'){ showAlert('🚫 요금발생차단 ON — 약도를 보내지 않았습니다'); setTimeout(function(){ try{hideAlert();}catch(e){} }, 3000); } return; }
+  var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
+  if(!code || typeof window._queueRouteDispatch!=='function'){ if(typeof showAlert==='function') showAlert('❌ 서버 연결 안됨 — 약도를 보내지 못했습니다'); return; }
+  var car = ''; var owner = '';
+  try{ var d = getSlot(slotIdx)||{}; car = String(d.car||''); owner = String(d.owner||'').trim(); }catch(e){}
+  var eid = String(window._lastDispatchEid || ('search_'+Date.now()));
+  window._queueRouteDispatch(code, phone, car, owner, eid, function(){}, ch);
 }
 
 /* ★ 키불출 처리 → 키반납확인 배지로 교체 + 슬롯 깜박임 (PC 전용)
@@ -11706,6 +11739,7 @@ function _confirmKeyReturn(slotIdx, entry){
           if(err) console.warn('[키반납확인] Firebase 업데이트 실패:', err);
         });
         _kdRef.child('updatedAt').set(Date.now());
+        _pbMarkReturnAt(_code, returnedIds);   /* ★ (2026-10-23) 반납 시간 기록 */
       }
     } catch(e){ console.warn('[키반납확인] Firebase 오류:', e); }
   }
@@ -23292,6 +23326,7 @@ window._drawQRCanvas = function(container, text, size){
   }
 
   /* ★ 자동 발송 본체 — 키불출앱 이벤트 수신 지점에서 호출 */
+  window._queueRouteDispatch = _queueRouteDispatch;   /* ★ (2026-10-27) 검색키불출 전송 버튼에서 사용 */
   window._autoSendRouteSms = function(partNo, entry, slotLabel, slotIdx){
     try{
       if(window._isFeeBlocked && window._isFeeBlocked()) return;      /* ★ 요금발생차단 ON → 전면 차단 */
@@ -23443,7 +23478,7 @@ window._drawQRCanvas = function(container, text, size){
      서버(onKeyDispatch)가 차량번호로 위치를 계산해 카카오 알림톡을 우선 발송하고,
      카톡 미수신자는 문자로 자동 대체함. (키불출앱 on/off 토글과 무관하게 동작)
      onStatus: 'sent'|'failed'|'timeout' 콜백, via: 'alimtalk'|기타 */
-  function _queueRouteDispatch(code, phone, car, name, eid, onStatus){
+  function _queueRouteDispatch(code, phone, car, name, eid, onStatus, ch){
     var notify = function(s, via){ try{ if(typeof onStatus==='function') onStatus(s, via); }catch(e){} };
     try{
       if(typeof fbDb==='undefined' || !fbDb){ notify('failed'); return; }
@@ -23453,6 +23488,7 @@ window._drawQRCanvas = function(container, text, size){
         car:    String(car||''),
         phone:  phone,
         name:   String(name||''),
+        ch:     (ch==='naver'||ch==='kakao') ? ch : null,   /* ★ (2026-10-27) 고른 채널 (없으면 설정의 알림 채널) */
         status: 'pending',
         t:      Date.now()
       }).then(function(){
@@ -23464,7 +23500,7 @@ window._drawQRCanvas = function(container, text, size){
           if(!v || done) return;
           if(v.status==='sent'){
             done=true; off();
-            var via=(v.via==='alimtalk')?'알림톡':'문자';
+            var via=(v.via==='alimtalk')?'알림톡':(v.via==='naver')?'네이버 톡톡':'문자';
             _greenToast('✅ 전송완료! 약도 '+via+' 발송 → '+_fmtPhone(phone));
             if(typeof hideAlert==='function') hideAlert();
             notify('sent', v.via);
