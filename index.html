@@ -1391,6 +1391,11 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   z-index:9999;
   white-space:pre-wrap;
 }
+.slot-tooltip[data-reg]:not([data-reg=""]){min-width:200px;}
+.slot-tooltip[data-reg]:not([data-reg=""])::after{content:attr(data-reg);position:absolute;top:10px;right:12px;font-size:11px;color:#FFC;font-weight:700;opacity:.85;white-space:nowrap;}
+.m-regat{position:absolute;right:10px;bottom:7px;font-size:11px;font-weight:800;color:#9A7B00;background:rgba(255,255,255,.9);padding:0 4px;border-radius:4px;pointer-events:none;line-height:1.5;}
+.m-regat:empty{display:none;}
+#mMemoInput.has-regat{padding-bottom:22px;}
 .slot-tooltip::before{
   content:'📝 메모';
   display:block;
@@ -2853,8 +2858,11 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
         </div>
       </div>
 
+      <div style="position:relative;width:100%;">
       <textarea id="mMemoInput" class="m-memo" rows="2"
                 placeholder="메모를 입력하세요 (선택)"></textarea>
+      <div id="mRegAtInfo" class="m-regat"></div>
+      </div>
     </div>
 
     <div class="m-dup-error" id="mDupError"></div>
@@ -6815,10 +6823,23 @@ function loadPartCollapseStates(){
 
 /* ── 메모 툴팁 ── */
 var tooltipTimer=null;
-function showTooltip(el, memo){
+/* ★(2026-10-29) 차량 최초 저장일 — 칸에 이 차량이 처음 저장된 시각(regAt) */
+function _pbRegAtFmt(ms, withTime){
+  ms=parseInt(ms,10); if(!ms) return '';
+  var d=new Date(ms), p=function(n){ return (n<10?'0':'')+n; };
+  return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+(withTime?(' '+p(d.getHours())+':'+p(d.getMinutes())):'');
+}
+function _pbRegAtShow(d){
+  var el=document.getElementById('mRegAtInfo'), ta=document.getElementById('mMemoInput');
+  var t=(d && d.car && d.regAt) ? ('🗓 최초등록 '+_pbRegAtFmt(d.regAt,true)) : '';
+  if(el) el.textContent=t;
+  if(ta) ta.classList.toggle('has-regat', !!t);
+}
+function showTooltip(el, memo, regAt){
   if(!memo) return;
   var tt=document.getElementById('slotTooltip');
   tt.textContent=memo;
+  tt.setAttribute('data-reg', regAt ? ('최초등록 '+_pbRegAtFmt(regAt)) : '');
   tt.style.display='block';
   /* 위치: 슬롯 바로 위 중앙 */
   var rect=el.getBoundingClientRect();
@@ -9191,6 +9212,7 @@ function _sendEncarReserveNtfy(slotIdx, car, timeStr, slotTopic, owner){
   if(slotTopic){ sendFn(slotTopic); return; }
   var code = localStorage.getItem(LS_CODE) || '';
   var localTopic = localStorage.getItem(LS_NTFY) || '';
+  if(localTopic){ sendFn(localTopic); return; }   /* ★ (2026-10-28) 이 현황판 설정 토픽 우선 */
   if(typeof fbDb!=='undefined' && fbDb && code){
     fbDb.ref('kd_rooms/'+code+'/kd_ntfy_topic').once('value').then(function(sn){
       var g = (sn && sn.val()) ? String(sn.val()) : localTopic;
@@ -10425,7 +10447,7 @@ function _setupSlotDelegation(){
   gw.addEventListener('mouseover', function(e){
     var s = e.target.closest ? e.target.closest('.slot') : null;
     if(!s) return;
-    try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo); }catch(err){}
+    try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo, d.car ? d.regAt : 0); }catch(err){}
   });
   gw.addEventListener('mouseout', function(e){
     var s = e.target.closest ? e.target.closest('.slot') : null;
@@ -10442,7 +10464,7 @@ function _setupSlotDelegation(){
     if(e.target.closest && e.target.closest('.slot-num')) return;
     clearTimeout(_lpTimer);
     _lpTimer=setTimeout(function(){
-      try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo); }catch(err){}
+      try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo, d.car ? d.regAt : 0); }catch(err){}
     }, 500);
   }, {passive:true});
   gw.addEventListener('touchend', function(){ clearTimeout(_lpTimer); setTimeout(hideTooltip,2000); }, {passive:true});
@@ -11338,6 +11360,9 @@ function _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr){
     if(slotTopic){ _postSearchNtfy(slotTopic, car, owner, dealerName, dealerPhone, dealerPr); return; }
     var code = localStorage.getItem(LS_CODE) || '';
     var localTopic = localStorage.getItem(LS_NTFY) || '';
+    /* ★ (2026-10-28) 이 현황판 설정의 ntfy토픽을 우선 사용 — 공유방(Firebase) 값은 비어 있을 때만
+       (다른 업체 파일을 같은 기기에서 연 키불출앱이 공유방 토픽을 엉뚱한 값으로 덮어쓰는 문제 방지) */
+    if(localTopic){ _postSearchNtfy(localTopic, car, owner, dealerName, dealerPhone, dealerPr); return; }
     if(fbDb && code){
       fbDb.ref('kd_rooms/'+code+'/kd_ntfy_topic').once('value').then(function(sn){
         var g = (sn && sn.val()) ? String(sn.val()) : localTopic;
@@ -12183,6 +12208,7 @@ function openModal(i){
   var _numInp=document.getElementById('mNumInput');
   if(_numInp) _numInp.value=(d.num!==undefined && d.num!=='' && d.num!=='0') ? d.num : '';
   document.getElementById('mMemoInput').value=d.memo||'';
+  try{ _pbRegAtShow(d); }catch(e){}
   /* ★ 인라인 차주 입력란에 현재 owner 표시 */
   var _oi=document.getElementById('mOwnerInlineInput');
   if(_oi) _oi.value=d.owner||'';
@@ -13580,6 +13606,7 @@ function restoreSlot(){
   refreshSlot(activeSlot); _encarUpdateCount();
   document.getElementById('mCarInput').value=s[activeSlot].car||'';
   document.getElementById('mMemoInput').value=s[activeSlot].memo||'';
+  try{ _pbRegAtShow(s[activeSlot]); }catch(e){}
   /* ★ BUG FIX: 복원 후 키번호 배지 업데이트 */
   var _restoredKn = s[activeSlot].num;
   _restoredKn = (_restoredKn!==undefined && _restoredKn!=='') ? _restoredKn : '0';
@@ -13750,6 +13777,15 @@ function saveSlot(){
   var _prevTopic = (s[activeSlot] && s[activeSlot].topic) ? s[activeSlot].topic : '';
   var _newTopic = _tpEl ? _tpEl.value.trim() : _prevTopic;
 
+  /* ★(2026-10-29) 최초 저장일: 같은 차량(번호 표기만 수정 포함)이면 그대로 유지, 새 차량이면 지금 시각 */
+  var _prevSlotR = s[activeSlot] || {};
+  var _regAtNew = 0;
+  if(!isClear && car){
+    var _pcR = _prevSlotR.car || '';
+    var _l4R = function(x){ var dg=String(x||'').replace(/\D/g,''); return dg.length>=4 ? dg.slice(-4) : ''; };
+    var _sameCar = _pcR && (norm(_pcR)===norm(car) || (_l4R(_pcR) && _l4R(_pcR)===_l4R(car)));
+    _regAtNew = _sameCar ? (_prevSlotR.regAt || 0) : Date.now();
+  }
   s[activeSlot] = {
     car:      isClear ? '' : car,
     status:   isClear ? 'none' : selectedStatus,
@@ -13763,6 +13799,7 @@ function saveSlot(){
     encar:    isClear ? {date:'',time:'',done:false,doneDate:''} : _prevEncar,
     inspect:  isClear ? {date:'',done:false} : _newInspect
   };
+  if(_regAtNew) s[activeSlot].regAt = _regAtNew;
   saveSlots(s);
   /* ★ 이 슬롯의 차주를 「등록된 차주」 목록에 자동 등록/갱신
      (판매완료·사용안함으로 비우는 경우에는 하지 않음) */
@@ -14477,17 +14514,24 @@ function _getViewBase(){
     if(!/view\.html(\?|$)/i.test(manual)) manual = manual.replace(/\/+$/,'') + '/view.html';
     return manual;
   }
+  return _getViewBaseDefault();
+}
+function _getViewBaseDefault(){
   return 'https://v1hgmotors-blip.github.io/p/view.html';
 }
+/* ★(2026-10-29) 약도주소 칸 안내문구 = 실제 기본 주소 */
+function _viewPhSet(){ try{ var i=document.getElementById('viewBaseInput'); if(!i) return; var d=String(_getViewBaseDefault()||''); i.placeholder = /^https?:\/\//i.test(d) ? ('비우면 기본 주소 사용: '+d) : '비우면 자동감지 · 예) https://내약도도메인.netlify.app'; }catch(e){} }
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _viewPhSet); else _viewPhSet();
+
 function saveViewBaseUrl(){
   var inp=document.getElementById('viewBaseInput'); if(!inp) return;
   var val=inp.value.trim();
   try{ localStorage.setItem('pb_view_base_url', val); }catch(e){}
   if(typeof pushSettings==='function'){ try{ pushSettings({viewBaseUrl: val}); }catch(e){} }
   var msg=document.getElementById('viewBaseMsg');
-  if(msg){ msg.textContent = val ? '✅ 약도주소 저장됨' : '✅ 자동감지로 전환'; setTimeout(function(){ if(msg) msg.textContent=''; }, 2500); }
+  if(msg){ msg.textContent = val ? '✅ 약도주소 저장됨' : '✅ 기본 주소로 전환'; setTimeout(function(){ if(msg) msg.textContent=''; }, 2500); }
 }
-function _loadViewBaseInput(){
+function _loadViewBaseInput(){ try{ _viewPhSet(); }catch(e){}
   var inp=document.getElementById('viewBaseInput');
   if(inp){ try{ inp.value=(localStorage.getItem('pb_view_base_url')||''); }catch(e){} }
 }
