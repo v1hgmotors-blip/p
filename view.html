@@ -467,6 +467,8 @@ function sharePage(){
       }
       var dn = document.getElementById('docNoneMsg');
       if(dn) dn.textContent = '● 출고서류는 ' + name + ' 사무실로 문의 주세요!';
+      window._docBizName = name;   /* ★ 서류별 안내문에 사용 */
+      try{ window._docBtnsRefresh(); }catch(e){}
     }catch(e){}
   }
   applyBiz(bz);
@@ -593,7 +595,9 @@ function sharePage(){
       _scanPath = _p;
       _dbgScan('기록 시도 car='+carNo);
       fdb.ref(_p).update({ at: Date.now(), car: String(carNo||'') })
-        .then(function(){ _dbgScan('✅ 기록성공 car='+carNo); })
+        .then(function(){ _dbgScan('✅ 기록성공 car='+carNo);
+          /* ★(2026-10-30) 열람 횟수 — 새로 열 때마다(같은 창 새로고침 제외) +1 */
+          fdb.ref(_p+'/vc').transaction(function(cur){ return (cur||0)+1; }).catch(function(){}); })
         .catch(function(err){ _dbgScan('❌ 실패: '+(err&&err.message||'')); sessionStorage.removeItem(sKey); });
     }catch(e){}
   }
@@ -655,6 +659,9 @@ function sharePage(){
     var cn = document.getElementById('docCarNo');
     if(cn && car) cn.textContent = '차량번호:' + car;
     _applySafe6Badge();
+    /* ★(2026-10-30) 종류별 서류 유무 */
+    try{ var _hr=false,_hi=false; if(v && typeof v==='object'){ Object.keys(v).forEach(function(id){ var d=v[id]; if(d&&d.cat==='reg') _hr=true; if(d&&d.cat==='insp') _hi=true; }); }
+      window._docHas.reg=_hr; window._docHas.insp=_hi; }catch(e){}
     if(v && typeof v==='object' && Object.keys(v).length){
       _carDocs = v;
       var row=document.getElementById('docBtnRow'); if(row) row.style.display='flex';
@@ -671,6 +678,7 @@ function sharePage(){
       }
       var none2=document.getElementById('docNoneMsg'); if(none2) none2.style.display='block';
     }
+    try{ window._docBtnsRefresh(); }catch(e){}
   }
   function loadCarDocs(car, _retryKey){
     var key = _retryKey || _docKeyFromCar(car);
@@ -702,6 +710,7 @@ function sharePage(){
           if(box) box.style.display = 'block';
           var cb = document.getElementById('commonDocBtn');
           if(cb) cb.style.display = 'block';
+          window._docHas.common = true; try{ window._docBtnsRefresh(); }catch(e){}
           return;
         }
         /* ★ 폴백: 아직 이 매장 관리앱이 새 구조로 마이그레이션을 안 했으면 예전 경로도 확인 */
@@ -713,7 +722,8 @@ function sharePage(){
             if(box2) box2.style.display = 'block';
             var cb2 = document.getElementById('commonDocBtn');
             if(cb2) cb2.style.display = 'block';
-          }
+            window._docHas.common = true; try{ window._docBtnsRefresh(); }catch(e){}
+          } else { window._docHas.common = false; try{ window._docBtnsRefresh(); }catch(e){} }
         }).catch(function(){});
       }).catch(function(){});
     }catch(e){}
@@ -754,16 +764,27 @@ function sharePage(){
       .filter(function(d){ return d && d.data; });
   }
   /* ★ 출고서류 다운로드 횟수 기록 — 키불출앱 이력에 표시 */
-  function _logDocDownload(){
+  function _logDocDownload(kind){
+    /* ★(2026-10-30) 서류 종류별 횟수 — dlk/{reg|insp|common|other}. 한 번 누름 = 1회
+       (여러 장을 한꺼번에 받아도 5초 안의 같은 종류는 1회로 셈) */
     try{
       if(!fdb || !code) return;
       var _base = _scanPath || (_docKeyCur ? ('kd_rooms/'+code+'/scan_log/'+_docKeyCur) : '');
       if(!_base) return;
+      kind = String(kind || window._docKindCur || 'other');
+      if(!/^(reg|insp|common|other)$/.test(kind)) kind = 'other';
+      var _now = Date.now();
+      window._dlLastAt = window._dlLastAt || {};
+      if(window._dlLastAt[kind] && _now - window._dlLastAt[kind] < 5000) return;
+      window._dlLastAt[kind] = _now;
       fdb.ref(_base+'/dl')
         .transaction(function(cur){ return (cur||0)+1; })
         .catch(function(){});
+      fdb.ref(_base+'/dlk/'+kind)
+        .transaction(function(cur){ return (cur||0)+1; })
+        .catch(function(){});
       /* ★ 마지막 다운로드 시각도 함께 기록 — 키불출앱 이력에 "언제 받아갔는지" 표시용 */
-      fdb.ref(_base).update({ dlAt: Date.now() }).catch(function(){});
+      fdb.ref(_base).update({ dlAt: _now }).catch(function(){});
     }catch(e){}
   }
   /* ★ FIX(2026-10-06): 서류 버튼을 누르면 「공유 / 다운로드」를 고르는 창을 띄운다. */
@@ -819,11 +840,52 @@ function _docSetShareBusy(busy){
   }catch(e){}
 }
 
+/* ★(2026-10-30) 서류가 없는 버튼 — 버튼은 보이되 흐리게(비활성), 누르면 창 없이 「사무실로 문의」 안내.
+   어떤 서류가 없는지 안내문에 구분 표시 (null=아직 확인 전 → 기존 동작 그대로) */
+window._docHas = window._docHas || { reg:null, insp:null, common:null };
+window._DOC_NM = { reg:'차량등록증', insp:'성능점검표', common:'판매확인서' };
+window._docJongsung = function(w){ var c=String(w||'').charCodeAt(String(w||'').length-1); return !!(c>=0xAC00 && c<=0xD7A3 && (c-0xAC00)%28); };
+window._docMissingMsg = function(){
+  var h=window._docHas, miss=[];
+  ['reg','insp','common'].forEach(function(k){ if(h[k]===false) miss.push(window._DOC_NM[k]); });
+  if(!miss.length) return '';
+  var subj = (miss.length===3) ? '출고서류' : miss.join(' · ');
+  var nm = window._docBizName ? (window._docBizName+' ') : '';
+  return '● ' + subj + (window._docJongsung(subj)?'은':'는') + ' ' + nm + '사무실로 문의 주세요!';
+};
+window._docBtnsRefresh = function(){
+  try{
+    var h=window._docHas, ids={ reg:'regDocBtn', insp:'inspDocBtn', common:'commonDocBtn' };
+    ['reg','insp','common'].forEach(function(k){
+      var b=document.getElementById(ids[k]); if(!b) return;
+      if(h[k]===null) return;                     /* 확인 전에는 건드리지 않음 */
+      var off=(h[k]===false);
+      b.style.display = (k==='common') ? 'block' : '';
+      b.style.opacity = off ? '.38' : '';
+      b.style.filter  = off ? 'grayscale(.75)' : '';
+      b.setAttribute('aria-disabled', off ? 'true' : 'false');
+    });
+    var none=document.getElementById('docNoneMsg');
+    if(none){ var m=window._docMissingMsg(); if(m){ none.textContent=m; none.style.display='block'; } else { none.style.display='none'; } }
+  }catch(e){}
+};
+window._docMissingTap = function(k){
+  try{
+    var nm=window._DOC_NM[k]||'서류';
+    var none=document.getElementById('docNoneMsg');
+    if(none){ none.style.display='block'; none.style.transition='background .25s'; none.style.background='#991B1B';
+      setTimeout(function(){ none.style.background='#3A1D1D'; },700); }
+    var st=document.getElementById('docStatus');
+    if(st) st.textContent='⚠️ '+nm+(window._docJongsung(nm)?'이':'가')+' 등록되지 않았습니다 — 사무실로 문의 해주세요';
+  }catch(e){}
+};
 function _docChoose(kind){
   var meta = { reg:   { label:'📘 차량등록증', fn:'downloadRegDocs' },
                insp:  { label:'📗 성능점검표', fn:'downloadInspDocs' },
                common:{ label:'📄 판매확인서', fn:'downloadCommonDocs' } }[kind];
   if(!meta) return;
+  if(window._docHas && window._docHas[kind]===false){ window._docMissingTap(kind); return; }   /* ★ 서류 없음 → 창 안 띄움 */
+  window._docKindCur = kind;   /* ★(2026-10-30) 종류별 다운로드 횟수용 */
   /* ★ 고르는 동안 서류 파일을 미리 받아둔다 — 공유는 터치 직후에만 열리기 때문 */
   try{ if(!_docDataLoaded && _docKeyCur && _carDocs) _ensureDocData(function(){}); }catch(e){}
 
@@ -1121,7 +1183,7 @@ window._docChoose = _docChoose;
     var a=document.createElement('a');
     a.href=d.data; a.download=d.name||fallbackName;
     document.body.appendChild(a); a.click(); a.remove();
-    _logDocDownload();
+    _logDocDownload(d && d.cat ? d.cat : (/^판매확인서/.test(fallbackName||'') ? 'common' : ''));
   }
   /* ★ 출고서류 다운로드 — 리스트에서 골라 받기 */
   var _pickListTimer = null;
@@ -1942,5 +2004,54 @@ window._docChoose = _docChoose;
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
 <div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-10-06 · OEM view v23 (세이프6 알림톡 배지 반영)</div>
+<style id="kdPressCss">
+/* ★ (2026-10-12) 탭 눌림 표시 + 탭 지연 제거
+   · 누르는 순간 그 버튼(가장 안쪽의 누를 수 있는 요소 하나)만 살짝 어둡게, 작은 버튼은 살짝 작게
+   · 두 번 탭 확대 대기(약 0.3초)를 없애 탭하자마자 반응 (두 손가락 확대는 그대로) */
+html{touch-action:manipulation;}
+.kd-pressed{filter:brightness(.86) !important;}
+.kd-pressed-s{scale:.97;}
+</style>
+<script>
+(function(){
+  if(window.__kdPressInit) return; window.__kdPressInit = true;
+  var SEL = 'button,a[href],[role="button"],[onclick],input[type="button"],input[type="submit"],label[for],summary,.btn';
+  var cur = null, t0 = 0;
+  function pick(t){
+    try{
+      var el = (t && t.closest) ? t.closest(SEL) : null;
+      if(!el || el === document.body || el === document.documentElement) return null;
+      if(el.disabled) return null;
+      var r = el.getBoundingClientRect();
+      /* 화면 대부분을 덮는 요소(팝업 배경 등)는 표시하지 않는다 — 안쪽을 눌렀을 때 팝업 전체가 어두워지지 않게 */
+      if(r.width * r.height > window.innerWidth * window.innerHeight * 0.35) return null;
+      return el;
+    }catch(e){ return null; }
+  }
+  function release(){
+    if(!cur) return;
+    var el = cur; cur = null;
+    var wait = Math.max(0, 90 - (Date.now() - t0));   /* 아주 짧은 탭도 눈에 보이게 최소 0.09초 */
+    setTimeout(function(){ try{ el.classList.remove('kd-pressed', 'kd-pressed-s'); }catch(e){} }, wait);
+  }
+  function press(e){
+    if(e.button && e.button !== 0) return;
+    release();
+    var el = pick(e.target); if(!el) return;
+    cur = el; t0 = Date.now();
+    try{
+      el.classList.add('kd-pressed');
+      var r = el.getBoundingClientRect();
+      if(r.width * r.height < 40000) el.classList.add('kd-pressed-s');
+    }catch(e2){}
+  }
+  var o = { capture:true, passive:true };
+  document.addEventListener('pointerdown', press, o);
+  document.addEventListener('pointerup', release, o);
+  document.addEventListener('pointercancel', release, o);
+  document.addEventListener('dragstart', release, o);
+  window.addEventListener('blur', release);
+})();
+</script>
 </body>
 </html>
