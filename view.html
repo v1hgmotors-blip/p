@@ -876,7 +876,7 @@ window._docMissingTap = function(k){
     if(none){ none.style.display='block'; none.style.transition='background .25s'; none.style.background='#991B1B';
       setTimeout(function(){ none.style.background='#3A1D1D'; },700); }
     var st=document.getElementById('docStatus');
-    if(st) st.textContent='⚠️ '+nm+(window._docJongsung(nm)?'이':'가')+' 등록되지 않았습니다 — 사무실로 문의 해주세요';
+    if(st) st.innerHTML='<span style="display:block;font-size:14px;font-weight:900;color:#FDE68A;background:#3A1D1D;'+'border:1.5px solid #F59E0B;border-radius:8px;padding:8px 10px;line-height:1.5;">⚠️ '+nm+(window._docJongsung(nm)?'이':'가')+' 등록되지 않았습니다<br>사무실로 문의 해주세요</span>';
   }catch(e){}
 };
 function _docChoose(kind){
