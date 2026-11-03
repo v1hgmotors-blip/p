@@ -2486,6 +2486,18 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       <button class="btn" onclick="testNtfy()" style="background:#0F766E;color:#fff;font-size:11px;">🧪테스트</button>
       <span class="save-msg" id="ntfyMsg"></span>
     </div>
+    <!-- ★(2026-10-30) 검색키불출 텔레그램 알림 — ①서버발송 ②기기 입력값 ③파일 기본값 -->
+    <div class="s-row" style="flex-wrap:wrap;">
+      <span class="s-lbl">✈️ 텔레그램</span>
+      <input id="pbTgToken" class="s-fb-url" type="password" autocomplete="off" placeholder="봇 토큰" style="flex:1.3;min-width:120px;" />
+      <input id="pbTgChat" class="s-fb-url" type="text" autocomplete="off" placeholder="채팅 ID" style="flex:1;min-width:90px;" />
+      <select id="pbTgMode" class="s-fb-url" style="flex:none;width:auto;min-width:0;">
+        <option value="direct">기기발송</option><option value="server">서버발송</option><option value="off">끄기</option>
+      </select>
+      <button class="btn btn-save" onclick="savePbTg()">💾</button>
+      <button class="btn" onclick="testPbTg()" style="background:#0F766E;color:#fff;font-size:11px;">🧪테스트</button>
+      <span class="save-msg" id="pbTgMsg"></span>
+    </div>
     <!-- ★★ 요금발생차단 마스터 스위치 — OFF면 모든 발송(문자·알림톡·약도전송) 전면 차단 -->
     <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;background:#7F1D1D;border-radius:10px;padding:6px 10px;">
       <span class="storage-mode-label" style="color:#FECACA;">🚫 요금발생차단</span>
@@ -3092,7 +3104,7 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
       🔥 Firebase URL · 공유코드<br>
       ⚙️ 열/행/파트 · 헤더 · 색상 등 모든 설정<br><br>
       <span style="color:#C03030;font-weight:900;">초기화 후 Firebase 정보를 새로 입력해야 합니다.</span>
-      <br><br><span style="color:#C03030;font-weight:900;">📄 차량 서류(출고서류)도 함께 영구 삭제됩니다.</span><br><span style="color:#1D4ED8;font-weight:900;">💾 아래 백업을 받으면 서류까지 포함해 100% 복원할 수 있습니다.</span>
+      <br><br><span style="color:#C03030;font-weight:900;">📄 차량 서류(출고서류)도 함께 영구 삭제됩니다.</span><br><span style="color:#C03030;font-weight:900;">🔑 같은 공유코드의 키불출앱 이력·메모·딜러명단·반납정보도 함께 영구 삭제됩니다.</span><br><span style="color:#1D4ED8;font-weight:900;">💾 아래 백업을 받으면 서류까지 포함해 100% 복원할 수 있습니다.</span>
     </div>
     <div style="margin:0 0 10px;"><button onclick="doBackup2Export(); try{showToast('📦 백업 .json 다운로드됨','success');}catch(e){}" style="width:100%;background:#1D4ED8;color:#fff;border:none;font-weight:900;padding:12px;border-radius:10px;cursor:pointer;font-family:inherit;font-size:14px;">📦 먼저 .json 백업받기 (권장)</button></div>
     <div class="reset-confirm-btns">
@@ -9169,6 +9181,100 @@ function _ntfyShowMsg(msg, isErr){
   clearTimeout(el._t);
   el._t=setTimeout(function(){ el.textContent=''; }, 3000);
 }
+/* ══ ★(2026-10-30) 검색키불출 텔레그램 알림 ══
+   보내는 순서
+   ① 「서버발송」: Firebase tg_queue 에 요청 → sms-server(onTgQueue)가 서버 비밀값 토큰으로 발송
+      (15초 안에 서버 응답이 없거나 실패하면 ②/③ 값으로 기기에서 직접 발송)
+   ② 이 기기 설정에 입력한 봇 토큰·채팅 ID
+   ③ 파일에 넣어둔 기본값(_PB_TG_DEFAULT) — 입력칸이 비어 있을 때
+   ※ 저장 키가 pb_ 로 시작하지 않음 → 백업·Firebase 동기화에 포함되지 않음 */
+var LS_PB_TG_TOKEN='kd_pbtg_token', LS_PB_TG_CHAT='kd_pbtg_chat', LS_PB_TG_MODE='kd_pbtg_mode';
+var _PB_TG_DEFAULT = { token:'8268063677:AAFYlfibw1bRaL88UGjc664kRmZFP0MN23Q', chat:'-1003698478861' };
+function _pbTgCfg(){
+  var g=function(k){ try{ return (localStorage.getItem(k)||'').trim(); }catch(e){ return ''; } };
+  return { token: g(LS_PB_TG_TOKEN) || _PB_TG_DEFAULT.token || '',
+           chat:  g(LS_PB_TG_CHAT)  || _PB_TG_DEFAULT.chat  || '',
+           mode:  g(LS_PB_TG_MODE)  || 'direct' };
+}
+function _pbTgMsg(t, err){ var el=document.getElementById('pbTgMsg'); if(!el) return; el.textContent=t; el.style.color=err?'#DC2626':'#16A34A'; clearTimeout(el._t); el._t=setTimeout(function(){ el.textContent=''; }, 4000); }
+function _pbTgLoad(){
+  try{
+    var t=document.getElementById('pbTgToken'), c=document.getElementById('pbTgChat'), m=document.getElementById('pbTgMode');
+    if(t){ t.value=localStorage.getItem(LS_PB_TG_TOKEN)||''; t.placeholder=_PB_TG_DEFAULT.token?'비우면 기본 봇 사용':'봇 토큰'; }
+    if(c){ c.value=localStorage.getItem(LS_PB_TG_CHAT)||''; c.placeholder=_PB_TG_DEFAULT.chat?('비우면 기본: '+_PB_TG_DEFAULT.chat):'채팅 ID'; }
+    if(m){ m.value=localStorage.getItem(LS_PB_TG_MODE)||'direct'; }
+  }catch(e){}
+}
+function savePbTg(){
+  try{
+    var t=(document.getElementById('pbTgToken')||{}).value||'', c=(document.getElementById('pbTgChat')||{}).value||'', m=(document.getElementById('pbTgMode')||{}).value||'direct';
+    localStorage.setItem(LS_PB_TG_TOKEN, t.trim()); localStorage.setItem(LS_PB_TG_CHAT, c.trim()); localStorage.setItem(LS_PB_TG_MODE, m);
+    var cfg=_pbTgCfg();
+    if(m==='off') _pbTgMsg('✅ 저장 — 텔레그램 끔', false);
+    else if(m==='server') _pbTgMsg('✅ 저장 — 서버발송'+((cfg.token&&cfg.chat)?' (실패 시 기기발송)':''), false);
+    else _pbTgMsg((cfg.token&&cfg.chat)?'✅ 저장 — 기기발송':'⚠️ 저장됨 — 토큰·채팅 ID가 필요합니다', !(cfg.token&&cfg.chat));
+  }catch(e){ _pbTgMsg('⚠️ 저장 실패', true); }
+}
+function _pbTgDirect(text, token, chat){
+  return fetch('https://api.telegram.org/bot'+token+'/sendMessage', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ chat_id: chat, text: text })
+  }).then(function(r){ return r.json(); }).then(function(j){ return !!(j && j.ok); }).catch(function(){ return false; });
+}
+function _pbTgCode(){
+  try{ return localStorage.getItem(LS_CODE) || ((typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS && _PB_DEFAULTS.code) || '') || (typeof DEFAULT_FB_CODE!=='undefined' ? DEFAULT_FB_CODE : ''); }catch(e){ return ''; }
+}
+/* cb(결과): 'server' | 'direct' | 'off' | 'nocfg' | 'fail' */
+function _pbTgSend(text, cb){
+  var done=function(r){ try{ if(cb) cb(r); }catch(e){} };
+  var cfg=_pbTgCfg();
+  if(cfg.mode==='off'){ done('off'); return; }
+  var direct=function(){
+    if(!(cfg.token && cfg.chat)){ done('nocfg'); return; }
+    _pbTgDirect(text, cfg.token, cfg.chat).then(function(ok){ done(ok?'direct':'fail'); });
+  };
+  var code=_pbTgCode();
+  if(cfg.mode==='server' && typeof fbDb!=='undefined' && fbDb && code){
+    try{
+      var ref=fbDb.ref('kd_rooms/'+code+'/tg_queue').push();
+      var fin=false, tmr=null;
+      var off=function(){ try{ ref.child('status').off('value', h); }catch(e){} };
+      var h=function(s){
+        var st=s && s.val(); if(fin) return;
+        if(st==='sent'){ fin=true; clearTimeout(tmr); off(); done('server'); }
+        else if(st==='failed'){ fin=true; clearTimeout(tmr); off(); direct(); }
+      };
+      ref.set({ text:String(text).slice(0,3500), chat: cfg.chat || null, status:'pending', t: Date.now() })
+        .then(function(){ ref.child('status').on('value', h); })
+        .catch(function(){ if(!fin){ fin=true; direct(); } });
+      tmr=setTimeout(function(){ if(fin) return; fin=true; off(); try{ ref.update({ status:'timeout' }); }catch(e){} direct(); }, 15000);
+      return;
+    }catch(e){}
+  }
+  direct();
+}
+function testPbTg(){
+  savePbTg();
+  _pbTgMsg('📤 전송 중...', false);
+  _pbTgSend('✈️ 주차현황판 텔레그램 테스트 성공!\n🕒 '+new Date().toLocaleString('ko-KR'), function(r){
+    var m={ server:'📤 서버로 전송 완료', direct:'📤 기기에서 전송 완료', off:'⚠️ 텔레그램이 꺼져 있습니다', nocfg:'⚠️ 봇 토큰·채팅 ID를 입력하세요', fail:'⚠️ 전송 실패 — 토큰·채팅 ID를 확인하세요' }[r];
+    _pbTgMsg(m||r, !(r==='server'||r==='direct'));
+  });
+}
+function _sendSearchTelegram(slotIdx, dealerName, dealerPhone, dealerPr){
+  try{
+    var slot=(getSlots()||{})[slotIdx]; if(!slot) return;
+    var t=new Date(Date.now()+9*3600*1000).toISOString().slice(0,16).replace('T',' ');
+    var body='🔑 키 불출 알림 (검색키불출)\n'
+      + '🚗 차량번호: ' + (slot.car||'') + '\n'
+      + (slot.owner ? ('🙋 차주: ' + slot.owner + '\n') : '')
+      + '🏢 소속상사: ' + (dealerPr||'') + '\n'
+      + '👤 딜러이름: ' + (dealerName||'') + '\n'
+      + '📲 전화번호: ' + (dealerPhone||'') + '\n'
+      + '🕒 ' + t;
+    _pbTgSend(body, function(r){ if(r==='fail') console.warn('[검색키불출 텔레그램] 전송 실패'); });
+  }catch(e){ console.warn('[검색키불출 텔레그램]', e); }
+}
 function saveNtfySettings(){
   var inp=document.getElementById('ntfyTopicInput');
   var topic = inp ? inp.value.trim() : '';
@@ -11387,6 +11493,7 @@ function _saveSearchIssueInfo(ch){  /* ★ (2026-10-27) ch: 'kakao' | 'naver' �
   _pendingSearchIssueSlot = null;
   _doSearchIssueConfirmed(slotIdx, dealerName, dealerPhone, dealerPr);
   _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr);
+  try{ _sendSearchTelegram(slotIdx, dealerName, dealerPhone, dealerPr); }catch(e){}   /* ★ 텔레그램 */
   if(ch==='kakao' || ch==='naver'){ try{ _searchSendRoute(slotIdx, dealerName, dealerPhone, ch); }catch(e){ console.warn('[검색키불출 약도전송]', e); } }
 }
 /* ★ (2026-10-27) 검색키불출 — 딜러 번호로 약도 전송 (서버가 위치 계산, 고른 채널 우선) */
@@ -13995,6 +14102,14 @@ function confirmResetPw(){
 /* ── 전체초기화 2차 확인 팝업 ── */
 function closeResetConfirm(){document.getElementById('resetConfirmOv').classList.remove('show');}
 function confirmClearAll(){
+  /* ★(2026-11-03) 지울 방 = 「지금 접속해 있는 방」. localStorage·연결을 지우기 전에 먼저 확보한다.
+     (예전 한결판은 파일 기본 공유코드의 방을 지워서, 다른 코드로 쓰던 기기에서 누르면 엉뚱한 방이 지워졌다) */
+  var _resetDelUrl = String(
+      (typeof fbDb!=='undefined' && fbDb && fbDb.app && fbDb.app.options && fbDb.app.options.databaseURL) ||
+      localStorage.getItem(LS_URL) || (_PB_DEFAULTS && _PB_DEFAULTS.url) || '').trim().replace(/\/+$/,'');
+  var _resetCode = String(localStorage.getItem(LS_CODE) || (_PB_DEFAULTS && _PB_DEFAULTS.code) || '').trim();
+  /* 공유코드가 비었거나 경로 문자(. # $ [ ] /)가 섞여 있으면 Firebase 삭제를 하지 않는다 — kd_rooms 전체 삭제 사고 방지 */
+  if(!/^[^.#$\[\]\/]+$/.test(_resetCode)) _resetCode = '';
   /* ★ 2차 확인 팝업 닫기 */
   var _rcOv = document.getElementById('resetConfirmOv');
   if(_rcOv) _rcOv.classList.remove('show');
@@ -14053,8 +14168,7 @@ function confirmClearAll(){
   /* ── 7. sessionStorage 초기화 → 새로고침 후 재연결 허용 ── */
   try { sessionStorage.removeItem('pb_fb_restore_checked'); } catch(e) {}
 
-  /* ── 8. ★ Firebase kd_rooms/{code} 데이터 전체 삭제를 먼저 완료한 후 재연결
-         (기존: 삭제와 재연결이 동시 실행되어 레이스컨디션으로 이전 데이터가 다시 보이는 버그)
+  /* ── 8. ★ Firebase kd_rooms/{지금 접속한 공유코드} 데이터 전체 삭제를 먼저 완료한 후 재연결
          ★ 삭제 진행 중 로딩 오버레이로 새로고침 방지 안내  */
   localStorage.setItem(LS_URL,  _PB_DEFAULTS.url);
   localStorage.setItem(LS_CODE, _PB_DEFAULTS.code);
@@ -14069,32 +14183,43 @@ function confirmClearAll(){
   var _resetBeforeUnload = function(e){ e.preventDefault(); e.returnValue=''; return ''; };
   window.addEventListener('beforeunload', _resetBeforeUnload);
 
-  function _finishReset(){
+  /* result: 'ok' = Firebase 삭제 완료 / 'nocode' = 공유코드 없음(삭제 안 함) / 'fail' = 삭제 실패 */
+  function _finishReset(result){
     window.removeEventListener('beforeunload', _resetBeforeUnload);
     if(_resetLoadingEl) _resetLoadingEl.classList.remove('show');
-    setDot('ing','연결 중...');
-    connectFb(_PB_DEFAULTS.url, _PB_DEFAULTS.code);
-    showAlert('✅ 초기화 완료! Firebase 데이터도 삭제됨');
-    setTimeout(hideAlert, 5000);
+    if(_PB_DEFAULTS.url && _PB_DEFAULTS.code){
+      setDot('ing','연결 중...');
+      connectFb(_PB_DEFAULTS.url, _PB_DEFAULTS.code);
+    } else {
+      setDot('off','미연결');
+    }
+    if(result==='ok')          showAlert('✅ 초기화 완료! Firebase 데이터도 삭제됨 (공유코드: '+_resetCode+')');
+    else if(result==='nocode') showAlert('✅ 이 기기 초기화 완료 — 접속한 공유코드가 없어 Firebase 데이터는 삭제하지 않았습니다');
+    else                       showAlert('⚠️ 이 기기는 초기화됐지만 Firebase 데이터 삭제에 실패했습니다 — 인터넷 연결을 확인해 주세요');
+    setTimeout(hideAlert, 6000);
   }
 
-  try {
-    var fbApp2 = firebase.initializeApp(
-      { databaseURL: _PB_DEFAULTS.url },
-      'reset_app_' + Date.now()
-    );
-    var fbDb2 = firebase.database(fbApp2);
-    try{ if(firebase.auth){ firebase.auth(fbApp2).signInAnonymously().catch(function(){}); } }catch(e){}
-    fbDb2.ref('kd_rooms/' + _PB_DEFAULTS.code).set(null).then(function(){
-      console.log('[RESET] Firebase 데이터 삭제 완료');
-      _finishReset();
-    }).catch(function(e){
-      console.warn('[RESET] Firebase 삭제 실패:', e);
-      _finishReset();
-    });
-  } catch(e){
-    console.warn('[RESET] Firebase 초기화 오류:', e);
-    _finishReset();
+  if(!_resetDelUrl || !_resetCode){
+    _finishReset('nocode');
+  } else {
+    try {
+      var fbApp2 = firebase.initializeApp(
+        { databaseURL: _resetDelUrl },
+        'reset_app_' + Date.now()
+      );
+      var fbDb2 = firebase.database(fbApp2);
+      try{ if(firebase.auth){ firebase.auth(fbApp2).signInAnonymously().catch(function(){}); } }catch(e){}
+      fbDb2.ref('kd_rooms/' + _resetCode).set(null).then(function(){
+        console.log('[RESET] Firebase 데이터 삭제 완료: kd_rooms/'+_resetCode);
+        _finishReset('ok');
+      }).catch(function(e){
+        console.warn('[RESET] Firebase 삭제 실패:', e);
+        _finishReset('fail');
+      });
+    } catch(e){
+      console.warn('[RESET] Firebase 초기화 오류:', e);
+      _finishReset('fail');
+    }
   }
 }
 
@@ -16635,6 +16760,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   try{
     var _nInp=document.getElementById('ntfyTopicInput');
     if(_nInp) _nInp.value = localStorage.getItem(LS_NTFY) || '';
+    _pbTgLoad();
   }catch(e){}
   /* ★ 저장소 모드 초기화 — 처음이면 팝업, 아니면 기존 모드 적용 */
   var _initModeResult = _initStorageMode();
@@ -16859,7 +16985,25 @@ var _MIGRATE_ROOM_PATHS = ['pb_slots','pb_settings',
   'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','kd_doc_flags',
   'links',
   'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
-  'pb_search_return','returned','updatedAt'];
+  'pb_search_return','returned','updatedAt',
+  /* ★(2026-11-03) 빠져 있던 경로 추가 — 서류 개수, 성능점검 등록일, 키불출앱 메모·반납위치·딜러명단, 각종 공유 설정 */
+  'kd_doc_counts','kd_insp_date','returnAt','returnLocMap','memos','action',
+  'dealerList','dealerByPhone','dealerListVer',
+  'kd_app_pin','kd_msg_channel','kd_ntfy_topic','kd_shop_name','kd_view_base_url',
+  'pb_media_ts','pb_view_log'];
+/* ★(2026-11-03) 발송 큐·인증·스캔 기록은 백업/복원/이전에서 항상 제외 (알림톡·텔레그램 재발송 사고 방지) */
+var _PB_ROOM_SKIP = ['dispatch_req','sms_queue','sms_sent','dispatch_scan','dispatch_auth',
+  'dispatch_auth_car','scan_log','search_dispatch_events','tg_queue'];
+/* 실제 방에 있는 경로(shallow 조회)까지 합쳐서 빠짐없이 — 새 기능이 경로를 추가해도 자동 포함 */
+function _pbRoomPaths(base, code, baseList){
+  var list=(baseList||_MIGRATE_ROOM_PATHS).slice();
+  return fetch(base+'/kd_rooms/'+encodeURIComponent(code)+'.json?shallow=true')
+    .then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
+    .then(function(v){
+      if(v && typeof v==='object'){ Object.keys(v).forEach(function(k){ if(list.indexOf(k)<0) list.push(k); }); }
+      return list.filter(function(k){ return _PB_ROOM_SKIP.indexOf(k)<0; });
+    });
+}
 /* ★★ 발송 큐/인증 경로는 이전에서 제외 — 알림톡 폭주 사고 방지
    제외: dispatch_req, sms_queue, dispatch_scan, search_dispatch_events, dispatch_auth, dispatch_auth_car, scan_log */
 
@@ -16920,7 +17064,9 @@ async function runDataMigrate(){
   if(btn){ btn.disabled=true; btn.textContent='⏳ 이전 중...'; }
   document.getElementById('dmMsg').style.display='none';
 
-  var total = _MIGRATE_ROOM_PATHS.length + 1; /* +1 = kd_photos */
+  _dmProgress('⏳ 이전할 항목 확인 중...');
+  var _MP = await _pbRoomPaths(srcUrl, srcCode);
+  var total = _MP.length + 1; /* +1 = kd_photos */
   var okCount=0, failList=[];
 
   async function _getJson(url){
@@ -16938,8 +17084,8 @@ async function runDataMigrate(){
   }
 
   var done=0;
-  for(var i=0;i<_MIGRATE_ROOM_PATHS.length;i++){
-    var p=_MIGRATE_ROOM_PATHS[i];
+  for(var i=0;i<_MP.length;i++){
+    var p=_MP[i];
     done++; _dmProgress('⏳ 이전 중... ('+done+'/'+total+') '+p);
     var got = await _getJson(srcUrl+'/kd_rooms/'+encodeURIComponent(srcCode)+'/'+p+'.json');
     if(!got.ok){ failList.push(p+'(읽기실패)'); continue; }
@@ -17051,7 +17197,7 @@ function doBackup2Export(){
       'pb_daily_backup','kd_docs_archive','hist','kd_daily_backup','kd_doc_flags',
       'links',
       'pb_app_pin_disabled','pb_encar_log','pb_part_steps','pb_product_memo_badges',
-      'pb_search_return','returned','updatedAt'];
+      'pb_search_return','returned','updatedAt'].concat(_MIGRATE_ROOM_PATHS.filter(function(x){ return ['pb_slots','pb_settings'].indexOf(x)<0; }));
     /* ★★ 발송 큐/인증 경로는 백업에서 제외 — 복원 시 알림톡 폭주 사고 방지 */
     /* ★ FIX: "요청 실패(ok:false)"와 "그 경로에 원래 데이터가 없어서 null"을 구분해야
        정확한 성공/실패 판정이 가능하다. 예전엔 둘 다 그냥 null로 뭉뚱그려서, 실패해도
@@ -17064,7 +17210,11 @@ function doBackup2Export(){
     var _fetchPhotos = fetch(_base+"/kd_photos/"+encodeURIComponent(_code)+".json")
       .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, val:j}; }).catch(function(){ return {ok:false, val:null}; }); })
       .catch(function(){ return {ok:false, val:null}; });
-    Promise.all(_fbPaths.map(_fetchOne).concat([_fetchPhotos])).then(function(res){
+    _pbRoomPaths(_base, _code, _fbPaths).then(function(_l){
+      /* pb_slots·pb_settings는 이 파일의 로컬 데이터로 따로 복원하므로 여기선 제외(기존 방식 유지) */
+      _fbPaths = _l.filter(function(x, i){ return _l.indexOf(x)===i && x!=='pb_slots' && x!=='pb_settings'; });
+      return Promise.all(_fbPaths.map(_fetchOne).concat([_fetchPhotos]));
+    }).then(function(res){
       var _fbFull={};
       var _failedPaths=[];
       _fbPaths.forEach(function(p, idx){
@@ -17089,6 +17239,27 @@ function doBackup2Export(){
       _finishExport();
     }).catch(function(){ _finishExport(); });
   } else { _finishExport(); }
+}
+/* ★(2026-11-03) 복원 파일의 Firebase 데이터(서류·사진·이력 등)를 REST로 되돌려 쓰기
+   — Firebase에 아직 접속 전이어도(새 기기) URL·공유코드만 있으면 복원되도록 */
+function _pbPushFbFull(data){
+  try{
+    var _rb=(localStorage.getItem(LS_URL) ||
+      (typeof fbDb!=='undefined' && fbDb && fbDb.app && fbDb.app.options && fbDb.app.options.databaseURL) ||
+      (typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS.url) || "").replace(/\/+$/,"");
+    var _rc=(localStorage.getItem(LS_CODE)||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||"");
+    if(!_rb || !_rc) return Promise.resolve();
+    var _ps=[];
+    var _putOne=function(path, val){ _ps.push(fetch(_rb+"/kd_rooms/"+encodeURIComponent(_rc)+"/"+path+".json",{method:"PUT", body:JSON.stringify(val)}).catch(function(){})); };
+    if(data._fbFull){
+      Object.keys(data._fbFull).forEach(function(p){ if(_PB_ROOM_SKIP.indexOf(p)<0) _putOne(p, data._fbFull[p]); });
+      if(data._kdPhotosFull) _ps.push(fetch(_rb+"/kd_photos/"+encodeURIComponent(_rc)+".json",{method:"PUT", body:JSON.stringify(data._kdPhotosFull)}).catch(function(){}));
+    } else {
+      if(data._kd_docs) _putOne('kd_docs', data._kd_docs);
+      if(data._kd_doc_flags) _putOne('kd_doc_flags', data._kd_doc_flags);
+    }
+    return Promise.all(_ps);
+  }catch(e){ return Promise.resolve(); }
 }
 function doBackup2Import(input){
   var file=input.files[0]; if(!file)return;
@@ -17241,7 +17412,7 @@ function doBackup2Import(input){
                   {method:"PUT", body:JSON.stringify(val)}).catch(function(){}));
               };
               if(data._fbFull){
-                Object.keys(data._fbFull).forEach(function(p){ _putOne(p, data._fbFull[p]); });
+                Object.keys(data._fbFull).forEach(function(p){ if(_PB_ROOM_SKIP.indexOf(p)<0) _putOne(p, data._fbFull[p]); });   /* ★ 발송 큐 등은 복원하지 않음 */
                 if(data._kdPhotosFull){
                   _ps.push(fetch(_rb+"/kd_photos/"+encodeURIComponent(_rc)+".json",
                     {method:"PUT", body:JSON.stringify(data._kdPhotosFull)}).catch(function(){}));
@@ -17257,7 +17428,8 @@ function doBackup2Import(input){
           .then(done)
           .catch(errFn);
       } else {
-        done();
+        /* ★(2026-11-03) 아직 Firebase 접속 전이어도 서류·사진·이력은 대상 DB에 되돌려 쓴다 */
+        _pbPushFbFull(data).then(done, done);
       }
 
     }catch(err){ _b2msg('❌ 복원 실패: '+err.message,'#C03030','#FFEEEE','#FFAAAA'); }
