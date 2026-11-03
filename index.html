@@ -11407,9 +11407,22 @@ function _addSearchIssueBadge(slotIdx){
 /* ★ 검색 키불출 버튼 클릭 → 배지 교체 전에 딜러정보(이름/전화번호/소속상사) 입력 미니팝업 먼저 표시
    저장 버튼을 눌러야 기존 배지교체+약도팝업+공유hist전달 로직(_doSearchIssueConfirmed)이 진행됨 */
 var _pendingSearchIssueSlot = null;
+/* ★(2026-11-03) 차량이 없는(빈칸·사용안함) 칸은 키불출 금지 — 빈칸에 키반납확인이 붙고 약도 팝업이 뜨던 문제 */
+function _pbSlotHasCar(slotIdx){
+  try{ var d=getSlot(slotIdx); return !!(d && !d.disabled && String(d.car||'').trim()); }catch(e){ return false; }
+}
+function _pbNoCarIssueAlert(){
+  try{ showAlert('⚠️ 차량이 등록되지 않은 칸은 키불출할 수 없습니다'); setTimeout(hideAlert, 2500); }catch(e){}
+}
 function _doSearchIssue(slotIdx){
   var el = document.getElementById('slot_'+slotIdx);
   if(!el) return;
+  if(!_pbSlotHasCar(slotIdx)){
+    _pbNoCarIssueAlert();
+    try{ var _ib=el.querySelector('.slot-search-issue-badge'); if(_ib) _ib.remove(); el.classList.remove('blink-search');
+         if(_searchBadgeSlots[slotIdx]==='issue') delete _searchBadgeSlots[slotIdx]; }catch(e){}
+    return;
+  }
   /* ★ BUG FIX: 배지 버튼 클릭 시 키보드 내리기
      검색 입력란 포커스 해제 → 모바일 키보드 내림 */
   try{
@@ -11491,6 +11504,7 @@ function _saveSearchIssueInfo(ch){  /* ★ (2026-10-27) ch: 'kakao' | 'naver' �
   var _ov = document.getElementById('searchIssueInfoOv');
   if(_ov) _ov.style.display = 'none';
   _pendingSearchIssueSlot = null;
+  if(!_pbSlotHasCar(slotIdx)){ _pbNoCarIssueAlert(); return; }   /* ★ 저장 사이에 칸이 비워진 경우 */
   _doSearchIssueConfirmed(slotIdx, dealerName, dealerPhone, dealerPr);
   _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr);
   try{ _sendSearchTelegram(slotIdx, dealerName, dealerPhone, dealerPr); }catch(e){}   /* ★ 텔레그램 */
