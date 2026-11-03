@@ -117,6 +117,11 @@
     background:#E03131;border-color:#B91C1C;color:#fff;font-weight:900;
     animation:amPulse 1.2s ease-in-out infinite;
   }
+  /* ★(2026-11-03) 내 차 칸: 📍 + 노란 차량번호 */
+  .amTarget.amTWithCar{ line-height:1.05; padding:2px 2px; min-width:38px; height:auto; }
+  .amTPin{ font-size:14px; line-height:1; }
+  .amTCar{ font-size:11px; font-weight:900; color:#FDE047; letter-spacing:-.3px; line-height:1.1;
+           text-shadow:0 1px 2px rgba(0,0,0,.55); word-break:keep-all; overflow-wrap:anywhere; margin-top:1px; }
   .amNear{
     font-size:9px;font-weight:800;color:#334155;letter-spacing:-.5px;
     background:#DBEAFE;border-color:#93C5FD;
@@ -1814,7 +1819,9 @@ window._docChoose = _docChoose;
       html+='<tr><td style="font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;">'+kan+'칸</td>';
       for(var c2=1;c2<=cols;c2++){
         var isT=(c2===d.col && r===d.row);
-        if(isT){ html+='<td class="amCell amTarget">📍</td>'; }
+        if(isT){   /* ★(2026-11-03) 내 차 칸 — 📍와 함께 차량번호를 노란 글씨로 크게 */
+          var _tcn = (d.cellCars && d.cellCars[c2+'_'+r]) || (typeof car!=='undefined' ? car : '') || '';
+          html+='<td class="amCell amTarget'+(_tcn?' amTWithCar':'')+'"><div class="amTPin">📍</div>'+(_tcn?'<div class="amTCar">'+_esc(_tcn)+'</div>':'')+'</td>'; }
         else{
           /* ★ 모든 주차 칸의 차량번호 표시 (특수문자 포함). 차주정보는 표시 안 함 */
           var _cn2 = d.cellCars ? d.cellCars[c2+'_'+r] : null;
