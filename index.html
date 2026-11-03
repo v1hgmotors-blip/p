@@ -9200,7 +9200,11 @@ function _pbTgMsg(t, err){ var el=document.getElementById('pbTgMsg'); if(!el) re
 function _pbTgLoad(){
   try{
     var t=document.getElementById('pbTgToken'), c=document.getElementById('pbTgChat'), m=document.getElementById('pbTgMode');
-    if(t){ t.value=localStorage.getItem(LS_PB_TG_TOKEN)||''; t.placeholder=_PB_TG_DEFAULT.token?'비우면 기본 봇 사용':'봇 토큰'; }
+    if(t){ t.value=localStorage.getItem(LS_PB_TG_TOKEN)||'';
+      /* ★(2026-11-04) 파일 기본 봇을 칸에 안내 — 보안상 앞(봇 번호)과 끝 4자리만 보이고 가운데는 가림 */
+      var _dt=String(_PB_TG_DEFAULT.token||''), _ci=_dt.indexOf(':');
+      var _mask=_dt ? (_ci>0 ? (_dt.slice(0,_ci+4)+'•••••'+_dt.slice(-4)) : (_dt.slice(0,4)+'•••••'+_dt.slice(-4))) : '';
+      t.placeholder=_dt?('비우면 기본 봇: '+_mask):'봇 토큰'; }
     if(c){ c.value=localStorage.getItem(LS_PB_TG_CHAT)||''; c.placeholder=_PB_TG_DEFAULT.chat?('비우면 기본: '+_PB_TG_DEFAULT.chat):'채팅 ID'; }
     if(m){ m.value=localStorage.getItem(LS_PB_TG_MODE)||'direct'; }
   }catch(e){}
@@ -11279,8 +11283,12 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
         if(_c4.length===4){ fbDb.ref('kd_rooms/'+code+'/dispatch_auth_car/'+_c4).set({ ph4:_p4, eid:id, at:id }); }
       }
     }catch(e){}
+    /* ★(2026-11-03) 차주 이름도 함께 전달 — 키불출앱 이력에 「차량번호 (차주)」로 표시 */
+    var _cOwner = (function(){ try{ var d=getSlot(slotIdx)||{}; var o=String(d.owner||'').trim();
+      if(!o && d.memo){ var m=String(d.memo), i=m.indexOf(' /'); if(i>0) o=m.substring(0,i).trim(); else if(/\/$/.test(m)) o=m.slice(0,-1).trim(); }
+      return o; }catch(e){ return ''; } })();
     var committedId = id; /* ★ transaction 커밋 시 실제 사용된 id로 갱신됨 */
-    var entry = { id:id, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx,
+    var entry = { id:id, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx, carOwner:_cOwner,
       timestamp: new Date().toLocaleString('ko-KR') };
     /* ★ FIX: once('value')로 읽은 뒤 set()으로 통째로 덮어쓰던 방식 →
        동시에 다른 기기가 키불출(hist 쓰기)을 하면 그 사이에 서로 덮어써서
@@ -11294,7 +11302,7 @@ function _pushSearchDispatchToHist(slotIdx, carNo, dealerName, dealerPhone, deal
       var maxExisting = hist.reduce(function(mx,h){ return (h&&h.id>mx)?h.id:mx; }, 0);
       var tid = Math.max(id, maxExisting+1);
       while(hist.some(function(h){ return h && h.id===tid; })){ tid++; }
-      var e2 = { id:tid, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx,
+      var e2 = { id:tid, car:carNo, name:_dName, phone:_dPhone, pr:_dPr, src:'search', slotIdx:slotIdx, carOwner:_cOwner,
         timestamp: new Date().toLocaleString('ko-KR') };
       /* ★ BUG FIX: push(맨 뒤 추가) → unshift(맨 앞 추가)로 변경.
          키불출앱은 이력이 최신순(앞쪽)이라고 가정하고 syncPushNow에서
