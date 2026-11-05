@@ -589,7 +589,7 @@ function sharePage(){
     try{
       if(!carNo){ _dbgScan('❌ 차량번호 없음 (서류·스캔 불가)'); return; }
       if(!fdb){ _dbgScan('❌ DB 미연결'); return; }
-      if(!code){ _dbgScan('❌ 공유코드 없음'); return; }
+      if(!code){ _dbgScan('❌ 상사코드 없음'); return; }
       var k = _docKeyFromCar(carNo);
       if(!k) return;
       var sKey = 'view_scan_'+code+'_'+k;
@@ -1694,7 +1694,23 @@ window._docChoose = _docChoose;
       drawAutoMap(); /* ★ 사진 유무와 상관없이 항상 자동 약도 갱신 */
       if(newPart) _maybeReloadPart(newPart);
     }
-    fdb.ref('kd_rooms/'+code+'/pb_slots').once('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); });
+    /* ★(2026-11-05) 다운로드 절약: 주차칸 전체 대신 「그 파트의 칸들」만 받는다 (C_파트_열_행 키 범위).
+       그 파트 안에서 차량번호가 정확히 일치하는 칸을 찾으면 그것만 사용 — 같은 파트 다른 칸의 차량번호(약도 표시)도 그대로 나옴.
+       못 찾으면(다른 파트로 이동·서류전용 칸·옛 형식 키 등) 예전처럼 전체를 받아 찾는다. */
+    function _vLoadSlotsFull(){ fdb.ref('kd_rooms/'+code+'/pb_slots').once('value', function(snap){ _liveSlots = snap.val()||{}; recompute(); }); }
+    function _vLoadSlotsSmart(){
+      var _pp = String(part||'').replace(/[^0-9]/g,'');
+      if(!_pp){ _vLoadSlotsFull(); return; }
+      var _pre = 'C_' + _pp + '_';
+      try{
+        fdb.ref('kd_rooms/'+code+'/pb_slots').orderByKey().startAt(_pre).endAt(_pre + '\uf8ff').once('value', function(snap){
+          var v = (snap && snap.val()) || {};
+          var hit = Object.keys(v).some(function(k){ var d = String((v[k] && v[k].car) || '').replace(/[^0-9]/g,''); return d && d === carD; });
+          if(hit){ _liveSlots = v; recompute(); } else { _vLoadSlotsFull(); }
+        }, function(){ _vLoadSlotsFull(); });
+      }catch(e){ _vLoadSlotsFull(); }
+    }
+    _vLoadSlotsSmart();
     fdb.ref('kd_rooms/'+code+'/pb_settings').once('value', function(snap){ _liveSettings = snap.val()||{}; try{ if(window._applyPromoFromSettings) window._applyPromoFromSettings(_liveSettings); }catch(e){} recompute(); });
   }
 
