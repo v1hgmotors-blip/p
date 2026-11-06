@@ -3850,6 +3850,15 @@ function _validateDataIntegrity(data, ids, label){
    2. dirty 없으면 → 전체 로컬 우선 set (기존 동작 유지) */
 function _fbLocalFirstMerge(localData, localIds, localTs){
   if(!fbSlotsRef) return;
+  /* ★ (2026-11-06) 올리기 전에 다른 기기의 파트 삭제 기록을 먼저 확인·반영 (옛 칸 번호로 올리는 사고 방지) */
+  if(!_fbLocalFirstMerge._pdOk && typeof _pdCheckLogThen==='function'){
+    _pdCheckLogThen(function(changed){
+      _fbLocalFirstMerge._pdOk=true;
+      try{ if(changed){ localData=_getData(); localIds=_getIds(); } _fbLocalFirstMerge(localData, localIds, localTs); }
+      finally{ _fbLocalFirstMerge._pdOk=false; }
+    });
+    return;
+  }
   if(typeof _kdFirstMergePending !== 'undefined' && _kdFirstMergePending){ console.log('[로컬우선] 처음 연결 선택 대기 중 — 보류'); return; }
 
   var dirty = _getDirtySlots();
@@ -4146,14 +4155,14 @@ var _safe6Partner = false;
 /* ★ 기본 차주 목록 (하드코딩, 선택만 가능 / 삭제 불가)
    ━ 전화번호 수정 방법: 메모장으로 이 파일을 열어 아래 p:'번호' 부분만 고치면 됩니다 (숫자만) */
 var DEFAULT_OWNER_LIST = [
-  { n:'김준성',         p:'01090454247', t:'myshop-key-9000' },
-  { n:'이서찬',         p:'01036871785' },
   { n:'김경수',         p:'01046971883' },
+  { n:'김준성',         p:'01090454247', t:'myshop-key-9000' },
+  { n:'김진희',         p:'01091394655' },
+  { n:'박윤상',         p:'01094174097' },
   { n:'송욱',           p:'01037168602' },
   { n:'송일석',         p:'01096666588' },
   { n:'신정우',         p:'01089273421' },
-  { n:'김진희',         p:'01091394655' },
-  { n:'박윤상',         p:'01094174097' },
+  { n:'이서찬',         p:'01036871785' },
   { n:'KANVLADIMIR',   p:'01058083711' },
   { n:'TSOYYURIYGEORGIEVICH', p:'01076097787' }
 ];
@@ -4313,6 +4322,8 @@ function _updateOwnerFoldBtn(){
   b.textContent = '👥 등록된 차주' + (n ? ' ' + n + '명' : '') + (_ownerListOpen ? ' ▲' : ' ▼');
 }
 
+/* ★ (2026-11-06) 차주이름 정렬: 한글 ㄱㄴㄷ순 → 영문 이름은 맨 뒤 */
+function _ownerNameCmp(a,b){ a=String(a||'').trim(); b=String(b||'').trim(); var ka=/^[가-힣ㄱ-ㅎ]/.test(a)?0:1, kb=/^[가-힣ㄱ-ㅎ]/.test(b)?0:1; if(ka!==kb) return ka-kb; try{ return a.localeCompare(b,'ko'); }catch(e){ return a<b?-1:(a>b?1:0); } }
 function renderOwnerList() {
   var userList = getOwnerList();
   var wrap = document.getElementById('ownerList');
@@ -4333,7 +4344,7 @@ function renderOwnerList() {
   }
 
   /* ★ 기본 차주 (상단 고정, 선택만 가능) — 이름+전화 세트 */
-  DEFAULT_OWNER_LIST.forEach(function(entry) {
+  DEFAULT_OWNER_LIST.slice().sort(function(x,y){ return _ownerNameCmp(_ownerEntryName(x),_ownerEntryName(y)); }).forEach(function(entry) {
     var name  = _ownerEntryName(entry);
     var phone = _ownerEntryPhone(entry);
     var topic = _ownerEntryTopic(entry);
@@ -4373,7 +4384,7 @@ function renderOwnerList() {
     wrap.appendChild(emp);
     _updateDelConfirmBtn(); return;
   }
-  userList.forEach(function(entry, i) {
+  userList.map(function(e,i){ return i; }).sort(function(x,y){ return _ownerNameCmp(_ownerEntryName(userList[x]),_ownerEntryName(userList[y])); }).forEach(function(i) { var entry = userList[i];   /* ★ 이름순 표시(번호는 원래 순서 유지) */
     var name  = _ownerEntryName(entry);
     var phone = _ownerEntryPhone(entry);
     var topic = _ownerEntryTopic(entry);
@@ -6841,9 +6852,17 @@ function _pbRegAtFmt(ms, withTime){
   var d=new Date(ms), p=function(n){ return (n<10?'0':'')+n; };
   return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+(withTime?(' '+p(d.getHours())+':'+p(d.getMinutes())):'');
 }
+/* ★(2026-11-05) 서류앱 등록일(kd_manual_at)과 칸 최초등록일 중 먼저인 날짜 */
+var _pbManualAt={};
+function _pbRegAtEff(d){
+  if(!d || !d.car) return 0;
+  var r=parseInt(d.regAt,10)||0, m=0;
+  try{ m=parseInt((_pbManualAt||{})[_docKeyFromCar(d.car)],10)||0; }catch(e){}
+  return (r && m) ? Math.min(r,m) : (r||m);
+}
 function _pbRegAtShow(d){
   var el=document.getElementById('mRegAtInfo'), ta=document.getElementById('mMemoInput');
-  var t=(d && d.car && d.regAt) ? ('🗓 최초등록 '+_pbRegAtFmt(d.regAt,true)) : '';
+  var _rt=_pbRegAtEff(d); var t=(d && d.car && _rt) ? ('🗓 최초등록 '+_pbRegAtFmt(_rt,true)) : '';
   if(el) el.textContent=t;
   if(ta) ta.classList.toggle('has-regat', !!t);
 }
@@ -8437,7 +8456,10 @@ function removePart(){
   /* ★ FIX: 파트 선택 팝업 — 어떤 파트를 삭제할지 선택 */
   _showPartSelectDeletePopup();
 }
+/* ★ (2026-11-06) 파트 선택 삭제 — 여러 파트를 체크해 한 번에 삭제 */
+var _partDelSel = {};
 function _showPartSelectDeletePopup(){
+  _partDelSel = {};
   var ids=_getIds(), data=_getData();
   var ov=document.getElementById('partSelectDeleteOv');
   var list=document.getElementById('partSelectDeleteList');
@@ -8456,17 +8478,386 @@ function _showPartSelectDeletePopup(){
     var info=colCnt+'열 × '+rowCnt+'행';
     if(carCnt>0) info+=' · 🚗 '+carCnt+'대';
     else if(hasData) info+=' · 데이터 있음';
-    (function(pNum,pIdsArr,hasDataFlag){
+    (function(pNum,hasDataFlag,lbl){
       var btn=document.createElement('button');
+      btn.type='button';
       btn.className='part-sel-del-btn'+(hasDataFlag?' has-data':'');
-      btn.innerHTML='<span class="part-sel-del-name">'+pNum+'.PART &nbsp;<b>'+label+'</b></span>'
-                   +'<span class="part-sel-del-info">'+info+'</span>';
-      btn.onclick=function(){_confirmDeleteSelectedPart(pNum,pIdsArr,hasDataFlag);};
+      btn.innerHTML='<span class="part-sel-del-chk">☐</span>'
+                   +'<span class="part-sel-del-txt"><span class="part-sel-del-name">'+pNum+'.PART &nbsp;<b>'+_pdEsc(lbl)+'</b></span>'
+                   +'<span class="part-sel-del-info">'+info+'</span></span>';
+      btn.onclick=function(){ _togglePartDelSel(pNum, btn, hasDataFlag, lbl); };
       list.appendChild(btn);
-    })(p,pIds,hasData);
+    })(p,hasData,label);
   }
+  _updatePartDelSelBtn();
   ov.style.display='flex';
 }
+function _pdEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _togglePartDelSel(pNum, btn, hasData, lbl){
+  if(_partDelSel[pNum]){ delete _partDelSel[pNum]; }
+  else{
+    var cnt=Object.keys(_partDelSel).length;
+    if(NUM_PARTS-(cnt+1) < MIN_PARTS){ showAlert('⚠️ 파트는 최소 '+MIN_PARTS+'개 남아야 합니다'); setTimeout(hideAlert,2500); return; }
+    _partDelSel[pNum]={hasData:!!hasData, label:lbl};
+  }
+  var on=!!_partDelSel[pNum];
+  btn.classList.toggle('sel', on);
+  var chk=btn.querySelector('.part-sel-del-chk'); if(chk) chk.textContent=on?'☑':'☐';
+  _updatePartDelSelBtn();
+}
+function _updatePartDelSelBtn(){
+  var b=document.getElementById('partSelectDeleteGo'); if(!b) return;
+  var n=Object.keys(_partDelSel).length;
+  b.disabled=!n;
+  b.style.opacity=n?'1':'.45';
+  b.textContent=n?('🗑️ 선택 삭제 ('+n+'개)'):'🗑️ 삭제할 파트를 선택하세요';
+}
+function _closePartSelectDelete(){
+  var ov=document.getElementById('partSelectDeleteOv'); if(ov) ov.style.display='none';
+  _partDelSel={};
+}
+function _goPartDeleteSelected(){
+  var sel=_partDelSel, list=Object.keys(sel).map(function(x){ return parseInt(x,10); }).sort(function(a,b){ return a-b; });
+  if(!list.length) return;
+  if(NUM_PARTS-list.length < MIN_PARTS){ showAlert('⚠️ 파트는 최소 '+MIN_PARTS+'개 남아야 합니다'); setTimeout(hideAlert,2500); return; }
+  var ov=document.getElementById('partSelectDeleteOv'); if(ov) ov.style.display='none';
+  var withData=list.filter(function(p){ return sel[p].hasData; });
+  if(withData.length){
+    var msg=document.getElementById('partDeleteMsg');
+    if(msg) msg.innerHTML='<b>'+withData.map(function(p){ return p+'.PART ('+_pdEsc(sel[p].label)+')'; }).join('<br>')+'</b><br>에 저장된 데이터가 있습니다.<br>(차량번호·키번호·메모·차주 등)<br>삭제하면 <b>영구 복구 불가</b>합니다.'
+                         +(list.length>1?'<br><span style="color:#7C2D12;">선택한 '+list.length+'개 파트('+list.join(', ')+'.PART)를 함께 삭제합니다</span>':'');
+    var confirmOv=document.getElementById('partDeleteOv');
+    if(confirmOv) confirmOv.style.display='flex';
+    window._partDeleteCallback=function(){ _doPartsDelete(list); };
+    return;
+  }
+  _doPartsDelete(list);
+}
+
+/* ★ (2026-11-06) 여러 파트 삭제 — 안전장치
+   ① 서버 연결 확인 (끊겨 있으면 삭제 불가 — 로컬 전용 모드는 예외)
+   ② 서버 최신 칸 데이터를 새로 받아 이 기기 데이터와 비교 → 더 최신 쪽 사용 (다른 기기에서 막 바꾼 칸 유실 방지)
+   ③ 삭제 직전 전체 백업 자동 저장 (백업 목록에 「🧩 파트삭제 전」으로 표시 — 그대로 복원 가능)
+   ④ 실제로 쓰기 전에 옮길 결과를 미리 계산해 검증 (차량 수·위치가 하나라도 안 맞으면 아무것도 바꾸지 않고 중단)
+   ⑤ 저장 후 다시 읽어 확인 (저장 실패 시 원래대로 되돌림) */
+var _partDelBusy = false;
+function _pdOnline(){
+  try{ if(typeof window._fbLiveConn !== 'undefined') return !!window._fbLiveConn && navigator.onLine !== false; }catch(e){}
+  return navigator.onLine !== false;
+}
+function _pdFail(msg){
+  _partDelBusy = false;
+  try{ showAlert(msg); setTimeout(hideAlert, 5000); }catch(e){ try{ alert(msg); }catch(e2){} }
+}
+function _doPartsDelete(delList){
+  if(_partDelBusy){ showAlert('⏳ 파트 삭제를 처리하는 중입니다'); setTimeout(hideAlert,2000); return; }
+  var oldN=NUM_PARTS, del={};
+  (delList||[]).forEach(function(p){ p=parseInt(p,10); if(p>=1&&p<=oldN) del[p]=1; });
+  var dels=Object.keys(del).map(function(x){ return parseInt(x,10); }).sort(function(a,b){ return a-b; });
+  if(!dels.length) return;
+  if(oldN-dels.length < MIN_PARTS){ _pdFail('⚠️ 파트는 최소 '+MIN_PARTS+'개 남아야 합니다'); return; }
+  var useFb = !!fbSlotsRef;
+  if(useFb && !_pdOnline()){ _pdFail('📴 서버 연결이 끊겨 있어 파트를 삭제할 수 없습니다.\n인터넷 연결 후 다시 시도해 주세요. (데이터는 그대로입니다)'); return; }
+  _partDelBusy = true;
+  showAlert('⏳ 서버 최신 데이터 확인 · 삭제 전 백업 저장 중...');
+  var minP=dels[0];
+  /* ② 서버 최신 칸 데이터 (10초 안에 못 받으면 중단) */
+  var srvP = !useFb ? Promise.resolve({}) : new Promise(function(res, rej){
+    var done=false, t=setTimeout(function(){ if(!done){ done=true; rej(new Error('timeout')); } }, 10000);
+    fbSlotsRef.once('value').then(function(s){ if(!done){ done=true; clearTimeout(t); res(s.val()||{}); } })
+      .catch(function(e){ if(!done){ done=true; clearTimeout(t); rej(e); } });
+  });
+  /* 삭제되는 파트의 사진·약도·경로(서버) — 백업에 함께 넣어 되돌릴 수 있게 */
+  var code = '';
+  try{ code = localStorage.getItem(LS_CODE) || (typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS.code) || ''; }catch(e){}
+  var medP = (!useFb || !fbDb || !code) ? Promise.resolve(null) : Promise.all(['pb_part_photos','pb_part_canvases','pb_part_steps'].map(function(kind){
+    return Promise.all(dels.map(function(p){ return fbDb.ref('kd_rooms/'+code+'/'+kind+'/'+p).once('value').then(function(s){ var v=s.val(); return v===undefined?null:v; }); }));
+  })).then(function(r){ var o={photos:{},canvases:{},steps:{}}; dels.forEach(function(p,i){ if(r[0][i]!=null) o.photos[p]=r[0][i]; if(r[1][i]!=null) o.canvases[p]=r[1][i]; if(r[2][i]!=null) o.steps[p]=r[2][i]; }); return o; });
+  Promise.all([srvP, medP]).then(function(res){
+    var srv=res[0]||{}, media=res[1];
+    /* ③ 삭제 직전 전체 백업 */
+    var keep=[]; for(var q=1;q<=oldN;q++){ if(!del[q]) keep.push(q); }
+    var bk=_collectBackupData(true);
+    /* 백업에는 이 기기 + 서버 중 더 최신 칸 값을 넣는다 (다른 기기에서 막 바꾼 칸도 백업에 포함) */
+    try{
+      var _ld=_getData(), _mg={}, _k;
+      var _t=function(v){ return (v && typeof v==='object' && +v._ts) || 0; };
+      for(_k in _ld) _mg[_k]=_ld[_k];
+      for(_k in srv){ if(!/^C_\d+_\d+_\d+$/.test(_k)) continue; if(_mg[_k]==null || _t(srv[_k])>_t(_mg[_k])) _mg[_k]=srv[_k]; }
+      bk[LS_SLOT_DATA]=JSON.stringify(_mg);
+    }catch(e){}
+    var nowKst=_kstNow(), hh=('0'+nowKst.getUTCHours()).slice(-2), mi=('0'+nowKst.getUTCMinutes()).slice(-2), ss=('0'+nowKst.getUTCSeconds()).slice(-2);
+    bk._backupTime = hh+':'+mi; bk._backupLabel = 'PARTDEL';
+    bk._partdel = { dels:dels, keep:keep, oldN:oldN, minP:minP, at:Date.now() };
+    if(media) bk._partdelMedia = media;
+    return new Promise(function(res2, rej2){
+      if(useFb){
+        _saveBackupToFirebase(bk, 'PARTDEL', function(ok, err){ if(ok) res2({srv:srv}); else rej2(new Error('backup:'+(err||''))); });
+      } else {
+        var okL=_saveBackupToLocalStorage(bk, 'PARTDEL', hh+':'+mi);
+        if(okL) res2({srv:srv});
+        else {
+          var go=false; try{ go=confirm('⚠️ 이 기기 저장공간이 부족해 삭제 전 백업을 저장하지 못했습니다.\n그래도 삭제할까요?'); }catch(e){}
+          if(go) res2({srv:srv}); else rej2(new Error('backup:local'));
+        }
+      }
+    });
+  }).then(function(r){
+    hideAlert();
+    var ok=_doPartsDeleteCommit(dels, r.srv);
+    _partDelBusy=false;
+    if(!ok) return;
+  }).catch(function(e){
+    console.warn('[파트삭제] 중단', e);
+    var m=String(e&&e.message||e);
+    _pdFail(m.indexOf('backup')===0 ? '⚠️ 삭제 전 백업 저장에 실패해 파트 삭제를 중단했습니다.\n(데이터는 그대로입니다) 잠시 후 다시 시도해 주세요.'
+                                    : '⚠️ 서버 데이터를 확인하지 못해 파트 삭제를 중단했습니다.\n(데이터는 그대로입니다) 연결 상태를 확인 후 다시 시도해 주세요.');
+  });
+}
+
+/* 실제 삭제 (검증 통과 시에만 기록) — 반환: true=완료, false=중단(아무것도 안 바뀜) */
+function _doPartsDeleteCommit(dels, serverSlots){
+  var oldN=NUM_PARTS, del={};
+  dels.forEach(function(p){ del[p]=1; });
+  var keep=[], map={};
+  for(var p=1;p<=oldN;p++){ if(!del[p]){ keep.push(p); map[p]=keep.length; } }
+  var newN=keep.length, minP=dels[0];
+  var re=/^C_(\d+)_(\d+)_(\d+)$/;
+  var data=_getData(), srv=serverSlots||{}, k, m, pp, np;
+  function _tsOf(v){ return (v && typeof v==='object' && +v._ts) || 0; }
+  function _inRange(key){ var mm=String(key).match(re); if(!mm) return 0; var x=parseInt(mm[1],10); return (x>=minP && x<=oldN) ? x : 0; }
+
+  /* 영향받는 칸: 이 기기 + 서버 (둘 다 있으면 더 최근 것) */
+  var aff={}, src={};
+  for(k in data){ if(_inRange(k)) aff[k]=1; }
+  for(k in srv){ if(_inRange(k)) aff[k]=1; }
+  for(k in aff){
+    var lv=data[k], sv=srv[k];
+    if(lv==null) src[k]=sv; else if(sv==null) src[k]=lv; else src[k]=(_tsOf(sv)>_tsOf(lv))?sv:lv;
+  }
+  var newData={}, fbUpd={}, moved={};
+  for(k in data){ if(!aff[k]) newData[k]=data[k]; }
+  for(k in aff){ fbUpd[k]=null; }
+  for(k in aff){
+    pp=_inRange(k); np=map[pp]; if(!np || src[k]==null) continue;
+    m=String(k).match(re);
+    var nk='C_'+np+'_'+m[2]+'_'+m[3];
+    if(moved[nk]){ _pdFail('⚠️ 칸 번호 계산 오류로 삭제를 중단했습니다 (데이터는 그대로입니다)'); console.warn('[파트삭제] 키 충돌', nk); return false; }
+    moved[nk]=k; newData[nk]=src[k]; fbUpd[nk]=src[k];
+  }
+
+  /* ④ 쓰기 전 검증 */
+  var expCars=0, gotCars=0, delCars=0, bad=[];
+  for(k in aff){
+    if(!(src[k] && src[k].car)) continue;
+    pp=_inRange(k);
+    if(map[pp]) expCars++; else delCars++;
+  }
+  for(k in newData){
+    var x=_inRange(k); if(!x) continue;
+    if(newData[k] && newData[k].car) gotCars++;
+    if(x>newN) bad.push('outside '+k);
+  }
+  Object.keys(moved).forEach(function(nk){ if(newData[nk]!==src[moved[nk]]) bad.push('mismatch '+nk); });
+  for(k in data){ if(!aff[k] && newData[k]!==data[k]) bad.push('changed '+k); }
+  if(expCars!==gotCars) bad.push('cars '+expCars+'≠'+gotCars);
+  if(bad.length){ console.warn('[파트삭제] 검증 실패', bad); _pdFail('⚠️ 삭제 결과 검증에 실패해 중단했습니다 (데이터는 그대로입니다)'); return false; }
+
+  /* ⑤ 칸 데이터 저장 → 다시 읽어 확인 (실패 시 원래대로) */
+  var _before=JSON.stringify(data);
+  try{ _saveData(newData); }catch(e){ try{ localStorage.setItem(LS_SLOT_DATA,_before); }catch(e2){} _pdFail('⚠️ 이 기기 저장공간 문제로 삭제를 중단했습니다 (데이터는 그대로입니다)'); return false; }
+  var _chk=''; try{ _chk=localStorage.getItem(LS_SLOT_DATA)||''; }catch(e){}
+  if(_chk!==JSON.stringify(newData)){ try{ localStorage.setItem(LS_SLOT_DATA,_before); }catch(e2){} _pdFail('⚠️ 저장 확인에 실패해 삭제를 중단했습니다 (데이터는 그대로입니다)'); return false; }
+
+  _saveUndoSnapshot('deleteParts '+dels.join(','));
+  try{ var _us=JSON.parse(localStorage.getItem(LS_UNDO_SNAPSHOT)||'null'); if(_us){ _us.data=data; localStorage.setItem(LS_UNDO_SNAPSHOT, JSON.stringify(_us)); } }catch(e){}   /* 되돌리기 스냅샷은 삭제 전 데이터 */
+  var _order0=_getPartOrder();
+
+  /* 칸 ID 목록 */
+  var ids=_getIds(), newIds={};
+  keep.forEach(function(op, i){
+    var nn=i+1;
+    newIds[nn]=(ids[op]||[]).map(function(id){ var mm=String(id||'').match(re); return (mm && parseInt(mm[1],10)===op) ? ('C_'+nn+'_'+mm[2]+'_'+mm[3]) : id; });
+  });
+  _saveIds(newIds);
+
+  /* 파트별 개별 저장값 당기기 (이름·접힘·열/행 수·열접기·좌표·경로·약도·사진) */
+  function _shiftKey(keyOf){
+    var vals={}, q;
+    for(q=minP;q<=oldN;q++){ try{ vals[q]=localStorage.getItem(keyOf(q)); }catch(e){ vals[q]=null; } }
+    for(q=minP;q<=oldN;q++){
+      var s0=(q<=newN)?keep[q-1]:0, v=s0?vals[s0]:null;
+      try{ if(v===null||v===undefined) localStorage.removeItem(keyOf(q)); else localStorage.setItem(keyOf(q), v); }
+      catch(e){ try{ localStorage.removeItem(keyOf(q)); }catch(e2){} }
+    }
+  }
+  while(LS_PARTS.length<oldN)     LS_PARTS.push('pb_part'+(LS_PARTS.length+1)+'_extra');
+  while(LS_COLLAPSED.length<oldN) LS_COLLAPSED.push('pb_part'+(LS_COLLAPSED.length+1)+'_collapsed');
+  _shiftKey(function(q){ return LS_PARTS[q-1]; });
+  _shiftKey(function(q){ return LS_COLLAPSED[q-1]; });
+  _shiftKey(function(q){ return LS_PART_COLS+'_'+q; });
+  _shiftKey(function(q){ return LS_PART_ROWS+'_'+q; });
+  _shiftKey(function(q){ return LS_COL_FOLD_PREFIX+q; });
+  _shiftKey(function(q){ return 'pb_part_geo_'+q; });
+  _shiftKey(function(q){ return 'pb_part_steps_'+q; });
+  _shiftKey(function(q){ return 'pb_part_canvas_'+q; });
+  _shiftKey(function(q){ return 'pb_part_photo_'+q; });
+
+  /* 파트번호가 들어간 묶음 설정 (열이름·열색·열간격·파트색·글자크기) */
+  function _remap(obj, pat, mk){
+    var out={}; obj=obj||{};
+    Object.keys(obj).forEach(function(kk){
+      var mm=kk.match(pat);
+      if(!mm){ out[kk]=obj[kk]; return; }
+      var op=parseInt(mm[1],10);
+      if(op<minP || op>oldN){ out[kk]=obj[kk]; return; }
+      var nn=map[op]; if(!nn) return;
+      out[mk(nn,mm)]=obj[kk];
+    });
+    return out;
+  }
+  function _lsJson(key){ try{ return JSON.parse(localStorage.getItem(key)||'{}')||{}; }catch(e){ return {}; } }
+  var PC=/^p(\d+)c(\d+)$/, PP=/^p(\d+)$/, NN=/^(\d+)$/;
+  var mkPC=function(nn,mm){ return 'p'+nn+'c'+mm[2]; }, mkP=function(nn){ return 'p'+nn; }, mkN=function(nn){ return String(nn); };
+  var colNamesNew=_remap(getColNames(), PC, mkPC); saveColNames(colNamesNew);
+  var oneColors=_remap(_lsJson(LS_COL_ONE_COLORS), PC, mkPC); localStorage.setItem(LS_COL_ONE_COLORS, JSON.stringify(oneColors));
+  var colGaps=_remap(_lsJson(LS_COL_GAPS), PC, mkPC); localStorage.setItem(LS_COL_GAPS, JSON.stringify(colGaps));
+  var partColors=_remap(_lsJson(LS_COL_PART_COLORS), PP, mkP); localStorage.setItem(LS_COL_PART_COLORS, JSON.stringify(partColors));
+  var partTxtColors=_remap(_lsJson(LS_COL_PART_TEXT_COLORS), PP, mkP); localStorage.setItem(LS_COL_PART_TEXT_COLORS, JSON.stringify(partTxtColors));
+  try{ var _fsm=_remap(_lsJson(LS_CAR_FS_MAP), NN, mkN); localStorage.setItem(LS_CAR_FS_MAP, JSON.stringify(_fsm)); }catch(e){}
+
+  /* 표시 순서(기기별) */
+  try{
+    var ord=(_order0||[]).filter(function(x){ return !del[x] && map[x]; }).map(function(x){ return map[x]; });
+    if(ord.length===newN) _savePartOrder(ord); else localStorage.removeItem(LS_PART_ORDER);
+  }catch(e){}
+
+  /* 파트 수 확정 */
+  NUM_PARTS=newN;
+  localStorage.setItem(LS_NUM_PARTS, NUM_PARTS);
+  _applyPartCount(NUM_PARTS);
+  _ensureIds();
+
+  /* 서버 반영 — 칸 데이터 (한 번에) */
+  if(fbSlotsRef && Object.keys(fbUpd).length){
+    try{
+      var _pc=window._fbPrevSlotCache;
+      if(_pc){ Object.keys(fbUpd).forEach(function(kk){ if(fbUpd[kk]===null) delete _pc[kk]; else _pc[kk]=fbUpd[kk]; }); }   /* 유실방지 가드가 옛 칸을 되살리지 않도록 */
+    }catch(e){}
+    _fbV7Update(fbUpd);
+  }
+  /* 서버 반영 — 설정 (전체 묶음으로 교체) */
+  if(typeof pushSettings==='function'){
+    var fbSet={numParts:NUM_PARTS}, partLbls={}, rbCols={}, rbRows={}, geo={};
+    for(var q2=1;q2<=NUM_PARTS;q2++){
+      var vv=localStorage.getItem(LS_PARTS[q2-1]); if(vv) partLbls[String(q2)]=vv;
+      rbCols[String(q2)]=PART_COL_COUNTS[q2-1]||COLS_PER_PART;
+      rbRows[String(q2)]=PART_ROW_COUNTS[q2-1]||ROWS_PER_PART;
+      var gv=localStorage.getItem('pb_part_geo_'+q2); if(gv) geo['p'+q2]=gv;
+    }
+    var _orNull=function(o){ return Object.keys(o).length?o:null; };
+    fbSet.partLabels=_orNull(partLbls); fbSet.colNames=_orNull(colNamesNew);
+    fbSet.partColCounts=rbCols; fbSet.partRowCounts=rbRows;
+    fbSet.colColors=_orNull(oneColors); fbSet.colGaps=_orNull(colGaps);
+    fbSet.colPartColors=_orNull(partColors); fbSet.colPartTextColors=_orNull(partTxtColors);
+    fbSet.partGeo=_orNull(geo);
+    pushSettings(fbSet);
+  }
+  /* 약도·사진·경로 서버 데이터도 같은 번호로 당기기 (실패하면 자동 재시도) */
+  try{ if(typeof window._pbShiftPartMedia==='function') window._pbShiftPartMedia(keep.slice(), oldN, minP); }catch(e){ console.warn('[파트삭제] 약도/사진 이동 오류', e); }
+
+  _recalcPartArrays(); _rebuildAndRefresh(); _pushGridStructure();
+
+  /* 최종 확인 — 화면 기준 차량 수 */
+  try{
+    var s=getSlots(), cnt=0; for(var gi in s){ if(s[gi] && s[gi].car) cnt++; }
+    console.log('[파트삭제] 완료 — 남은 파트 '+NUM_PARTS+'개, 화면 차량 '+cnt+'대 (옮긴 차량 '+expCars+'대, 삭제된 차량 '+delCars+'대)');
+  }catch(e){}
+  /* ★ 다른 기기(특히 오프라인이던 기기)가 옛 칸 번호로 저장한 내용을 새 번호로 옮길 수 있도록 삭제 기록을 남김 */
+  try{
+    var _logTs=Date.now(), _lc=_pdCode();
+    _pdSetApplied(_lc, _logTs);
+    if(fbDb && _lc) fbDb.ref('kd_rooms/'+_lc+'/pb_partdel_log/'+_logTs).set({keep:keep, oldN:oldN, minP:minP, dels:dels, at:_logTs}).catch(function(e){ console.warn('[파트삭제] 기록 저장 실패', e); });
+  }catch(e){}
+  showAlert('🗑️ '+dels.map(function(x){ return x+'.PART'; }).join(', ')+' 삭제 완료 — 총 '+TOTAL+'칸\n(삭제 전 백업: 백업목록 「🧩 파트삭제 전」)'); setTimeout(hideAlert,4000);
+  return true;
+}
+
+/* ★ (2026-11-06) 다른 기기에서 파트를 삭제했을 때 — 이 기기가 아직 옛 구조(파트 수)라면
+   이 기기에 저장된 칸 데이터·미전송 변경·파트별 설정을 같은 규칙으로 옮긴다 (서버에는 쓰지 않음).
+   → 오프라인 중 옛 번호로 저장한 칸이 재연결 후 엉뚱한 파트에 올라가는 사고 방지 */
+function _pdCode(){ try{ return localStorage.getItem(LS_CODE) || (typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS.code) || ''; }catch(e){ return ''; } }
+function _pdGetApplied(c){ try{ return +localStorage.getItem('kdpb_partdel_applied_'+c) || 0; }catch(e){ return 0; } }
+function _pdSetApplied(c, ts){ try{ if(ts > _pdGetApplied(c)) localStorage.setItem('kdpb_partdel_applied_'+c, String(ts)); }catch(e){} }
+function _pdApplyLocal(e){
+  var keep=e.keep||[], oldN=+e.oldN, minP=+e.minP, newN=keep.length;
+  if(!newN || !oldN || !minP || NUM_PARTS!==oldN) return false;
+  var cfgTs=+localStorage.getItem('pb_grid_cfg_ts')||0;
+  if(cfgTs >= +e.at) return false;   /* 이 기기 구조가 더 최근 → 이미 반영됐거나 다른 변경 — 건드리지 않음 */
+  var map={}; keep.forEach(function(op,i){ map[op]=i+1; });
+  var re=/^C_(\d+)_(\d+)_(\d+)$/;
+  function nk(k){ var m=String(k).match(re); if(!m) return k; var p=+m[1]; if(p<minP||p>oldN) return k; return map[p] ? ('C_'+map[p]+'_'+m[2]+'_'+m[3]) : null; }
+  /* 칸 데이터 — 지워진 파트 칸은 따로 보관 */
+  var data=_getData(), nd={}, lost={};
+  Object.keys(data).forEach(function(k){ var n=nk(k); if(n===null){ if(data[k] && data[k].car) lost[k]=data[k]; } else nd[n]=data[k]; });
+  try{ if(Object.keys(lost).length) localStorage.setItem('kdpb_partdel_lost_'+e.at, JSON.stringify(lost)); }catch(x){}
+  _saveData(nd);
+  /* 미전송 변경 목록 */
+  try{ var dt=_getDirtySlots(), ndt={}; Object.keys(dt).forEach(function(k){ var n=nk(k); if(n!==null) ndt[n]=dt[k]; }); if(Object.keys(ndt).length) localStorage.setItem(LS_OFFLINE_DIRTY, JSON.stringify(ndt)); else localStorage.removeItem(LS_OFFLINE_DIRTY); }catch(x){}
+  /* 칸 ID */
+  var ids=_getIds(), ni={}; keep.forEach(function(op,i){ ni[i+1]=(ids[op]||[]).map(function(id){ var n=nk(id); return n===null?id:n; }); }); _saveIds(ni);
+  /* 파트별 개별 저장값 */
+  while(LS_PARTS.length<oldN)     LS_PARTS.push('pb_part'+(LS_PARTS.length+1)+'_extra');
+  while(LS_COLLAPSED.length<oldN) LS_COLLAPSED.push('pb_part'+(LS_COLLAPSED.length+1)+'_collapsed');
+  [function(q){ return LS_PARTS[q-1]; }, function(q){ return LS_COLLAPSED[q-1]; }, function(q){ return LS_PART_COLS+'_'+q; }, function(q){ return LS_PART_ROWS+'_'+q; },
+   function(q){ return LS_COL_FOLD_PREFIX+q; }, function(q){ return 'pb_part_geo_'+q; }, function(q){ return 'pb_part_steps_'+q; }, function(q){ return 'pb_part_canvas_'+q; }, function(q){ return 'pb_part_photo_'+q; }
+  ].forEach(function(keyOf){
+    var vals={}, q; for(q=minP;q<=oldN;q++){ try{ vals[q]=localStorage.getItem(keyOf(q)); }catch(x){ vals[q]=null; } }
+    for(q=minP;q<=oldN;q++){ var s0=(q<=newN)?keep[q-1]:0, v=s0?vals[s0]:null; try{ if(v==null) localStorage.removeItem(keyOf(q)); else localStorage.setItem(keyOf(q), v); }catch(x){ try{ localStorage.removeItem(keyOf(q)); }catch(x2){} } }
+  });
+  function _rm(key, pat, mk){ try{ var o=JSON.parse(localStorage.getItem(key)||'{}')||{}, out={}; Object.keys(o).forEach(function(kk){ var mm=kk.match(pat); if(!mm){ out[kk]=o[kk]; return; } var op=+mm[1]; if(op<minP||op>oldN){ out[kk]=o[kk]; return; } if(map[op]) out[mk(map[op],mm)]=o[kk]; }); localStorage.setItem(key, JSON.stringify(out)); }catch(x){} }
+  _rm(LS_COL_NAMES, /^p(\d+)c(\d+)$/, function(n,mm){ return 'p'+n+'c'+mm[2]; });
+  _rm(LS_COL_ONE_COLORS, /^p(\d+)c(\d+)$/, function(n,mm){ return 'p'+n+'c'+mm[2]; });
+  _rm(LS_COL_GAPS, /^p(\d+)c(\d+)$/, function(n,mm){ return 'p'+n+'c'+mm[2]; });
+  _rm(LS_COL_PART_COLORS, /^p(\d+)$/, function(n){ return 'p'+n; });
+  _rm(LS_COL_PART_TEXT_COLORS, /^p(\d+)$/, function(n){ return 'p'+n; });
+  _rm(LS_CAR_FS_MAP, /^(\d+)$/, function(n){ return String(n); });
+  try{ var ord=_getPartOrder().filter(function(x){ return map[x] || x<minP; }).map(function(x){ return x<minP?x:map[x]; }); if(ord.length===newN) _savePartOrder(ord); else localStorage.removeItem(LS_PART_ORDER); }catch(x){}
+  NUM_PARTS=newN; localStorage.setItem(LS_NUM_PARTS, NUM_PARTS);
+  _applyPartCount(NUM_PARTS); _ensureIds();
+  try{ _recalcPartArrays(); _applyPartCount(NUM_PARTS); _rebuildGridDOM(); renderColHeaders(); buildGrid(); fitLayout(); _updateGridCtrlDisp(); if(typeof loadPartLabels==='function') loadPartLabels(); }catch(x){ console.warn('[파트삭제 동기화] 화면 갱신 오류', x); }
+  console.log('[파트삭제 동기화] 다른 기기의 파트 삭제를 이 기기에 반영 ('+(e.dels||[]).join(',')+')');
+  return true;
+}
+function _pdApplyLog(logObj){
+  var c=_pdCode(); if(!c || !logObj) return false;
+  var applied=_pdGetApplied(c), changed=false;
+  Object.keys(logObj).map(function(k){ return logObj[k]; }).filter(function(e){ return e && +e.at > applied; })
+    .sort(function(a,b){ return a.at-b.at; })
+    .forEach(function(e){ try{ if(_pdApplyLocal(e)) changed=true; }catch(x){ console.warn('[파트삭제 동기화] 오류', x); } _pdSetApplied(c, +e.at); });
+  return changed;
+}
+/* 재연결 업로드 전에 반드시 한 번 확인 */
+function _pdCheckLogThen(cb){
+  var c=_pdCode(), done=false;
+  function fin(ch){ if(done) return; done=true; try{ cb(!!ch); }catch(x){ console.warn(x); } }
+  if(typeof fbDb==='undefined' || !fbDb || !c){ fin(false); return; }
+  var t=setTimeout(function(){ fin(false); }, 8000);
+  fbDb.ref('kd_rooms/'+c+'/pb_partdel_log').orderByKey().limitToLast(30).once('value').then(function(s){ clearTimeout(t); var ch=false; try{ ch=_pdApplyLog(s.val()); }catch(x){} fin(ch); })
+    .catch(function(){ clearTimeout(t); fin(false); });
+}
+/* 실시간 감시 (작은 기록만) */
+var _pdLogCode='';
+setInterval(function(){
+  try{
+    if(typeof fbDb==='undefined' || !fbDb) return;
+    var c=_pdCode(); if(!c || c===_pdLogCode) return;
+    _pdLogCode=c;
+    if(!_pdGetApplied(c)) _pdSetApplied(c, Date.now() - 1);   /* 처음 쓰는 기기: 예전 기록은 적용하지 않음 */
+    fbDb.ref('kd_rooms/'+c+'/pb_partdel_log').orderByKey().limitToLast(30).on('value', function(s){ try{ _pdApplyLog(s.val()); }catch(x){} });
+  }catch(e){}
+}, 2000);
+
 function _confirmDeleteSelectedPart(pNum,pIds,hasData){
   var ov=document.getElementById('partSelectDeleteOv');
   if(ov)ov.style.display='none';
@@ -8482,6 +8873,7 @@ function _confirmDeleteSelectedPart(pNum,pIds,hasData){
   _doPartDeleteAny(pNum,pIds);
 }
 function _doPartDeleteAny(targetP,pIds){
+  if(typeof _doPartsDelete==='function'){ _doPartsDelete([targetP]); return; }   /* ★ (2026-11-06) 새 삭제 엔진으로 처리 (뒤 파트 데이터 정확히 당김) */
   _saveUndoSnapshot('deletePartAny p'+targetP);
   var ids=_getIds(), data=_getData(), fbUpd={};
   /* ① 슬롯 데이터 삭제 */
@@ -9775,7 +10167,7 @@ openModal = function(i){
   _encarUpdateBtn(i);
   _inspectUpdateModal(i);
   var d  = getSlot(i);
-  _safe6Selected = !!d.safe6;
+  _safe6Selected = (typeof _safe6Partner!=='undefined' && _safe6Partner) ? !!(d.car ? !d.safe6Off : false) : !!d.safe6;   /* ★(2026-11-05) 제휴점 켬: 버튼 = 이 차량 표시 여부 */
   var _s6b=document.getElementById('sbSafe6'); if(_s6b) _s6b.classList.toggle('sel-safe6', _safe6Selected);
   var ec = d.encar || {time:'', done:false};
   var hasDoneBtn = !!(ec.time || ec.done);
@@ -10557,7 +10949,7 @@ function _setupSlotDelegation(){
   gw.addEventListener('mouseover', function(e){
     var s = e.target.closest ? e.target.closest('.slot') : null;
     if(!s) return;
-    try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo, d.car ? d.regAt : 0); }catch(err){}
+    try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo, d.car ? _pbRegAtEff(d) : 0); }catch(err){}
   });
   gw.addEventListener('mouseout', function(e){
     var s = e.target.closest ? e.target.closest('.slot') : null;
@@ -10574,7 +10966,7 @@ function _setupSlotDelegation(){
     if(e.target.closest && e.target.closest('.slot-num')) return;
     clearTimeout(_lpTimer);
     _lpTimer=setTimeout(function(){
-      try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo, d.car ? d.regAt : 0); }catch(err){}
+      try{ var d=getSlot(_slotIdxOf(s)); if(d && d.memo) showTooltip(s, d.memo, d.car ? _pbRegAtEff(d) : 0); }catch(err){}
     }, 500);
   }, {passive:true});
   gw.addEventListener('touchend', function(){ clearTimeout(_lpTimer); setTimeout(hideTooltip,2000); }, {passive:true});
@@ -10757,7 +11149,7 @@ function renderSlot(el,idx){
   /* ★ 변경 감지: 슬롯 내용이 이전과 동일하면 다시 그리지 않음 (이벤트 있는 칸만 갱신, 전체 재렌더·깜빡임 방지) */
   try {
     var _sig = [d.car||'', d.status||'', d.memo||'', d.num||'', d.disabled?1:0, d.owner||'',
-      (d.safe6?1:0), ((typeof _safe6Partner!=='undefined' && _safe6Partner)?1:0),
+      (d.safe6?1:0), (d.safe6Off?1:0), ((typeof _safe6Partner!=='undefined' && _safe6Partner)?1:0),
       (d.encar?((d.encar.date||'')+'~'+(d.encar.time||'')+'~'+(d.encar.done?1:0)+'~'+(d.encar.doneDate||'')):''),
       (d.inspect?((d.inspect.date||'')+'~'+(d.inspect.done?1:0)):''),
       ((d.car && typeof _docFlags!=='undefined' && typeof _docKeyFromCar==='function' && _docFlags[_docKeyFromCar(d.car)])?1:0)
@@ -10844,7 +11236,7 @@ function renderSlot(el,idx){
     }
   }
   /* ★ 세이프6 아이콘 (개별 slot.safe6 또는 협력업체 모드) */
-  if(d.car && (d.safe6 || (typeof _safe6Partner!=='undefined' && _safe6Partner))){
+  if(d.car && !d.safe6Off && (d.safe6 || (typeof _safe6Partner!=='undefined' && _safe6Partner))){   /* ★(2026-11-05) safe6Off = 제휴점 켬이어도 이 차량은 제외 */
     var _s6i=document.createElement('div');
     _s6i.className='slot-safe6-icon'; _s6i.textContent='🛡️';
     if(ec.done && typeof _cam!=='undefined' && _cam) _cam.classList.add('below-safe6');  /* ★ 세이프6 아래에 엔카 */
@@ -13919,6 +14311,8 @@ function saveSlot(){
     var _l4R = function(x){ var dg=String(x||'').replace(/\D/g,''); return dg.length>=4 ? dg.slice(-4) : ''; };
     var _sameCar = _pcR && (norm(_pcR)===norm(car) || (_l4R(_pcR) && _l4R(_pcR)===_l4R(car)));
     _regAtNew = _sameCar ? (_prevSlotR.regAt || 0) : Date.now();
+    /* ★(2026-11-05) 서류앱에서 먼저 등록한 차량이면 그 날짜(더 이른 쪽)를 최초등록일로 */
+    try{ var _mAt=parseInt((_pbManualAt||{})[_docKeyFromCar(car)],10)||0; if(_mAt && (!_regAtNew || _mAt<_regAtNew)) _regAtNew=_mAt; }catch(e){}
   }
   s[activeSlot] = {
     car:      isClear ? '' : car,
@@ -13934,6 +14328,14 @@ function saveSlot(){
     inspect:  isClear ? {date:'',done:false} : _newInspect
   };
   if(_regAtNew) s[activeSlot].regAt = _regAtNew;
+  /* ★(2026-11-05) 세이프6 차량별 제외(safe6Off) — 제휴점 켬이면 모달 버튼이 「이 차량 표시」, 끔이면 기존 개별 세이프6 */
+  try{
+    if(!isClear && car){
+      var _s6p=(typeof _safe6Partner!=='undefined' && _safe6Partner), _s6same=(typeof _sameCar!=='undefined') ? _sameCar : false;
+      if(_s6p){ s[activeSlot].safe6 = _s6same ? !!_prevSlotR.safe6 : false; if(!_safe6Selected) s[activeSlot].safe6Off = true; }
+      else if(_s6same && _prevSlotR.safe6Off) s[activeSlot].safe6Off = true;
+    }
+  }catch(e){}
   saveSlots(s);
   /* ★ 이 슬롯의 차주를 「등록된 차주」 목록에 자동 등록/갱신
      (판매완료·사용안함으로 비우는 경우에는 하지 않음) */
@@ -16210,6 +16612,7 @@ function connectFb(url,code){
 
     /* ★ 서류첨부(📄) 플래그 실시간 동기화 — 실제 서류 데이터는 불러오지 않고 있음/없음만 구독 */
     if(fbDocFlagsRef){try{fbDocFlagsRef.off('value');}catch(e){}}
+    try{ if(window._pbManualAtRef){ window._pbManualAtRef.off('value'); } window._pbManualAtRef=fbDb.ref('kd_rooms/'+code+'/kd_manual_at'); window._pbManualAtRef.on('value', function(sn){ _pbManualAt=sn.val()||{}; }); }catch(e){}   /* ★(2026-11-05) 서류앱 등록일 */
     fbDocFlagsRef=fbDb.ref('kd_rooms/'+code+'/kd_doc_flags');
     fbDocFlagsRef.on('value',function(snap){
       _docFlags = snap.val()||{};
@@ -17365,6 +17768,25 @@ function doBackup2Import(input){
       }
       if(Object.keys(partCols).length) settingsToFb.partColCounts=partCols;
       if(Object.keys(partRows).length) settingsToFb.partRowCounts=partRows;
+      /* ★ (2026-11-06) 「파트삭제 전」 백업 복원: 파트 이름·좌표·열색·간격도 백업 상태 그대로 서버에 되돌림 */
+      if(data._partdel){
+        try{
+          var _pdN=parseInt(data['pb_num_parts'],10)||0, _pl={}, _pg={};
+          for(var _pi=1;_pi<=_pdN;_pi++){
+            var _lk=(LS_PARTS[_pi-1])||('pb_part'+_pi+'_extra'); if(data[_lk]) _pl[String(_pi)]=data[_lk];
+            if(data['pb_part_geo_'+_pi]) _pg['p'+_pi]=data['pb_part_geo_'+_pi];
+          }
+          var _jn=function(key){ try{ var o=JSON.parse(data[key]||'{}'); return (o && Object.keys(o).length)?o:null; }catch(e){ return null; } };
+          settingsToFb.partLabels=Object.keys(_pl).length?_pl:null;
+          settingsToFb.partGeo=Object.keys(_pg).length?_pg:null;
+          settingsToFb.colNames=_jn('pb_col_names_v1');
+          settingsToFb.colColors=_jn('pb_col_one_colors');
+          settingsToFb.colGaps=_jn('pb_col_gaps');
+          settingsToFb.colPartColors=_jn('pb_col_part_colors');
+          settingsToFb.colPartTextColors=_jn('pb_col_part_text_colors');
+        }catch(e){ console.warn('[파트삭제 되돌리기] 설정 준비 오류', e); }
+        try{ if(typeof window._pbUndoPartDelMedia==='function') window._pbUndoPartDelMedia(data._partdel, data._partdelMedia, (typeof useCode!=='undefined' && useCode) ? useCode : ''); }catch(e){}
+      }
       var partLabels={};
       for(var pj=1;pj<=20;pj++){
         var lv=data['pb_part'+pj+'_extra'];
@@ -18314,7 +18736,7 @@ function _doShowFbBackupList(useListCode){
       keys.forEach(function(k){ var p=k.split('_'); var dk=p[0]; var sl=p[1]||''; var hm=p[2]||'';
         var td=hm.length===4?hm.slice(0,2)+':'+hm.slice(2):'';
         if(!dm[dk]) dm[dk]={AM:null,PM:null,legacy:null,at:'',pt:''};
-        if(sl==='AM'){dm[dk].AM=k;dm[dk].at=td;}else if(sl==='PM'){dm[dk].PM=k;dm[dk].pt=td;}else{dm[dk].legacy=k;}
+        if(sl==='AM'){dm[dk].AM=k;dm[dk].at=td;}else if(sl==='PM'){dm[dk].PM=k;dm[dk].pt=td;}else if(sl==='PARTDEL'){ (dm[dk].PD=dm[dk].PD||[]).push([k,td]); }else{dm[dk].legacy=k;}
       });
       Object.keys(dm).sort().reverse().forEach(function(date){
         var en=dm[date]; var row=document.createElement('div');
@@ -18345,6 +18767,8 @@ function _doShowFbBackupList(useListCode){
         if(en.AM)     _mb(en.AM,    '🌅 오전'+(en.at?' '+en.at:''),'#3B82F6');
         if(en.PM)     _mb(en.PM,    '🌇 오후'+(en.pt?' '+en.pt:''),'#8B5CF6');
         if(en.legacy) _mb(en.legacy,'📋 백업','#6B7280');
+        (en.PD||[]).forEach(function(x){ _mb(x[0],'🧩 파트삭제 전'+(x[1]?' '+x[1]:''),'#EA580C'); });   /* ★ 파트 삭제 직전 자동 백업 */
+        try{ br.style.flexWrap='wrap'; }catch(e){}
         if(br.children.length) row.appendChild(br); listDiv.appendChild(row);
       });
     }).catch(function(e){ while(listDiv.firstChild) listDiv.removeChild(listDiv.firstChild);
@@ -18535,6 +18959,25 @@ function restoreFbBackup_execute(dateKey, _db, _code, label){
       }
       if(Object.keys(partCols).length) settingsToFb.partColCounts=partCols;
       if(Object.keys(partRows).length) settingsToFb.partRowCounts=partRows;
+      /* ★ (2026-11-06) 「파트삭제 전」 백업 복원: 파트 이름·좌표·열색·간격도 백업 상태 그대로 서버에 되돌림 */
+      if(data._partdel){
+        try{
+          var _pdN=parseInt(data['pb_num_parts'],10)||0, _pl={}, _pg={};
+          for(var _pi=1;_pi<=_pdN;_pi++){
+            var _lk=(LS_PARTS[_pi-1])||('pb_part'+_pi+'_extra'); if(data[_lk]) _pl[String(_pi)]=data[_lk];
+            if(data['pb_part_geo_'+_pi]) _pg['p'+_pi]=data['pb_part_geo_'+_pi];
+          }
+          var _jn=function(key){ try{ var o=JSON.parse(data[key]||'{}'); return (o && Object.keys(o).length)?o:null; }catch(e){ return null; } };
+          settingsToFb.partLabels=Object.keys(_pl).length?_pl:null;
+          settingsToFb.partGeo=Object.keys(_pg).length?_pg:null;
+          settingsToFb.colNames=_jn('pb_col_names_v1');
+          settingsToFb.colColors=_jn('pb_col_one_colors');
+          settingsToFb.colGaps=_jn('pb_col_gaps');
+          settingsToFb.colPartColors=_jn('pb_col_part_colors');
+          settingsToFb.colPartTextColors=_jn('pb_col_part_text_colors');
+        }catch(e){ console.warn('[파트삭제 되돌리기] 설정 준비 오류', e); }
+        try{ if(typeof window._pbUndoPartDelMedia==='function') window._pbUndoPartDelMedia(data._partdel, data._partdelMedia, (typeof useCode!=='undefined' && useCode) ? useCode : ''); }catch(e){}
+      }
 
       /* ★ ID 기반 슬롯 + _ids + _gridConfig + _localTs 포함 push */
       var _fbRestoreTs = _tsNow();
@@ -18662,9 +19105,12 @@ function _initPcScrollLimiter2(){
 <div id="partSelectDeleteOv" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9991;align-items:center;justify-content:center;padding:16px;display:none;">
   <div style="background:#fff;border-radius:18px;padding:20px 16px 16px;width:min(340px,96vw);box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:12px;max-height:80vh;overflow-y:auto;">
     <div style="font-size:17px;font-weight:900;color:#1A0A00;text-align:center;">🗑️ 삭제할 파트 선택</div>
-    <div style="font-size:13px;color:#666;text-align:center;">삭제할 파트를 선택해 주세요</div>
+    <div style="font-size:13px;color:#666;text-align:center;">삭제할 파트를 눌러 선택하세요 (여러 개 선택 가능)</div>
     <div id="partSelectDeleteList" style="display:flex;flex-direction:column;gap:8px;"></div>
-    <button onclick="document.getElementById('partSelectDeleteOv').style.display='none'" style="background:#eee;color:#333;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;">취소</button>
+    <div style="display:flex;gap:8px;position:sticky;bottom:-16px;background:#fff;padding:8px 0 2px;">
+      <button type="button" id="partSelectDeleteGo" onclick="_goPartDeleteSelected()" disabled style="flex:1.6;background:#DC2626;color:#fff;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:900;cursor:pointer;opacity:.45;font-family:inherit;">🗑️ 삭제할 파트를 선택하세요</button>
+      <button type="button" onclick="_closePartSelectDelete()" style="flex:1;background:#eee;color:#333;border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">취소</button>
+    </div>
   </div>
 </div>
 <style>
@@ -18674,6 +19120,11 @@ function _initPcScrollLimiter2(){
 .part-sel-del-name{font-size:15px;font-weight:800;color:#1A0A00;}
 .part-sel-del-info{font-size:12px;color:#666;}
 .part-sel-del-btn.has-data .part-sel-del-info{color:#DC2626;}
+.part-sel-del-btn{flex-direction:row !important;align-items:center;gap:10px !important;width:100%;font-family:inherit;}
+.part-sel-del-txt{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.part-sel-del-chk{font-size:22px;line-height:1;flex-shrink:0;color:#9CA3AF;}
+.part-sel-del-btn.sel{background:#DC2626 !important;border-color:#991B1B !important;}
+.part-sel-del-btn.sel .part-sel-del-name,.part-sel-del-btn.sel .part-sel-del-info,.part-sel-del-btn.sel .part-sel-del-chk{color:#fff !important;}
 </style>
 
 <!-- ★ 파트 삭제 확인 팝업 -->
@@ -22587,6 +23038,84 @@ window._drawQRCanvas = function(container, text, size){
   }
   window._setPartMediaTs = _setMediaTs;  /* 약도편집기 등 다른 모듈에서 호출용 */
 
+  /* ★ (2026-11-06) 파트 삭제 시 뒤 파트의 사진·약도·경로를 새 번호로 당김 (서버 + 이 기기 캐시)
+     keep[i] = 새 (i+1)번 파트의 옛 번호. 서버 작업은 기기에 기록해 두고 실패하면 다시 시도한다
+     (작업 기록 키는 'pb_' 로 시작하지 않아 백업/복원에 섞이지 않음) */
+  var LS_MEDIA_JOBS='kdpb_media_shift_jobs', _mediaJobRun=false, _mediaJobTimer=null;
+  function _mjGet(){ try{ var a=JSON.parse(localStorage.getItem(LS_MEDIA_JOBS)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+  function _mjSet(a){ try{ if(a.length) localStorage.setItem(LS_MEDIA_JOBS, JSON.stringify(a)); else localStorage.removeItem(LS_MEDIA_JOBS); }catch(e){} }
+  function _mjCode(){ try{ return localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||''; }catch(e){ return ''; } }
+  function _mjRetry(){ if(_mediaJobTimer) return; _mediaJobTimer=setTimeout(function(){ _mediaJobTimer=null; _runMediaJobs(); }, 30000); }
+  function _runMediaJobs(){
+    if(_mediaJobRun) return;
+    var jobs=_mjGet(); if(!jobs.length) return;
+    var job=jobs[0];
+    if(typeof fbDb==='undefined'||!fbDb){ _mjRetry(); return; }
+    var code=job.code||_mjCode(); if(!code){ _mjRetry(); return; }
+    _mediaJobRun=true;
+    var keep=job.keep, oldN=job.oldN, minP=job.minP, newN=keep.length, now=Date.now();
+    var base=fbDb.ref('kd_rooms/'+code), kinds=['pb_part_photos','pb_part_canvases','pb_part_steps'], src=[], q;
+    for(q=minP;q<=oldN;q++) src.push(q);
+    Promise.all(kinds.map(function(kind){
+      return Promise.all(src.map(function(sp){ return base.child(kind+'/'+sp).once('value').then(function(s){ var v=s.val(); return v===undefined?null:v; }); }));
+    })).then(function(res){
+      var upd={};
+      kinds.forEach(function(kind, ki){
+        var vals={}; src.forEach(function(sp, i){ vals[sp]=res[ki][i]; });
+        for(var nq=minP;nq<=oldN;nq++){ var s2=(nq<=newN)?keep[nq-1]:0; upd[kind+'/'+nq]=s2?(vals[s2]===undefined?null:vals[s2]):null; }
+      });
+      for(var tq=minP;tq<=oldN;tq++){ upd['pb_media_ts/'+tq]=(tq<=newN)?{p:now,c:now}:null; }
+      return base.update(upd);
+    }).then(function(){
+      var a=_mjGet(); if(a.length && a[0].id===job.id){ a.shift(); _mjSet(a); }
+      _mediaJobRun=false;
+      console.log('[파트삭제] 사진·약도·경로 번호 이동 완료');
+      _runMediaJobs();
+    }).catch(function(e){
+      _mediaJobRun=false;
+      console.warn('[파트삭제] 사진·약도·경로 이동 실패 — 30초 뒤 다시 시도', e);
+      _mjRetry();
+    });
+  }
+  window._pbShiftPartMedia = function(keep, oldN, minP){
+    try{
+      var newN=keep.length, q, now=Date.now();
+      var mc={}; for(q=minP;q<=oldN;q++) mc[q]=_memCache[q];
+      for(q=minP;q<=oldN;q++){ var sp=(q<=newN)?keep[q-1]:0; if(sp && mc[sp]) _memCache[q]=mc[sp]; else delete _memCache[q]; }
+      for(q=minP;q<=oldN;q++){ _setLocalTs('p',q,now); _setLocalTs('c',q,now); _stepsSuppressUntil[q]=now+8000; _photoSuppressUntil[q]=now+8000; }
+      var a=_mjGet(); a.push({id:now+'_'+Math.random().toString(36).slice(2,7), keep:keep, oldN:oldN, minP:minP, code:_mjCode()}); _mjSet(a);
+      _runMediaJobs();
+    }catch(e){ console.warn('[파트삭제] 미디어 이동 오류', e); }
+  };
+  /* 삭제 되돌리기(백업 복원) — 지운 파트의 사진·약도·경로를 원래 번호로 되돌림 */
+  window._pbUndoPartDelMedia = function(info, saved, codeOverride){
+    try{
+      if(!info || !info.keep || typeof fbDb==='undefined' || !fbDb) return;
+      var code=codeOverride||_mjCode(); if(!code) return;
+      var keep=info.keep, oldN=info.oldN, minP=info.minP, newN=keep.length, now=Date.now(), map={};
+      keep.forEach(function(op,i){ map[op]=i+1; });
+      var base=fbDb.ref('kd_rooms/'+code), kinds=['pb_part_photos','pb_part_canvases','pb_part_steps'], sk={pb_part_photos:'photos',pb_part_canvases:'canvases',pb_part_steps:'steps'}, cur=[], q;
+      for(q=minP;q<=newN;q++) cur.push(q);
+      Promise.all(kinds.map(function(kind){
+        return Promise.all(cur.map(function(np){ return base.child(kind+'/'+np).once('value').then(function(s){ var v=s.val(); return v===undefined?null:v; }); }));
+      })).then(function(res){
+        var upd={};
+        kinds.forEach(function(kind, ki){
+          var vals={}; cur.forEach(function(np,i){ vals[np]=res[ki][i]; });
+          for(var op=minP; op<=oldN; op++){
+            var v = map[op] ? vals[map[op]] : ((saved && saved[sk[kind]] && saved[sk[kind]][op]!=null) ? saved[sk[kind]][op] : null);
+            upd[kind+'/'+op] = (v===undefined?null:v);
+          }
+        });
+        for(var tq=minP;tq<=oldN;tq++){ upd['pb_media_ts/'+tq]={p:now,c:now}; delete _memCache[tq]; }
+        return base.update(upd);
+      }).then(function(){ console.log('[파트삭제 되돌리기] 사진·약도·경로 복원 완료'); })
+        .catch(function(e){ console.warn('[파트삭제 되돌리기] 사진·약도·경로 복원 실패', e); });
+    }catch(e){ console.warn('[파트삭제 되돌리기] 오류', e); }
+  };
+  setTimeout(_runMediaJobs, 8000);   /* 앱 시작 시 남은 작업 이어서 처리 */
+  try{ window.addEventListener('online', function(){ setTimeout(_runMediaJobs, 3000); }); }catch(e){}
+
   /* 특정 파트의 사진 이미지를 "필요할 때만" 1회 받아옴 (.once) */
   function _fetchPhotoOnce(partNo, remoteTs){
     if(_photoSuppressUntil[partNo]&&Date.now()<_photoSuppressUntil[partNo]) return; /* 내가 방금 올린 건 무시 */
@@ -23033,7 +23562,7 @@ window._drawQRCanvas = function(container, text, size){
         on:   oName||null,
         op:   oPhone||null,
         kn:   (typeof oKeyNo!=='undefined' && oKeyNo) ? oKeyNo : null,
-        sf:   (function(){ try{ var _s6=(typeof slotIdx==='number'&&slotIdx>=0&&typeof getSlot==='function')?(getSlot(slotIdx)||{}):{}; return (_s6.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner))?1:null; }catch(e){ return null; } })() /* ★ 세이프6 → QR/약도전송에도 배지 표시 */
+        sf:   (function(){ try{ var _s6=(typeof slotIdx==='number'&&slotIdx>=0&&typeof getSlot==='function')?(getSlot(slotIdx)||{}):{}; return (!_s6.safe6Off&&(_s6.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner)))?1:null; }catch(e){ return null; } })() /* ★ 세이프6 → QR/약도전송에도 배지 표시 */
       };
 
       if(qrContent.length > 0){  /* ★ 내용 있으면 항상 QR 표시 */
@@ -23647,7 +24176,7 @@ window._drawQRCanvas = function(container, text, size){
 
       /* ★ 🔗 링크 모드(LMS 49.5원): 이미지 없이 짧은 약도 링크 발송 */
       if(_getSmsMode()==='link'){
-        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null, sf:(_sd9&&(_sd9.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner)))?1:null }, function(shortUrl){
+        _makeShortLink(code, { part:String(partNo), car:car, loc:loc, on:_oName9||null, op:_oPhone9||null, kn:(typeof _oKey9!=='undefined'&&_oKey9)?_oKey9:null, sf:(_sd9&&(!_sd9.safe6Off&&(_sd9.safe6||(typeof _safe6Partner!=='undefined'&&_safe6Partner))))?1:null }, function(shortUrl){
           var u = shortUrl || _viewUrl9;
           if(u){ text += '\n▼ 약도 보기 (누르면 지도가 열립니다)\n' + u; }
           _queueRouteSms(code, phone, car, text, '', eid, 'parkboard');
@@ -25536,7 +26065,7 @@ function _saveAllOnClose(){
     try{
       var s = getSlots();
       var d = s[idx] || {};
-      if(v === 'safe6'){ d.safe6 = !d.safe6; }
+      if(v === 'safe6'){ if(typeof _safe6Partner!=='undefined' && _safe6Partner){ if(d.safe6Off) delete d.safe6Off; else d.safe6Off = true; } else { d.safe6 = !d.safe6; } }   /* ★(2026-11-05) 제휴점 켬: 이 차량만 끄기/켜기 */
       else if(v === 'disabled'){ d.disabled = true; }
       else { d.disabled = false; d.status = v; }
       s[idx] = d;
