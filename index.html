@@ -556,6 +556,10 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 
 
+/* ★ (2026-11-07) 열 스크롤 화살표는 PC(넓은 화면) 전용 — 휴대폰에서는 항상 숨김
+   (가로로 넓을 때 만들어진 화살표가 세로로 돌리면 기본 회색 버튼으로 화면 아래에 줄줄이 보이던 문제) */
+.col-scroll-arrow{ display:none; }
+@media(max-width:600px){ .col-scroll-arrow{ display:none !important; } }
 /* ★ PC 열 스크롤 화살표 버튼 */
 @media(min-width:601px){
   .col-scroll-arrow{
@@ -2015,6 +2019,224 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 .fsb-bar-fill{height:100%;background:#FEE500;border-radius:4px;
   width:0%;transition:width .4s ease;}
 </style>
+<style id="pbPremiumCss">
+/* ═══════════ ★ (2026-11-07) 화이트 프리미엄 디자인 ═══════════
+   html.pb-premium 일 때만 적용 (설정 → 디자인에서 기본(노랑)으로 되돌릴 수 있음)
+   기능·배치·사용자 지정 색(열 색·글자색 등 인라인 값)은 그대로 — 기본 색·그림자·모서리만 바꿈 */
+html.pb-premium{
+  --bg:#F3F5F9; --card-empty:#FFFFFF; --card-fill:#FFFFFF;
+  --border:#E2E8F0; --border-fill:#C7D2E3;
+  --text-main:#0F172A; --text-sub:#64748B;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 3px 10px rgba(15,23,42,.06);
+  --pm-navy:#1E3A8A; --pm-navy-deep:#0F1E4A; --pm-silver:#CBD5E1; --pm-ink:#0F172A;
+}
+html.pb-premium, html.pb-premium body{ background:var(--bg); }
+html.pb-premium body{ font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif; }
+
+/* 상단 헤더 */
+html.pb-premium .header{
+  --kakao:#FFFFFF; --kakao-dark:#E2E8F0;
+  background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
+  border-bottom:1px solid #E2E8F0;
+  box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 6px 18px rgba(15,23,42,.06);
+}
+html.pb-premium .header .sync-pill{ background:#F1F5F9; border:1px solid #E2E8F0; color:#334155; box-shadow:none; }
+
+/* 검색줄 · 설정줄 */
+html.pb-premium .search-bar{ background:#FFFFFF; border-bottom:1px solid #E2E8F0; box-shadow:0 4px 14px rgba(15,23,42,.05); }
+html.pb-premium .search-input{ background:#F8FAFC; border:1.5px solid #E2E8F0 !important; border-radius:12px; color:#0F172A; }
+html.pb-premium .search-input:focus{ background:#fff; border-color:var(--pm-navy) !important; box-shadow:0 0 0 3px rgba(30,58,138,.12); outline:none; }
+html.pb-premium .car-count-badge{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; color:#fff !important; border:none !important; box-shadow:0 2px 8px rgba(30,58,138,.25); }
+html.pb-premium .settings-bar{ background:#F8FAFC; border-bottom:1px solid #E2E8F0; }
+
+/* 파트 제목줄 — 남색 그라데이션 + 흰 글씨 */
+html.pb-premium .part-label{
+  --kakao:#FFFFFF; --kakao-dark:#E2E8F0;
+  background:linear-gradient(120deg,var(--pm-navy-deep) 0%,var(--pm-navy) 70%,#27479E 100%);
+  color:#FFFFFF; border-radius:14px;
+  box-shadow:0 6px 18px rgba(15,30,74,.22), inset 0 1px 0 rgba(255,255,255,.08);
+}
+html.pb-premium .part-label-extra,
+html.pb-premium .part-label-pc-extra{ color:#FFFFFF !important; }
+html.pb-premium .part-label-extra::placeholder,
+html.pb-premium .part-label-pc-extra::placeholder{ color:rgba(255,255,255,.45) !important; }
+
+/* 열 이름줄 (사용자 지정 색이 있으면 그 색 유지) */
+html.pb-premium .col-header{ --col-hc-bg:#1E293B; }
+html.pb-premium .col-hc{ border-radius:8px; letter-spacing:.3px; box-shadow:0 1px 2px rgba(15,23,42,.12); }
+
+/* 주차칸 카드 */
+html.pb-premium .slot{
+  border:1px solid var(--border); border-radius:14px;
+  box-shadow:var(--shadow);
+  transition:border-color .15s, background .15s, box-shadow .15s, transform .15s;
+}
+html.pb-premium .slot.occupied{
+  background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFD 100%);
+  border-color:var(--border-fill);
+  box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 16px rgba(30,58,138,.08);
+}
+html.pb-premium .slot-car{ color:var(--pm-ink); letter-spacing:.5px; }
+html.pb-premium .slot-memo{ color:#475569; }
+html.pb-premium .slot-empty{ opacity:.10; }
+
+/* 키번호 배지 — 남색 원 + 흰 테두리 (빈칸은 은색) */
+html.pb-premium .slot-num{ background:#94A3B8; border:2px solid #FFFFFF; box-shadow:0 2px 6px rgba(15,23,42,.25); }
+html.pb-premium .slot.occupied .slot-num{ background:#334155; box-shadow:0 2px 6px rgba(15,23,42,.3); }
+html.pb-premium .slot-num.custom{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; box-shadow:0 2px 8px rgba(30,58,138,.4) !important; }
+
+/* 마우스를 올리면 살짝 떠오름 (PC) */
+@media (hover:hover){
+  html.pb-premium .slot:hover{ box-shadow:0 2px 4px rgba(15,23,42,.06),0 10px 22px rgba(30,58,138,.12); border-color:#A9B8D6; }
+}
+
+/* 빈칸 키번호는 은회색, 차량 있는 칸은 남색 */
+html.pb-premium .slot:not(.occupied) .slot-num.custom{ background:#94A3B8 !important; box-shadow:0 1px 4px rgba(15,23,42,.2) !important; }
+
+/* 파트 제목줄 안의 작은 버튼·숫자 — 노랑 → 흰색·은색 */
+html.pb-premium .part-car-count{ background:rgba(255,255,255,.12) !important; border-color:rgba(255,255,255,.35) !important; color:#FFFFFF !important; }
+html.pb-premium .part-collapse-btn,
+html.pb-premium .col-fold-hide-btn,
+html.pb-premium .col-fold-show-btn{ border-color:rgba(255,255,255,.35) !important; color:#FFFFFF !important; }
+html.pb-premium .part-ctrl{ border-color:rgba(255,255,255,.25) !important; }
+html.pb-premium .part-ctrl-lbl{ color:#CBD5E1 !important; }
+html.pb-premium .part-ctrl-btn:not(.del){ color:#FFFFFF !important; border-color:rgba(255,255,255,.35) !important; }
+html.pb-premium .part-ctrl-disp,
+html.pb-premium .col-fold-cnt{ background:#FFFFFF !important; border-color:#FFFFFF !important; color:var(--pm-navy) !important; }
+
+/* 검색줄 버튼들 */
+html.pb-premium .ccb-num{ color:#BFDBFE !important; }
+html.pb-premium #partViewToggleBtn{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; border-color:var(--pm-navy) !important; color:#FFFFFF !important; }
+html.pb-premium #pmbAddBtn{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; border-color:#FFFFFF !important; color:#FFFFFF !important; box-shadow:0 4px 12px rgba(30,58,138,.35) !important; }
+html.pb-premium #partPhotoBtn{ border-color:var(--pm-navy) !important; color:#FFFFFF !important; }
+html.pb-premium .col-edit-label,
+html.pb-premium .ctrl-toggle-btn,
+html.pb-premium .settings-toggle-btn,
+html.pb-premium .settings-toggle-lbl{ color:#475569 !important; }
+html.pb-premium .ctrl-section{ background:#F8FAFC !important; border-color:#E2E8F0 !important; }
+html.pb-premium .ctrl-section-lbl{ color:var(--pm-navy) !important; }
+html.pb-premium .ctrl-disp{ background:var(--pm-navy) !important; border-color:var(--pm-navy) !important; color:#FFFFFF !important; }
+html.pb-premium .btn-ctrl-add{ background:#FFFFFF !important; border-color:#CBD5E1 !important; color:var(--pm-navy) !important; }
+html.pb-premium .memo-edit-save{ background:var(--pm-navy) !important; border-color:var(--pm-navy) !important; color:#FFFFFF !important; }
+
+/* ★ (2026-11-07) 키불출 깜박임 — 차량번호·키번호는 크기 그대로, 칸(슬롯)만 녹색으로 깜박임 */
+html.pb-premium .slot.blink-dispatch .slot-car{ animation:none !important; }
+html.pb-premium .slot.blink-dispatch .slot-num{ animation:none !important; }
+html.pb-premium .slot.blink-dispatch{
+  border-color:#16A34A !important; border-width:3px !important;
+  animation:pmBlinkSlotGreen .8s ease-in-out infinite !important;
+}
+@keyframes pmBlinkSlotGreen{
+  0%,100%{ background:#FFFFFF; box-shadow:0 0 0 2px rgba(22,163,74,.25),0 4px 12px rgba(22,163,74,.18); }
+  50%    { background:#86EFAC; box-shadow:0 0 0 6px rgba(22,163,74,.45),0 8px 22px rgba(22,163,74,.40); }
+}
+
+/* ★ (2026-11-07) 검색 키불출 깜박임 — 차량번호·키번호 크기 그대로, 칸만 남색 계열로 깜박임
+   ① 검색으로 찾은 칸: 흰색 ↔ 하늘색, 남색 굵은 테두리
+   ② 🔑키불출 후(키반납확인 대기): 칸 전체가 진한 남색으로 깜박 + 흰 글씨 (멀리서도 한눈에 구분) */
+html.pb-premium .slot.blink-search .slot-car,
+html.pb-premium .blink-search .slot-car,
+html.pb-premium .slot.blink-search .slot-num{ animation:none !important; transform:none !important; }
+html.pb-premium .slot.blink-search{
+  border-color:#1E3A8A !important; border-width:3px !important;
+  animation:pmBlinkSearch .9s ease-in-out infinite !important;
+}
+@keyframes pmBlinkSearch{
+  0%,100%{ background:#FFFFFF; box-shadow:0 0 0 2px rgba(30,58,138,.25),0 4px 12px rgba(30,58,138,.18); }
+  50%    { background:#BFDBFE; box-shadow:0 0 0 6px rgba(37,99,235,.45),0 8px 22px rgba(30,58,138,.38); }
+}
+html.pb-premium .blink-search-name{
+  border-color:#1E3A8A !important;
+  animation:pmBlinkBorderNavy 1.2s ease-in-out infinite !important;
+}
+@keyframes pmBlinkBorderNavy{
+  0%,100%{ box-shadow:0 0 0 3px rgba(30,58,138,.35); }
+  50%    { box-shadow:0 0 0 7px rgba(37,99,235,.55); }
+}
+html.pb-premium .slot.blink-search-issue{
+  border-color:#0F1E4A !important; border-width:3px !important;
+  animation:pmBlinkIssued .8s ease-in-out infinite !important;
+}
+@keyframes pmBlinkIssued{
+  0%,100%{ background:#1E3A8A; box-shadow:0 0 0 3px rgba(15,30,74,.35),0 4px 14px rgba(15,30,74,.35); }
+  50%    { background:#3B5BC4; box-shadow:0 0 0 7px rgba(59,91,196,.50),0 8px 24px rgba(15,30,74,.45); }
+}
+html.pb-premium .slot.blink-search-issue .slot-car,
+html.pb-premium .slot.blink-search-issue .slot-memo,
+html.pb-premium .slot.blink-search-issue .slot-id{ color:#FFFFFF !important; animation:none !important; transform:none !important; }
+html.pb-premium .slot.blink-search-issue .slot-num{ background:#FFFFFF !important; color:#1E3A8A !important; border-color:#1E3A8A !important; animation:none !important; }
+
+/* ═══ ★ (2026-11-07) 팝업(모달)도 화이트 프리미엄 ═══
+   기능·버튼 위치 그대로 — 바탕·테두리·강조색만 흰색·남색으로 통일.
+   상태 버튼(계약중·상품화중 등) 선택 색, 엔카/서류 버튼, 전화(초록)·토픽(보라) 입력란 색은 의미가 있어 유지 */
+html.pb-premium .modal-ov{ background:rgba(15,23,42,.55) !important; }
+html.pb-premium .modal{
+  background:#FFFFFF !important; border:1px solid #E2E8F0 !important;
+  box-shadow:0 24px 60px rgba(15,23,42,.28),0 2px 6px rgba(15,23,42,.08) !important;
+}
+html.pb-premium .m-close-btn{ background:#F1F5F9 !important; border-color:#E2E8F0 !important; color:#334155 !important; }
+html.pb-premium .m-badge{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; color:#FFFFFF !important; box-shadow:0 2px 8px rgba(30,58,138,.25); }
+html.pb-premium .m-badge > span, html.pb-premium #mBadgeNum{ color:#FFFFFF !important; }
+html.pb-premium .m-label{ color:#475569 !important; }
+html.pb-premium .m-input-wrap{ border-color:#CBD5E1 !important; border-width:1.5px !important; }
+html.pb-premium .m-input-wrap:focus-within{ border-color:var(--pm-navy) !important; box-shadow:0 0 0 3px rgba(30,58,138,.12); }
+html.pb-premium .m-input-wrap input{ color:var(--pm-ink) !important; }
+html.pb-premium .m-input-wrap input::placeholder{ color:#94A3B8 !important; }
+html.pb-premium .modal input, html.pb-premium .modal textarea, html.pb-premium .modal select{ color:var(--pm-ink); }
+html.pb-premium .modal input::placeholder, html.pb-premium .modal textarea::placeholder{ color:#94A3B8 !important; }
+html.pb-premium .modal textarea, html.pb-premium .modal select{ border-color:#E2E8F0 !important; background-color:#FFFFFF; }
+html.pb-premium .modal textarea:focus, html.pb-premium .modal select:focus{ border-color:var(--pm-navy) !important; box-shadow:0 0 0 3px rgba(30,58,138,.12); outline:none; }
+
+/* 차량 상태 버튼 — 선택 안 된 버튼만 은색 톤, '일반' 선택은 남색 */
+html.pb-premium .status-btn:not([class*="sel-"]){ background:#F8FAFC; border-color:#E2E8F0; color:#64748B; }
+html.pb-premium .status-btn.sel-none{ background:#EEF2FF !important; border-color:var(--pm-navy) !important; color:var(--pm-navy) !important; }
+
+/* 차주 입력 영역 */
+html.pb-premium .owner-btn{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; border-color:var(--pm-navy) !important; color:#FFFFFF !important; }
+html.pb-premium #mOwnerInlineInput{ background:#F8FAFC !important; border-color:#E2E8F0 !important; }
+html.pb-premium .m-memo-fs-btn{ background:#F8FAFC !important; border-color:#E2E8F0 !important; color:var(--pm-navy) !important; }
+html.pb-premium .owner-panel-inner{ background:#F8FAFC !important; border-color:#E2E8F0 !important; }
+html.pb-premium .owner-fold-btn{ background:#EEF2FF !important; border-color:#C7D2FE !important; color:var(--pm-navy) !important; }
+html.pb-premium .owner-chip{ background:#FFFFFF !important; border-color:#CBD5E1 !important; color:var(--pm-ink) !important; }
+html.pb-premium .owner-chip-default{ background:#EEF2FF !important; border-color:#C7D2FE !important; color:var(--pm-navy) !important; }
+
+/* 아래 버튼 — 닫기(은색) · 초기화(빨강 유지) · 저장(남색) */
+html.pb-premium .mbtn-cancel{ background:#F1F5F9 !important; color:#334155 !important; border:1px solid #E2E8F0 !important; }
+html.pb-premium .mbtn-save{ background:linear-gradient(135deg,var(--pm-navy-deep),var(--pm-navy)) !important; color:#FFFFFF !important; box-shadow:0 6px 16px rgba(30,58,138,.30) !important; }
+
+/* 팝업 안 알림줄 · 기타 노랑 팝업 */
+html.pb-premium #modalAlertBar{ background:var(--pm-navy-deep) !important; border-color:#3B5BC4 !important; color:#FFFFFF !important; }
+html.pb-premium #partPhotoSettingBox{ background:#FFFFFF !important; }
+html.pb-premium .memo-edit-title{ color:var(--pm-navy) !important; }
+html.pb-premium #mOwnerInlineInput, html.pb-premium #mOwnerPhoneInput, html.pb-premium #mTopicInput{ color:var(--pm-ink) !important; }
+
+/* 디자인 선택 버튼 */
+.pb-theme-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0 4px;}
+.pb-theme-lbl{flex:0 0 auto;white-space:nowrap;font-size:13px;font-weight:900;color:#475569;margin-right:2px;position:static;width:auto;overflow:visible;}
+.pb-theme-btn{flex:0 0 auto;white-space:nowrap;}
+.pb-theme-btn{border:1.5px solid #CBD5E1;background:#fff;color:#334155;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
+.pb-theme-btn.on{background:#1E3A8A;border-color:#1E3A8A;color:#fff;}
+.pb-theme-btn.classic.on{background:#FEE500;border-color:#E8B800;color:#3A1D1D;}
+</style>
+<script>
+/* ★ (2026-11-07) 디자인 선택 — 기본값: 화이트 프리미엄 (이 기기에만 저장) */
+(function(){
+  var t='premium'; try{ t=localStorage.getItem('kdpb_theme')||'premium'; }catch(e){}
+  if(t!=='classic') document.documentElement.classList.add('pb-premium');
+})();
+function _pbThemeBtns(){
+  var on=document.documentElement.classList.contains('pb-premium');
+  var a=document.getElementById('pbThemePremium'), b=document.getElementById('pbThemeClassic');
+  if(a) a.classList.toggle('on', on); if(b) b.classList.toggle('on', !on);
+}
+function _pbSetTheme(t){
+  try{ localStorage.setItem('kdpb_theme', t==='classic'?'classic':'premium'); }catch(e){}
+  document.documentElement.classList.toggle('pb-premium', t!=='classic');
+  _pbThemeBtns();
+  try{ if(typeof fitLayout==='function') fitLayout(); }catch(e){}
+}
+document.addEventListener('DOMContentLoaded', _pbThemeBtns);
+</script>
 </head>
 <body>
 
@@ -2432,6 +2654,10 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   </div>
   <!-- ★ 접히는 본문 -->
   <div class="settings-body" id="settingsBody">
+    <div class="pb-theme-row"><span class="pb-theme-lbl">🎨 디자인</span>
+      <button type="button" id="pbThemePremium" class="pb-theme-btn" onclick="_pbSetTheme('premium')">화이트 프리미엄</button>
+      <button type="button" id="pbThemeClassic" class="pb-theme-btn classic" onclick="_pbSetTheme('classic')">기본(노랑)</button>
+    </div>
     <!-- ★ 화면 켜짐 / 저장방식 / 세이프6제휴점 → 한 줄로 통합 (공간 부족 시 자동 줄바꿈, 다른 요소 영향 없음) -->
     <div class="settings-multirow" style="display:flex;flex-wrap:wrap;align-items:center;row-gap:6px;column-gap:16px;margin-top:4px;background:#0F3D3A;border-radius:10px;padding:6px 10px;">
       <!-- ★ 화면 켜짐 유지(WakeLock) 토글 -->
@@ -9666,7 +9892,7 @@ function _sendSearchTelegram(slotIdx, dealerName, dealerPhone, dealerPr){
       + '🚗 차량번호: ' + (slot.car||'') + '\n'
       + (slot.owner ? ('🙋 차주: ' + slot.owner + '\n') : '')
       + '🏢 소속상사: ' + (dealerPr||'') + '\n'
-      + '👤 딜러이름: ' + (dealerName||'') + '\n'
+      + '👤 알선딜러명: ' + (dealerName||'') + '\n'
       + '📲 전화번호: ' + (dealerPhone||'') + '\n'
       + '🕒 ' + t;
     _pbTgSend(body, function(r){ if(r==='fail') console.warn('[검색키불출 텔레그램] 전송 실패'); });
@@ -11863,7 +12089,7 @@ function _postSearchNtfy(topic, car, owner, dealerName, dealerPhone, dealerPr){
       + '🚗 차량번호: ' + (car||'') + '\n'
       + (owner ? ('🙋 차주: ' + owner + '\n') : '')
       + '🏢 소속상사: ' + (dealerPr||'') + '\n'
-      + '👤 딜러이름: ' + (dealerName||'') + '\n'
+      + '👤 알선딜러명: ' + (dealerName||'') + '\n'
       + '📲 전화번호: ' + (dealerPhone||'') + '\n'
       + '🕒 ' + t;
     fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body });
@@ -12432,8 +12658,14 @@ function showDispatchPopup(entryOrCar){
   document.getElementById('dpCar').textContent=carNum;
 
   if(matchIdx>=0&&matchData){
-    document.getElementById('dpBadge').textContent=(matchIdx+1)+'번 칸 ('+(slotToPart(matchIdx))+'.PART)';
-    document.getElementById('dpSlot').textContent='📍 '+(matchIdx+1)+'번 칸에서 키 불출됨';
+    /* ★ (2026-11-08) 키번호 + 열 이름(열 헤더 그대로) + 아래에서 몇 번째 칸인지 표시 */
+    var _dpPart=slotToPart(matchIdx), _dpCol='', _dpRow='', _dpKey='';
+    try{ var _pl=_gidxToPartLocal(matchIdx); if(_pl){ var _pc=PART_COL_COUNTS[_pl.part-1]||COLS_PER_PART; _dpCol=getColName(_pl.part, (_pl.local % _pc)+1); } }catch(e){}
+    try{ _dpRow=(typeof _slotRowInfo==='function')?_slotRowInfo(matchIdx):''; }catch(e){}
+    try{ var _n=String(matchData.num==null?'':matchData.num).trim(); _dpKey=(_n && _n!=='0')?_n:''; }catch(e){}
+    var _dpWhere=[_dpCol,_dpRow].filter(function(x){ return x; }).join(' ');
+    document.getElementById('dpBadge').textContent=(_dpKey?('🔑 키번호 '+_dpKey+'  ·  '):'🔑 키번호 없음  ·  ')+(_dpWhere||((matchIdx+1)+'번 칸'));
+    document.getElementById('dpSlot').textContent='📍 '+_dpPart+'.PART '+(_dpWhere||((matchIdx+1)+'번 칸'))+'에서 키 불출됨';
     /* 상태 */
     var stEl=document.getElementById('dpStatus');
     if(matchData.status==='contract'){
@@ -12478,22 +12710,22 @@ function showDispatchPopup(entryOrCar){
   if(matchIdx>=0){
     var mPartNum=slotToPart(matchIdx);
     expandPart(mPartNum);
-    /* 팝업이 닫히고 나서(3초 후) 해당 칸으로 스크롤 */
+    /* 팝업 뒤에서 해당 칸으로 미리 스크롤 (팝업을 닫으면 바로 보이도록) */
     setTimeout(function(){
       var mEl=document.getElementById('slot_'+matchIdx);
       if(mEl) mEl.scrollIntoView({behavior:'smooth',block:'center'});
     }, 3100);
   }
 
-  /* 자동 닫힘 바 (3초) */
+  /* 자동 닫힘 바 — ★ (2026-11-08) 3초 → 30초 (확인 버튼을 누르면 바로 팝업만 닫힘, 칸 깜박임은 유지) */
   if(dpAutoTimer) clearTimeout(dpAutoTimer);
   var fill=document.getElementById('dpAutoFill');
   fill.style.transition='none'; fill.style.width='100%';
   setTimeout(function(){
-    fill.style.transition='width 3s linear';
+    fill.style.transition='width 30s linear';
     fill.style.width='0%';
   },50);
-  dpAutoTimer=setTimeout(closeDispatchPopup, 3000);
+  dpAutoTimer=setTimeout(closeDispatchPopup, 30000);
 }
 
 function closeDispatchPopup(){
