@@ -1368,6 +1368,31 @@ window._docChoose = _docChoose;
   var statusEl = document.getElementById('statusMsg');
   function showStatus(html){ statusEl.innerHTML = html; statusEl.style.display='block'; }
   function hideStatus(){ statusEl.style.display='none'; }
+  /* ★ (2026-11-08) 만료·불러오기 실패 안내 — 접혀 있는 '주차위치 보기' 안이 아니라 화면 맨 위에 크게 표시
+     (예전엔 안내 문구가 접힌 영역 안에 있어 손님 화면에는 아무 안내도 안 보였음) */
+  function _showTopNotice(html){
+    try{ showStatus(html); }catch(e){}
+    try{
+      var expired = String(html).indexOf('⏰')===0;
+      var n = document.getElementById('viewTopNotice');
+      if(!n){
+        n = document.createElement('div'); n.id = 'viewTopNotice';
+        n.style.cssText = 'margin:8px 0 14px;padding:22px 16px;border-radius:16px;text-align:center;font-size:17px;font-weight:900;line-height:1.75;word-break:keep-all;';
+        var tt = document.getElementById('carHeader') || document.getElementById('topTitle');
+        if(tt && tt.parentNode) tt.parentNode.insertBefore(n, tt.nextSibling);
+        else { var w = document.getElementById('wrap') || document.body; w.insertBefore(n, w.firstChild); }
+      }
+      n.style.background = expired ? '#3A1D1D' : '#3B2F0B';
+      n.style.border     = expired ? '2px solid #F87171' : '2px solid #FBBF24';
+      n.style.color      = expired ? '#FECACA' : '#FDE68A';
+      n.innerHTML = html;
+      n.style.display = 'block';
+      if(expired){
+        window._viewExpired = true;
+        ['parkLocToggle','parkLocWrap','viewCopyLinkBtn','docBox','ownerLine','slotMemoBox'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display='none'; });
+      }
+    }catch(e){}
+  }
   /* ★ 주차현황판 미사용(part 없음) 시 "주차위치 보기" 토글 버튼을 숨김 —
      오류가 아니라 그 매장이 위치 안내 기능을 안 쓰는 정상 상태이므로 조용히 숨긴다 */
   function _hideParkLocIfNoPart(){
@@ -1687,7 +1712,7 @@ window._docChoose = _docChoose;
         if(m) oPhone=m[0].replace(/[^0-9]/g,'');
       }
       /* ★ 세이프6 실시간 반영 — 알림톡 링크(서버 생성)에는 sf가 없으므로 슬롯(safe6)/제휴점 전체설정(safe6Partner)에서 직접 판단 */
-      isSafe6 = !!((slot && slot.safe6) || (st && st.safe6Partner));
+      isSafe6 = !(slot && slot.safe6Off) && !!((slot && slot.safe6) || (st && st.safe6Partner));   /* ★(2026-11-05) 차량별 세이프6 제외 */
       _applySafe6Badge();
       renderHeader();
       renderMemo(String((slot&&slot.memo)||'').trim());
@@ -1935,7 +1960,7 @@ window._docChoose = _docChoose;
     }, function(){ if(!_recvP){ _recvP=true; _partRecv++; } _renderPartData(); });
     /* 네트워크 문제로 아무것도 못 받는 경우 안내 (8초) */
     setTimeout(function(){
-      if(_partRecv<2 && !loadedAny && !car && !loc) showStatus('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
+      if(_partRecv<2 && !loadedAny && !car && !loc) _showTopNotice('⚠️ 약도를 불러오지 못했습니다.<br>네트워크 상태를 확인해 주세요.');
     }, 8000);
   }
 
@@ -1947,7 +1972,7 @@ window._docChoose = _docChoose;
       var _up = JSON.parse(_b64urlDecode(_dParam));
       if(_up && typeof _up === 'object'){
         var _okU = true;
-        if(_up.t){ if(Date.now() - Number(_up.t) > 24*60*60*1000){ _okU = false; showStatus('⏰ 유효기간이 만료된 링크입니다.<br>발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.'); } }
+        if(_up.t){ if(Date.now() - Number(_up.t) > 24*60*60*1000){ _okU = false; _showTopNotice('⏰ 유효기간이 만료된 링크입니다.<br>발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.'); } }
         if(_okU){
           part = String(_up.part||part||'');
           car = String(_up.car||car||'');
@@ -1992,7 +2017,7 @@ window._docChoose = _docChoose;
          고객에게는 먹통처럼 보였다. → 만료 안내를 명확히 표시한다.
          (URL에 part/car가 직접 담긴 구형 링크는 그대로 진행) */
       if(!d && !car && !part){
-        showStatus('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
+        _showTopNotice('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
         return;
       }
       /* ★ 유효기간 24시간 — 생성(d.t) 후 24시간 지나면 만료 안내 */
@@ -2000,7 +2025,7 @@ window._docChoose = _docChoose;
         var _ageMs = Date.now() - Number(d.t);
         var _limitMs = 24 * 60 * 60 * 1000; /* 24시간 */
         if(_ageMs > _limitMs){
-          showStatus('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
+          _showTopNotice('⏰ 유효기간이 만료된 링크입니다.<br>이 안내는 발송 후 24시간까지만 열람할 수 있습니다.<br>매장으로 문의해 주세요.');
           return;
         }
       }
@@ -2024,7 +2049,7 @@ window._docChoose = _docChoose;
       if(part){ loadPart(); }
       else { _hideParkLocIfNoPart(); }   /* ★ 주차현황판 미사용 매장 — 오류 메시지 대신 위치 섹션만 조용히 숨김 */
     }).catch(function(){
-      showStatus('⚠️ 링크 정보를 불러오지 못했습니다.<br>네트워크를 확인해 주세요.');
+      _showTopNotice('⚠️ 링크 정보를 불러오지 못했습니다.<br>네트워크를 확인해 주세요.');
     });
   } else {
     if(car){ startLiveTracking(car); _checkAuthThenLog(car); } /* ★ 실시간 반영 + 본인확인/기록 */
@@ -2038,7 +2063,7 @@ window._docChoose = _docChoose;
   }, 12000);
 })();
 </script><!-- ★ 버전 표시 (하단 좌측) — 캐시 옛 버전 실행 여부 확인용 -->
-<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-10-06 · OEM view v23 (세이프6 알림톡 배지 반영)</div>
+<div style="position:fixed;left:6px;bottom:6px;z-index:99990;background:rgba(15,23,42,.55);color:#94A3B8;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:inherit;">v2026-11-08 · OEM view v24 (만료 안내 표시)</div>
 <style id="kdPressCss">
 /* ★ (2026-10-12) 탭 눌림 표시 + 탭 지연 제거
    · 누르는 순간 그 버튼(가장 안쪽의 누를 수 있는 요소 하나)만 살짝 어둡게, 작은 버튼은 살짝 작게
