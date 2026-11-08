@@ -2282,10 +2282,10 @@ html.pb-premium #mOwnerInlineInput, html.pb-premium #mOwnerPhoneInput, html.pb-p
   if(t!=='classic') document.documentElement.classList.add('pb-premium');
   _pbThemeColorMeta();
 })();
-/* ★ (2026-11-08) 앱 창 맨 위 제목줄(브라우저/설치앱 바) 색 = 디자인에 맞춤 (화이트 프리미엄: 흰색 / 클래식: 노랑) */
+/* ★ (2026-11-08) 앱 창 맨 위 제목줄(브라우저/설치앱 바) 색 = 디자인에 맞춤 (화이트 프리미엄: 남색 / 클래식: 노랑) */
 function _pbThemeColorMeta(){
   try{
-    var c=document.documentElement.classList.contains('pb-premium')?'#FFFFFF':'#FEE500';
+    var c=document.documentElement.classList.contains('pb-premium')?'#1E3A8A':'#FEE500';   /* 프리미엄: 남색 바탕(글씨는 기기가 자동으로 흰색) */
     var ms=document.querySelectorAll('meta[name="theme-color"]');
     if(!ms.length){ var m=document.createElement('meta'); m.name='theme-color'; (document.head||document.documentElement).appendChild(m); ms=[m]; }
     for(var i=0;i<ms.length;i++) ms[i].setAttribute('content',c);
@@ -17781,7 +17781,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
      주소가 없어 브라우저가 "start_url property ignored, URL is invalid"
      경고를 띄우고 있었음 → location 기반 절대경로로 교체해 해결. */
   var _startUrl = location.href.split('?')[0].split('#')[0];
-  var manifest={name:"주차현황판",short_name:"주차현황판",start_url:_startUrl,display:"fullscreen",background_color:(document.documentElement.classList.contains("pb-premium")?"#FFFFFF":"#FEE500"),theme_color:(document.documentElement.classList.contains("pb-premium")?"#FFFFFF":"#FEE500"),orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
+  var manifest={name:"주차현황판",short_name:"주차현황판",start_url:_startUrl,display:"fullscreen",background_color:(document.documentElement.classList.contains("pb-premium")?"#FFFFFF":"#FEE500"),theme_color:(document.documentElement.classList.contains("pb-premium")?"#1E3A8A":"#FEE500"),orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
   var blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
   var el=document.getElementById("pwaManifest");
   if(el) el.href=URL.createObjectURL(blob);
