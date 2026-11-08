@@ -231,6 +231,17 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
   .header.pb-hdr1 #syncStatus{font-size:9.5px;white-space:nowrap;line-height:1.2;}
   .header.pb-hdr1 #realClock{font-size:10.5px;margin-left:0;line-height:1.2;}
   .header.pb-hdr1 .sync-dot{width:8px;height:8px;}
+  /* ★ (2026-11-08) 휴대폰: 맨 위 남색 바에 현황판 이름(+엔카 카운트) — 아래 줄은 [로고·제휴점 문구] [실시간연결] */
+  .header.pb-hdr1{padding-top:0;}
+  .header.pb-hdr1 .h-row1{flex-wrap:wrap;row-gap:4px;}
+  .header.pb-hdr1 .h-row1 .h-center-abs{order:-1;flex:0 0 calc(100% + 12px);width:calc(100% + 12px);max-width:none;margin:0 -6px 2px;padding:5px 10px;box-sizing:border-box;
+    background:linear-gradient(135deg,#1E3A8A,#172554);justify-content:center;gap:6px;min-height:34px;box-shadow:0 2px 6px rgba(15,23,42,.18);}
+  html:not(.pb-premium) .header.pb-hdr1 .h-row1 .h-center-abs{background:var(--kakao-deep,#3A1D1D);}
+  .header.pb-hdr1 .h-row1 .h-center-abs .h-memo-text{color:#FFFFFF !important;flex:0 1 auto;min-width:0;max-width:100%;display:block;font-size:var(--pbFitFs,clamp(15px,4.8vw,19px)) !important;background:none !important;}
+  html:not(.pb-premium) .header.pb-hdr1 .h-row1 .h-center-abs .h-memo-text{color:var(--kakao,#FEE500) !important;}
+  .header.pb-hdr1 .h-row1 .h-center-abs #encarCountBadge, .header.pb-hdr1 .h-row1 .h-center-abs #encarCountReset{flex-shrink:0;white-space:nowrap;}
+  .header.pb-hdr1 .h-left{flex:1 1 auto;max-width:62%;}
+  .header.pb-hdr1 .h-row1{min-height:0;}
 }
 .h-promo-outer.has-logo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
 .h-promo-logo{height:56px;max-width:180px;object-fit:contain;display:block;cursor:pointer;}
