@@ -6591,6 +6591,48 @@ function _pbLogoColLayout(){
   function scan(){ try{ document.querySelectorAll('.part-label').forEach(function(pl){ if(!pl._pbZf){ pl._pbZf=1; if(ro) ro.observe(pl); } }); later(); }catch(e){} }
   setInterval(scan,1500); setTimeout(scan,300); setTimeout(fitAll,1200);
 })();
+/* ★ (2026-11-08) 열·행 추가/삭제 때 화면 위치 유지 — 다시 그려져도 작업 중인 파트가 같은 자리에 그대로 보이게 */
+(function(){
+  var A=null;   /* {p, t} 최근 작업 파트 */
+  function scroller(){ var m=document.getElementById('mainWrap'); return (m && m.scrollHeight>m.clientHeight+2)?m:null; }
+  function partEl(p){ return document.getElementById('partWrap'+p) || (document.getElementById('partExtraPC'+p)||{closest:function(){return null;}}).closest('.part-label'); }
+  function capture(){
+    if(!A || Date.now()-A.t>15000) return null;
+    var el=partEl(A.p); if(!el) return null;
+    var r=el.getBoundingClientRect(); if(!r.height && !r.width) return null;
+    var sc=scroller();
+    return {p:A.p, top:r.top, sc:sc, sTop:sc?sc.scrollTop:window.scrollY};
+  }
+  function restore(c){
+    if(!c) return;
+    var el=partEl(c.p); if(!el) return;
+    var d=el.getBoundingClientRect().top - c.top;
+    if(Math.abs(d)<1) return;
+    var sc=scroller();
+    if(sc) sc.scrollTop+=d; else window.scrollBy(0,d);
+  }
+  var userMoved=0;
+  ['wheel','touchmove','keydown'].forEach(function(ev){ window.addEventListener(ev,function(){ userMoved=Date.now(); },{passive:true,capture:true}); });
+  function keep(c){
+    if(!c) return; var t0=Date.now();
+    restore(c);
+    (function tick(){ if(Date.now()-t0>1500 || userMoved>t0) return; restore(c); requestAnimationFrame(tick); })();
+  }
+  window._pbAnchorKeep=keep; window._pbAnchorCapture=capture;
+  function install(){
+    ['addPartCol','removePartCol','addPartRow','removePartRow'].forEach(function(n){
+      var o=window[n]; if(typeof o!=='function' || o._pbAnch) return;
+      var w=function(p){ A={p:p, t:Date.now()}; var c=capture(); var r=o.apply(this, arguments); keep(c); return r; };
+      w._pbAnch=1; window[n]=w;
+    });
+    var rb=window._rebuildAndRefresh;
+    if(typeof rb==='function' && !rb._pbAnch){
+      var w2=function(){ var c=capture(); var r=rb.apply(this, arguments); if(c) keep(c); return r; };
+      w2._pbAnch=1; window._rebuildAndRefresh=w2;
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(install,0); }); else setTimeout(install,0);
+})();
 function _applyPromoLogo(){
   var src=_promoLogoGet();
   var img=document.getElementById('hPromoLogo'), out=document.querySelector('.h-promo-outer');
