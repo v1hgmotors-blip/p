@@ -234,6 +234,21 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 }
 .h-promo-outer.has-logo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
 .h-promo-logo{height:56px;max-width:180px;object-fit:contain;display:block;cursor:pointer;}
+/* ★ (2026-11-08) Firebase 설정 줄: 접혀 있을 때는 판을 스크롤해도 맨 위에 고정 (펼치면 내용이 길어서 예전처럼 같이 스크롤) */
+html.pb-setfix #settingsBar{position:sticky;top:0;z-index:160;}
+html.pb-setfix .part-wrap > .part-label{top:var(--pbSetH,0px);}
+/* ★ (2026-11-08) 파트번호·드래그(순서변경) 버튼 크게, 잘 보이게 */
+.part-label .part-drag-handle, .part-cell .part-label .part-drag-handle{
+  font-size:22px !important;line-height:1 !important;padding:3px 8px 4px !important;margin-right:5px;opacity:1 !important;
+  background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.45);border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:30px;box-sizing:border-box;
+}
+.part-label .part-drag-handle:hover{background:rgba(255,255,255,.28);}
+.part-label .part-label-fixed, .part-cell .part-label .part-label-fixed{font-size:16px !important;font-weight:900;letter-spacing:.3px;}
+@media(max-width:600px){
+  .part-label .part-drag-handle, .part-cell .part-label .part-drag-handle{font-size:19px !important;min-width:30px;min-height:28px;padding:2px 6px 3px !important;}
+  .part-label .part-label-fixed, .part-cell .part-label .part-label-fixed{font-size:14px !important;}
+}
 /* ★ (2026-11-08) PC·태블릿 로고 세로칸: 로고는 왼쪽 칸(헤더~Firebase 설정 줄 높이)에만, 제휴점 문구·대수·검색·설정은 오른쪽으로 */
 #pbLogoCol{display:none;}
 html.pb-logocol #pbLogoCol{display:flex;position:absolute;left:0;top:0;width:var(--pbLogoW,200px);height:var(--pbLogoH,120px);align-items:center;justify-content:center;padding:8px 10px;box-sizing:border-box;cursor:pointer;z-index:5;background:var(--kakao,#FEE500);border-right:1px solid rgba(0,0,0,.08);}
@@ -655,7 +670,7 @@ html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbL
   /* ★ padding 증가: 세로 여백 확보 → 열 헤더가 너무 얇아 보이는 문제 해결 */
   padding:6px 1px;
   min-height:24px;
-  cursor:pointer;position:relative;transition:background .15s;text-shadow:0 1px 0 rgba(255,255,255,.4);overflow:hidden;white-space:normal;word-break:break-all;line-height:1.2;min-width:0;display:flex;align-items:center;justify-content:center;}
+  cursor:pointer;position:relative;transition:background .15s;text-shadow:none;/* ★(2026-11-08) 흰 그림자 제거 — 글씨 번짐 방지 */overflow:hidden;white-space:normal;word-break:break-all;line-height:1.2;min-width:0;display:flex;align-items:center;justify-content:center;}
 @media(max-width:600px){
   .col-hc{ padding:5px 1px; min-height:22px; }
 }
@@ -6473,7 +6488,10 @@ function _pbLogoColLayout(){
       var sb=document.querySelector('.search-bar'); if(sb && sb.offsetHeight) bottom=Math.max(bottom, sb.getBoundingClientRect().bottom);
       if(row && row.offsetHeight) bottom=Math.max(bottom, row.getBoundingClientRect().bottom);
       var H=Math.max(60, Math.round(bottom-hr.top));
-      var W=Math.round(Math.min(260, Math.max(150, (H-16)*1.9+20)));
+      /* ★ 판을 스크롤하면 Firebase 설정 줄은 위로 올라가므로, 로고 칸 높이도 그 줄을 따라 줄어듦(판을 가리지 않게).
+         로고 칸 '폭'은 스크롤과 관계없이 전체 높이 기준으로 고정 → 화면이 흔들리지 않음 */
+      var Hfull=hdr.offsetHeight + (sb?sb.offsetHeight:0) + ((row && row.offsetHeight)?row.offsetHeight:0);
+      var W=Math.round(Math.min(260, Math.max(150, (Math.max(H,Hfull)-16)*1.9+20)));
       if(window.innerWidth<=1100) W=Math.round(Math.max(130, Math.min(W, window.innerWidth*0.2)));
       var _ow=html.style.getPropertyValue('--pbLogoW'); html.style.setProperty('--pbLogoH', H+'px'); html.style.setProperty('--pbLogoW', W+'px');
       if(_ow!==W+'px' && typeof window._pbHdrFit==='function') setTimeout(window._pbHdrFit,30);
@@ -6487,6 +6505,9 @@ function _pbLogoColLayout(){
   var t=null; function later(){ clearTimeout(t); t=setTimeout(_pbLogoColLayout,60); }
   window._pbLogoColLater=later;
   window.addEventListener('resize',later); window.addEventListener('orientationchange',later); window.addEventListener('load',later);
+  /* 판 스크롤 때 로고 칸 높이 즉시 맞춤 (Firebase 설정 줄을 따라감) */
+  var _rafL=0; function onScr(){ if(!document.documentElement.classList.contains('pb-logocol') || _rafL) return; _rafL=requestAnimationFrame(function(){ _rafL=0; _pbLogoColLayout(); }); }
+  document.addEventListener('scroll', onScr, true);
   setTimeout(later,500); setTimeout(later,2000);
   function obs(){
     try{
@@ -6495,6 +6516,80 @@ function _pbLogoColLayout(){
     }catch(e){}
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',obs); else obs();
+})();
+/* ★ (2026-11-08) Firebase 설정 줄 고정: 접힘 상태 감지 + 파트 이름줄이 그 아래에 붙도록 높이 전달 */
+(function(){
+  function upd(){
+    try{
+      var bar=document.getElementById('settingsBar'), body=document.getElementById('settingsBody'), html=document.documentElement;
+      if(!bar || !body) return;
+      var collapsed=body.classList.contains('collapsed');
+      html.classList.toggle('pb-setfix', collapsed);
+      html.style.setProperty('--pbSetH', (collapsed?bar.offsetHeight:0)+'px');
+      if(typeof window._pbLogoColLater==='function') window._pbLogoColLater();
+    }catch(e){}
+  }
+  window._pbSetFixUpd=upd;
+  function go(){
+    upd();
+    try{
+      var body=document.getElementById('settingsBody'), bar=document.getElementById('settingsBar');
+      if(body && window.MutationObserver) new MutationObserver(upd).observe(body,{attributes:true,attributeFilter:['class']});
+      if(bar && window.ResizeObserver) new ResizeObserver(upd).observe(bar);
+    }catch(e){}
+    setTimeout(upd,800);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',go); else go();
+})();
+/* ★ (2026-11-08) PC 구역명(파트 이름) 자동 크기 맞춤 — 격자모드처럼 칸이 좁아도 파트번호·대수·버튼을 침범하지 않게
+   왼쪽(≡·파트번호·열행 버튼)과 오른쪽(대수·접기·◀▶) 사이 빈 공간만큼만 쓰고, 넘치면 글씨를 줄임 */
+(function(){
+  var cv=null;
+  function tw(text, font){ try{ cv=cv||document.createElement('canvas'); var x=cv.getContext('2d'); x.font=font; return x.measureText(text).width; }catch(e){ return text.length*14; } }
+  function fitOne(inp){
+    try{
+      if(window.innerWidth<=600 || !inp.offsetParent) return;
+      var pl=inp.closest('.part-label'); if(!pl) return;
+      var pr=pl.getBoundingClientRect(); if(!pr.width) return;
+      /* 1줄(≡·파트번호 … 대수·접기) / 2줄(열·행 버튼 … ◀▶) 각각에서 가운데 빈 공간을 재고, 더 넓은 줄에 구역명을 놓음 */
+      function gap(row){
+        var cx=pr.left+pr.width/2, L=pr.left+6, R=pr.right-6, top=null, bot=null;
+        if(!row) return null;
+        var rr=row.getBoundingClientRect(); top=rr.top; bot=rr.bottom;
+        [].forEach.call(row.children, function(el){
+          if(el===inp || el.classList.contains('part-label-extra') || !el.offsetWidth) return;
+          var cs=getComputedStyle(el); if(cs.visibility==='hidden' || cs.display==='none') return;
+          var r=el.getBoundingClientRect(); if(!r.width) return;
+          if((r.left+r.right)/2 < cx) L=Math.max(L, r.right); else R=Math.min(R, r.left);
+        });
+        return {L:L, R:R, w:R-L, top:top, bot:bot};
+      }
+      var g1=gap(pl.querySelector('.part-label-row1')), g2=gap(pl.querySelector('.part-label-row2'));
+      var both=null;
+      if(g1 && g2){ var bL=Math.max(g1.L,g2.L), bR=Math.min(g1.R,g2.R); both={L:bL,R:bR,w:bR-bL,top:g1.top,bot:g2.bot}; }
+      var g=both; if(!g || (g1 && g1.w>g.w*1.6)) g=(g1 && (!g2 || g1.w>=g2.w))?g1:g2;
+      if(!g) return;
+      var avail=Math.max(30, Math.floor(g.w)-10);
+      var cs2=getComputedStyle(inp), txt=inp.value||inp.placeholder||'';
+      var bandH=Math.max(16, (g.bot-g.top));
+      var maxFs=Math.min(inp.value ? 25 : 22, Math.max(12, bandH*0.9)), fs=maxFs;
+      var fam=cs2.fontFamily, wt=cs2.fontWeight||'900', ls=parseFloat(cs2.letterSpacing)||0;
+      while(fs>10 && tw(txt, wt+' '+fs+'px '+fam)+ls*txt.length > avail-4) fs-=0.5;
+      inp.style.transform='translateY(-50%)';
+      inp.style.left=Math.round(g.L-pr.left+5)+'px';
+      inp.style.top=Math.round((g.top+g.bot)/2-pr.top)+'px';
+      inp.style.width=avail+'px'; inp.style.maxWidth=avail+'px'; inp.style.textOverflow='ellipsis';
+      inp.style.fontSize=fs+'px';
+    }catch(e){}
+  }
+  function fitAll(){ document.querySelectorAll('.part-label-pc-extra').forEach(fitOne); }
+  window._pbZoneFitAll=fitAll;
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(fitAll,80); }
+  window.addEventListener('resize',later); window.addEventListener('load',later);
+  document.addEventListener('input',function(e){ var el=e.target; if(el && el.classList && el.classList.contains('part-label-pc-extra')) setTimeout(function(){ fitOne(el); },0); },true);
+  var ro=window.ResizeObserver?new ResizeObserver(later):null;
+  function scan(){ try{ document.querySelectorAll('.part-label').forEach(function(pl){ if(!pl._pbZf){ pl._pbZf=1; if(ro) ro.observe(pl); } }); later(); }catch(e){} }
+  setInterval(scan,1500); setTimeout(scan,300); setTimeout(fitAll,1200);
 })();
 function _applyPromoLogo(){
   var src=_promoLogoGet();
