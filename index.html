@@ -262,7 +262,7 @@ html.pb-setfix .part-wrap > .part-label{top:var(--pbSetH,0px);}
 }
 /* ★ (2026-11-08) PC·태블릿 로고 세로칸: 로고는 왼쪽 칸(헤더~Firebase 설정 줄 높이)에만, 제휴점 문구·대수·검색·설정은 오른쪽으로 */
 #pbLogoCol{display:none;}
-html.pb-logocol #pbLogoCol{display:flex;position:absolute;left:0;top:0;width:var(--pbLogoW,200px);height:var(--pbLogoH,120px);align-items:center;justify-content:center;padding:8px 10px;box-sizing:border-box;cursor:pointer;z-index:5;background:var(--kakao,#FEE500);border-right:1px solid rgba(0,0,0,.08);}
+html.pb-logocol #pbLogoCol{display:flex;position:absolute;left:0;top:var(--pbLogoT,0px);width:var(--pbLogoW,200px);height:var(--pbLogoH,120px);align-items:center;justify-content:center;padding:8px 10px;box-sizing:border-box;cursor:pointer;z-index:5;background:var(--kakao,#FEE500);border-right:1px solid rgba(0,0,0,.08);}
 html.pb-premium.pb-logocol #pbLogoCol{background:#FFFFFF;border-right:1px solid #E2E8F0;}
 html.pb-logocol #pbLogoCol img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:cover;object-position:center;border-radius:12px;border:1px solid #E2E8F0;background:#FFFFFF;box-shadow:0 2px 8px rgba(15,23,42,.12);box-sizing:border-box;}
 html.pb-logocol #pbLogoCol img.pb-logo-wide{object-fit:contain;padding:4px 8px;}
@@ -278,6 +278,17 @@ html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbL
   html.pb-logocol .header.pb-hdr1 .h-row1{gap:8px;}
   html.pb-logocol .header.pb-hdr1 .h-left .h-promo{font-size:var(--pbFitFs,15px) !important;text-overflow:clip;}
   html.pb-logocol .header.pb-hdr1 .h-memo-text{font-size:var(--pbFitFs,18px) !important;text-overflow:clip;}
+}
+/* ★ (2026-11-08) 휴대폰 로고 세로칸: 남색 이름 바 아래 ~ Firebase 설정 줄까지 왼쪽에 로고, 문구·대수·검색·설정은 오른쪽 */
+@media(max-width:600px){
+  html.pb-logocol .header{padding-left:6px;}
+  html.pb-logocol #pbLogoCol{padding:5px 6px;}
+  html.pb-logocol #pbLogoCol img{border-radius:10px;}
+  html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{position:static;transform:none;left:auto;order:-1;flex:0 0 calc(100% + 12px);width:calc(100% + 12px);max-width:none;margin:0 -6px 2px;justify-content:center;}
+  html.pb-logocol .header.pb-hdr1 .h-left{margin-left:calc(var(--pbLogoW,110px) - 2px);flex:1 1 0;max-width:none;min-width:0;}
+  html.pb-logocol .header.pb-hdr1 .h-left .h-promo{font-size:var(--pbFitFs,clamp(11px,3.4vw,15px)) !important;}
+  html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs .h-memo-text{font-size:var(--pbFitFs,clamp(15px,4.8vw,19px)) !important;}
+  html.pb-logocol .search-bar{padding-left:calc(var(--pbLogoW,110px) + 6px);}
 }
 /* ★ (2026-11-08) 로고 = 모서리 둥근 가로 직사각형 틀 (가로:세로 ≈ 2.3:1, 틀을 꽉 채움) */
 .h-promo-outer .h-promo-logo.pb-logo-wide{object-fit:contain;padding:2px 4px;}
@@ -6492,18 +6503,23 @@ function _pbLogoColLayout(){
     var has=!!(img.getAttribute('src')) && img.style.display!=='none';
     var wide=window.innerWidth>600;
     var row=document.querySelector('.settings-toggle-row'), hr=hdr.getBoundingClientRect();
-    if(has && wide && hr.height>0){
+    if(has && hr.height>0){   /* ★ (2026-11-08) 휴대폰도 로고 세로칸 사용 */
       if(img.parentNode!==col) col.appendChild(img);
       html.classList.add('pb-logocol');
       var bottom=hr.bottom;
       var sb=document.querySelector('.search-bar'); if(sb && sb.offsetHeight) bottom=Math.max(bottom, sb.getBoundingClientRect().bottom);
       if(row && row.offsetHeight) bottom=Math.max(bottom, row.getBoundingClientRect().bottom);
-      var H=Math.max(60, Math.round(bottom-hr.top));
+      /* 휴대폰: 맨 위 남색 이름 바 아래에서부터 로고 칸 시작 */
+      var topOff=0;
+      if(!wide){ var _ca=hdr.querySelector('.h-row1 > .h-center-abs'); if(_ca && _ca.offsetHeight) topOff=Math.max(0, Math.round(_ca.getBoundingClientRect().bottom-hr.top)+3); }
+      html.style.setProperty('--pbLogoT', topOff+'px');
+      var H=Math.max(60, Math.round(bottom-hr.top-topOff));
       /* ★ 판을 스크롤하면 Firebase 설정 줄은 위로 올라가므로, 로고 칸 높이도 그 줄을 따라 줄어듦(판을 가리지 않게).
          로고 칸 '폭'은 스크롤과 관계없이 전체 높이 기준으로 고정 → 화면이 흔들리지 않음 */
       var Hfull=hdr.offsetHeight + (sb?sb.offsetHeight:0) + ((row && row.offsetHeight)?row.offsetHeight:0);
       var W=Math.round(Math.min(260, Math.max(150, (Math.max(H,Hfull)-16)*1.9+20)));
       if(window.innerWidth<=1100) W=Math.round(Math.max(130, Math.min(W, window.innerWidth*0.2)));
+      if(!wide) W=Math.round(Math.max(88, Math.min(window.innerWidth*0.28, 150)));
       var _ow=html.style.getPropertyValue('--pbLogoW'); html.style.setProperty('--pbLogoH', H+'px'); html.style.setProperty('--pbLogoW', W+'px');
       if(_ow!==W+'px' && typeof window._pbHdrFit==='function') setTimeout(window._pbHdrFit,30);
     } else {
