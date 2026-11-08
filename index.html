@@ -308,6 +308,10 @@ html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbL
   .settings-toggle-row .settings-toggle-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;}
   #pmbAddBtn:not([style*="top"]){top:auto;bottom:calc(84px + env(safe-area-inset-bottom,0px));right:12px;}
 }
+/* ★ (2026-11-08) 슬롯에 한글 이름(예: 무지개임대·로또임대) — 최대 2줄, 같은 파트 안에서는 같은 글씨 크기 */
+.slot-car.pb-car-name{white-space:normal !important;word-break:break-all;text-wrap:balance;overflow-wrap:anywhere;line-height:1.08 !important;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;letter-spacing:-.3px;}
+.slot-car.pb-car-name .car-d1{display:inline !important;white-space:normal !important;word-break:break-all;overflow-wrap:anywhere;}
 /* ★ (2026-11-08) 로고 = 모서리 둥근 가로 직사각형 틀 (가로:세로 ≈ 2.3:1, 틀을 꽉 채움) */
 .h-promo-outer .h-promo-logo.pb-logo-wide{object-fit:contain;padding:2px 4px;}
 .h-promo-outer .h-promo-logo{aspect-ratio:23/10;object-fit:cover;object-position:center;border-radius:9px;border:1px solid #E2E8F0;background:#FFFFFF;box-shadow:0 1px 3px rgba(15,23,42,.12);box-sizing:border-box;}
@@ -6757,6 +6761,57 @@ function _pbLogoColLayout(){
   window.addEventListener('resize',later);
   document.addEventListener('input',function(e){ if(e.target && e.target.classList && e.target.classList.contains('part-label-extra')) setTimeout(fit,0); },true);
   setInterval(fit,1500); setTimeout(fit,600);
+})();
+/* ★ (2026-11-08) 슬롯 한글 이름 글씨 크기 안정화
+   - 번호판이 아닌 한글 이름(무지개임대 등)은 2줄까지 허용하고, 칸에 딱 맞는 크기를 계산
+   - 같은 파트(그리드) 안의 한글 이름 칸은 모두 같은 크기(가장 작은 값)로 맞춰 들쭉날쭉하지 않게
+   - 열 넘기기(◀▶)·화면 회전 등으로 칸 폭이 바뀌면 다시 계산 */
+(function(){
+  function isName(el){
+    if(!el || el.querySelector('.car-four-grid')) return false;
+    var t=(el.textContent||'').trim(); if(!/[가-힣]/.test(t)) return false;
+    if(/\d{2,3}\s*[가-힣]\s*\d{4}/.test(t)) return false;   /* 번호판(12가3456)은 기존 방식 */
+    return true;
+  }
+  function fitOne(el, maxFs){
+    el.classList.add('pb-car-name');
+    el.style.fontSize='';
+    var base=Math.min(maxFs||99, parseFloat(getComputedStyle(el).fontSize)||13), fs=base, n=0;
+    el.style.webkitLineClamp='unset'; el.style.display='block';
+    el.style.fontSize=fs+'px';
+    var lh=1.08;
+    while(n<60 && fs>7 && (el.scrollWidth>el.clientWidth+1 || el.scrollHeight>Math.ceil(fs*lh*2)+2)){ fs-=0.5; el.style.fontSize=fs+'px'; n++; }
+    el.style.webkitLineClamp=''; el.style.display='';
+    return fs;
+  }
+  function run(scope){
+    try{
+      var root=scope||document;
+      var grids=root.classList && root.classList.contains('parking-grid') ? [root] : [].slice.call(root.querySelectorAll('.parking-grid'));
+      if(scope && !grids.length){ var g=scope.closest && scope.closest('.parking-grid'); if(g) grids=[g]; }
+      grids.forEach(function(g){
+        var els=[].slice.call(g.querySelectorAll('.slot-car')).filter(function(el){ var y=isName(el); if(!y) el.classList.remove('pb-car-name'); return y; });
+        if(!els.length) return;
+        var vis=els.filter(function(el){ return el.offsetWidth>0; });
+        var mins=vis.map(function(el){ return fitOne(el); });
+        if(!mins.length) return;
+        var m=Math.min.apply(null, mins);
+        els.forEach(function(el){ el.classList.add('pb-car-name'); el.style.fontSize=m+'px'; });
+      });
+    }catch(e){}
+  }
+  window._pbCarNameFit=run;
+  function hook(){
+    var o=window._fitSlotCarTexts; if(typeof o!=='function' || o._pbKn) return;
+    var w=function(slotEl){ var r=o.apply(this, arguments); requestAnimationFrame(function(){ requestAnimationFrame(function(){ run(slotEl||null); }); }); return r; };
+    w._pbKn=1; window._fitSlotCarTexts=w;
+  }
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(function(){ run(null); },120); }
+  var ro=window.ResizeObserver?new ResizeObserver(later):null, seen=typeof WeakSet!=='undefined'?new WeakSet():null;
+  function scan(){ try{ if(!ro) return; document.querySelectorAll('.parking-grid').forEach(function(g){ if(seen && seen.has(g)) return; if(seen) seen.add(g); ro.observe(g); }); }catch(e){} }
+  window.addEventListener('resize',later); window.addEventListener('orientationchange',later);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(hook,0); }); else setTimeout(hook,0);
+  setInterval(scan,2000); setTimeout(function(){ scan(); later(); },1200);
 })();
 function _applyPromoLogo(){
   var src=_promoLogoGet();
