@@ -201,6 +201,63 @@ body::before{content:'';display:block;position:fixed;top:0;left:0;right:0;height
 .h-left{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .h-icon{font-size:18px;}
 /* 제휴점 깜박이 */
+/* ★ (2026-11-08) 제휴점 업체 로고 + 아래 상호 */
+.h-title,#hTitle{display:none !important;}   /* ★ (2026-11-08) 고정 문구 '🚗 주차위치현황판' 삭제 — 멘트(편집 가능)만 표시 */
+/* 한 줄 헤더 (위·아래 빈 공간 줄임) — 로고 유무 관계없이 [업체명(왼쪽)] [타이틀(가운데)] [실시간연결(오른쪽)] */
+.header.pb-hdr1{padding-top:4px;padding-bottom:4px;}
+.header.pb-hdr1 .h-row1{position:relative;min-height:52px;}
+.header.pb-hdr1 .h-row2{display:none;}
+.header.pb-hdr1 .h-left{max-width:28%;min-width:0;overflow:hidden;}
+.header.pb-hdr1 .h-left .h-promo{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.header.pb-has-logo .h-promo-logo{height:40px;width:92px;max-width:none;}
+.header.pb-has-logo .h-promo-outer .h-promo{font-size:14px !important;line-height:1.1;}
+.header.pb-hdr1 .h-row1 .h-center-abs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:44%;justify-content:center;}
+.header.pb-hdr1 .h-memo-text{max-width:100%;}
+.header.pb-hdr1 #keyIssueBanner{margin:0 8px 0 auto;}
+/* 휴대폰: [로고+상호(작게)] [타이틀(자동 크기)] [실시간연결(작게)] — 화면 폭에 맞춰 글자 크기 자동 조절 */
+@media(max-width:600px){
+  .header.pb-hdr1{padding-left:6px;padding-right:6px;}
+  .header.pb-hdr1 .h-row1{min-height:42px;gap:4px;}
+  .header.pb-hdr1 .h-left{display:flex;flex:0 1 auto;max-width:32%;min-width:0;}
+  .header.pb-hdr1 .h-promo-outer{min-width:0;max-width:100%;}
+  .header.pb-hdr1 .h-promo-logo{height:30px;width:66px;max-width:100%;border-radius:7px;}
+  .header.pb-hdr1 .h-left .h-promo{text-overflow:clip;padding-right:1px;}
+  .header.pb-hdr1 .h-promo-outer .h-promo{font-size:var(--pbFitFs,clamp(10px,3.4vw,16px)) !important;line-height:1.15;}
+  .header.pb-hdr1.pb-has-logo .h-promo-outer .h-promo{font-size:var(--pbFitFs,clamp(9px,2.6vw,12px)) !important;}
+  .header.pb-hdr1 .h-row1 .h-center-abs{position:static;transform:none;flex:1 1 auto;min-width:0;max-width:none;justify-content:center;}
+  .header.pb-hdr1 .h-memo-text{font-size:var(--pbFitFs,clamp(13px,4.6vw,20px)) !important;text-overflow:clip;padding:1px 2px;}
+  .header.pb-hdr1 .sync-pill{flex:0 0 auto;display:grid;grid-template-columns:auto auto;align-items:center;justify-content:center;row-gap:0;column-gap:3px;padding:3px 8px;max-width:33vw;}
+  .header.pb-hdr1 #realClock{grid-column:1 / -1;text-align:center;}
+  .header.pb-hdr1 #syncStatus{font-size:9.5px;white-space:nowrap;line-height:1.2;}
+  .header.pb-hdr1 #realClock{font-size:10.5px;margin-left:0;line-height:1.2;}
+  .header.pb-hdr1 .sync-dot{width:8px;height:8px;}
+}
+.h-promo-outer.has-logo{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
+.h-promo-logo{height:56px;max-width:180px;object-fit:contain;display:block;cursor:pointer;}
+/* ★ (2026-11-08) PC·태블릿 로고 세로칸: 로고는 왼쪽 칸(헤더~Firebase 설정 줄 높이)에만, 제휴점 문구·대수·검색·설정은 오른쪽으로 */
+#pbLogoCol{display:none;}
+html.pb-logocol #pbLogoCol{display:flex;position:absolute;left:0;top:0;width:var(--pbLogoW,200px);height:var(--pbLogoH,120px);align-items:center;justify-content:center;padding:8px 10px;box-sizing:border-box;cursor:pointer;z-index:5;background:var(--kakao,#FEE500);border-right:1px solid rgba(0,0,0,.08);}
+html.pb-premium.pb-logocol #pbLogoCol{background:#FFFFFF;border-right:1px solid #E2E8F0;}
+html.pb-logocol #pbLogoCol img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:cover;object-position:center;border-radius:12px;border:1px solid #E2E8F0;background:#FFFFFF;box-shadow:0 2px 8px rgba(15,23,42,.12);box-sizing:border-box;}
+html.pb-logocol #pbLogoCol img.pb-logo-wide{object-fit:contain;padding:4px 8px;}
+html.pb-logocol .header{padding-left:calc(var(--pbLogoW,200px) + 10px);}
+html.pb-logocol .search-bar{padding-left:calc(var(--pbLogoW,200px) + 8px);}
+html.pb-logocol .settings-toggle-row{padding-left:var(--pbLogoW,200px);}
+html.pb-logocol .header.pb-has-logo .h-promo-outer .h-promo{font-size:inherit;}
+html.pb-logocol .header.pb-hdr1 .h-left{max-width:calc(50vw - var(--pbLogoW,200px) - 170px);}
+html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbLogoW,200px) - 10px);max-width:34vw;}
+@media(max-width:1400px){
+  html.pb-logocol .header.pb-hdr1 .h-left{flex:0 1 auto;max-width:42%;}
+  html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{position:static;transform:none;flex:1 1 auto;min-width:0;max-width:none;justify-content:center;}
+  html.pb-logocol .header.pb-hdr1 .h-row1{gap:8px;}
+  html.pb-logocol .header.pb-hdr1 .h-left .h-promo{font-size:var(--pbFitFs,15px) !important;text-overflow:clip;}
+  html.pb-logocol .header.pb-hdr1 .h-memo-text{font-size:var(--pbFitFs,18px) !important;text-overflow:clip;}
+}
+/* ★ (2026-11-08) 로고 = 모서리 둥근 가로 직사각형 틀 (가로:세로 ≈ 2.3:1, 틀을 꽉 채움) */
+.h-promo-outer .h-promo-logo.pb-logo-wide{object-fit:contain;padding:2px 4px;}
+.h-promo-outer .h-promo-logo{aspect-ratio:23/10;object-fit:cover;object-position:center;border-radius:9px;border:1px solid #E2E8F0;background:#FFFFFF;box-shadow:0 1px 3px rgba(15,23,42,.12);box-sizing:border-box;}
+.h-promo-outer.has-logo .h-promo{line-height:1.15;text-align:center;}
+@media(max-width:600px){ .h-promo-logo{height:42px;max-width:130px;} }
 .h-promo{font-size:20px;font-weight:900;color:#CC0000;letter-spacing:.2px;animation:blinkPromo .9s ease-in-out infinite;cursor:pointer;}
 @keyframes blinkPromo{0%,100%{opacity:1;}50%{opacity:0;}}
 /* 가운데 절대 위치 */
@@ -2223,7 +2280,17 @@ html.pb-premium #mOwnerInlineInput, html.pb-premium #mOwnerPhoneInput, html.pb-p
 (function(){
   var t='premium'; try{ t=localStorage.getItem('kdpb_theme')||'premium'; }catch(e){}
   if(t!=='classic') document.documentElement.classList.add('pb-premium');
+  _pbThemeColorMeta();
 })();
+/* ★ (2026-11-08) 앱 창 맨 위 제목줄(브라우저/설치앱 바) 색 = 디자인에 맞춤 (화이트 프리미엄: 흰색 / 클래식: 노랑) */
+function _pbThemeColorMeta(){
+  try{
+    var c=document.documentElement.classList.contains('pb-premium')?'#FFFFFF':'#FEE500';
+    var ms=document.querySelectorAll('meta[name="theme-color"]');
+    if(!ms.length){ var m=document.createElement('meta'); m.name='theme-color'; (document.head||document.documentElement).appendChild(m); ms=[m]; }
+    for(var i=0;i<ms.length;i++) ms[i].setAttribute('content',c);
+  }catch(e){}
+}
 function _pbThemeBtns(){
   var on=document.documentElement.classList.contains('pb-premium');
   var a=document.getElementById('pbThemePremium'), b=document.getElementById('pbThemeClassic');
@@ -2232,6 +2299,7 @@ function _pbThemeBtns(){
 function _pbSetTheme(t){
   try{ localStorage.setItem('kdpb_theme', t==='classic'?'classic':'premium'); }catch(e){}
   document.documentElement.classList.toggle('pb-premium', t!=='classic');
+  _pbThemeColorMeta();
   _pbThemeBtns();
   try{ if(typeof fitLayout==='function') fitLayout(); }catch(e){}
 }
@@ -2404,6 +2472,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
   <div class="h-row1">
     <div class="h-left">
       <div class="h-promo-outer" onclick="openPromoEdit()">
+      <img id="hPromoLogo" class="h-promo-logo" alt="" style="display:none">
       <div class="h-promo" id="hPromoText">🔴 제휴점:skv1모터스 타다할부 🔴</div>
       </div>
     </div>
@@ -2492,9 +2561,20 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
              onkeydown="if(event.key==='Enter')document.getElementById('promoEditText').focus()" />
     </div>
     <div>
-      <div class="memo-edit-label">📝 문구 (최대 50자)</div>
+      <div class="memo-edit-label">📝 문구 / 업체 상호 (최대 50자 — 로고를 넣으면 로고 아래에 표시)</div>
       <input class="memo-edit-input" id="promoEditText" type="text" placeholder="제휴점 문구 입력" maxlength="50"
              onkeydown="if(event.key==='Enter')savePromoEdit()" />
+    </div>
+    <div>
+      <div class="memo-edit-label">🖼️ 업체 로고 (선택)</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="promoLogoPrev" style="width:120px;height:52px;flex:0 0 120px;border:1.5px dashed #CBD5E1;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#F8FAFC;font-size:11px;color:#94A3B8;font-weight:800;">없음</div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">
+          <button type="button" onclick="document.getElementById('promoLogoFile').click()" style="padding:10px 8px;border:none;border-radius:10px;background:#1E3A8A;color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">📷 로고 이미지 첨부</button>
+          <button type="button" onclick="_promoLogoClear()" style="padding:8px;border:1.5px solid #FCA5A5;border-radius:10px;background:#FEF2F2;color:#B91C1C;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">🗑️ 로고 삭제 (문구만 표시)</button>
+        </div>
+        <input type="file" id="promoLogoFile" accept="image/*" style="display:none" onchange="_promoLogoPick(this)">
+      </div>
     </div>
     <div>
       <div class="memo-edit-label">📋 상세 정보 (약도 안내 페이지에 표시 — 여러 줄 가능)</div>
@@ -3009,7 +3089,12 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
 
     <!-- ★ 서류 첨부 (출고서류) — kd_docs 분리 저장, 차량번호 기준 -->
     <div class="m-section" id="docsSection">
-      <div class="m-label">📎 서류 첨부 (출고서류)</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <div class="m-label" style="margin-bottom:0;">📎 서류 첨부 (출고서류)</div>
+        <button type="button" onclick="_pbSaleDocOpen()" title="판매확인서 공유·미리보기·다운로드·인쇄"
+                style="flex-shrink:0;padding:6px 12px;border:none;border-radius:9px;background:#0F766E;color:#fff;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(15,118,110,.25);">🧾 판매확인서</button>
+      </div>
+      <div style="height:6px;"></div>
       <div id="docsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
       <input type="file" id="docFileInput" accept="image/*,application/pdf" multiple
              style="display:none" onchange="handleDocFiles(this.files)">
@@ -3018,12 +3103,16 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
                 style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #1D4ED8;border-radius:10px;background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📘 등록증 추가</button>
         <button type="button" onclick="pickDocCat('insp')"
                 style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #7C3AED;border-radius:10px;background:#F5F3FF;color:#7C3AED;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📗 점검표 추가</button>
-        <button type="button" onclick="pickDocCat('')"
-                style="flex:1;min-width:96px;padding:9px 6px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📎 기타 추가</button>
+        <button type="button" onclick="_pbAllDocsOpen()" title="이 칸에 저장된 서류 전부 — 공유·미리보기·다운로드·인쇄"
+                style="flex:1;min-width:96px;padding:9px 6px;border:2px solid #0F172A;border-radius:10px;background:#1E293B;color:#fff;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">📂 모든서류보기</button>
       </div>
       <input type="file" id="docBundleInput" accept="application/pdf,image/*" multiple style="display:none" onchange="handleBundlePdf(this.files)">
+      <div style="display:flex;gap:6px;margin-top:6px;">
       <button type="button" onclick="pickBundlePdf()"
-              style="width:100%;margin-top:6px;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 자동분리 (PDF·사진 모두 가능, 1장 등록증·나머지 점검표)</button>
+              style="flex:1;min-width:0;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 자동분리 (PDF·사진 모두 가능, 1장 등록증·나머지 점검표)</button>
+      <button type="button" onclick="pickDocCat('')" title="기타 서류 추가"
+              style="flex-shrink:0;padding:9px 12px;border:2px dashed #94A3B8;border-radius:10px;background:#F8FAFC;color:#475569;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📎 기타 추가</button>
+      </div>
       <div id="docUploadStatus" style="font-size:11px;font-weight:700;color:#7C3AED;margin-top:4px;"></div>
     </div>
 
@@ -6336,6 +6425,225 @@ function loadHeaderMemo(){
   var promo=localStorage.getItem(LS_PROMO_TEXT)||'🔴 제휴점:skv1모터스 타다할부 🔴';
   var pe=document.getElementById('hPromoText');
   if(pe) pe.textContent=promo;
+  try{ _applyPromoLogo(); }catch(e){}
+}
+/* ★ (2026-11-08) 제휴점 업체 로고 — 로고 아래에 문구(업체 상호) 표시
+   로고는 256px 이하로 줄여 저장 · 서버는 pb_promo_logo(따로 저장)에 올리고 pb_settings엔 변경시각만 → 다른 기기가 바뀔 때만 받음 */
+var LS_PROMO_LOGO='pb_promo_logo', LS_PROMO_LOGO_TS='pb_promo_logo_ts';
+var _promoLogoDraft;   /* undefined = 변경 없음, '' = 삭제, 'data:...' = 새 로고 */
+function _promoLogoGet(){ try{ return localStorage.getItem(LS_PROMO_LOGO) || window._promoLogoMem || ''; }catch(e){ return window._promoLogoMem || ''; } }
+function _promoLogoStore(src){
+  window._promoLogoMem = src || '';
+  try{ if(src) localStorage.setItem(LS_PROMO_LOGO, src); else localStorage.removeItem(LS_PROMO_LOGO); }catch(e){}
+}
+
+/* ★ (2026-11-08) 휴대폰 헤더 글자 자동 맞춤: 칸에 넘치면 글자를 조금씩 줄임 (사용자 설정 크기는 그대로 보관) */
+(function(){
+  function fit(el,min){
+    if(!el) return; el.style.removeProperty('--pbFitFs');
+    var _lc=document.documentElement.classList.contains('pb-logocol') && window.innerWidth<=1100;
+    if((window.innerWidth>600 && !_lc) || !el.offsetWidth) return;
+    var fs=parseFloat(getComputedStyle(el).fontSize)||14, n=0;
+    var over=function(){ try{ var r=document.createRange(); r.selectNodeContents(el); return el.scrollWidth>el.clientWidth || r.getBoundingClientRect().width>el.clientWidth+0.1; }catch(e){ return el.scrollWidth>el.clientWidth; } };
+    while(over() && fs>min && n<40){ fs-=0.5; n++; el.style.setProperty('--pbFitFs',fs+'px'); }
+  }
+  function run(){ try{ fit(document.getElementById('hMemoText'),10); fit(document.getElementById('hPromoText'),8); }catch(e){} }
+  window._pbHdrFit=run;
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(run,120); }
+  window.addEventListener('resize',later); window.addEventListener('orientationchange',later);
+  window.addEventListener('load',later); setTimeout(run,800); setTimeout(run,2500);
+  try{ var mo=new MutationObserver(later); var go=function(){ ['hMemoText','hPromoText','syncStatus','hPromoLogo'].forEach(function(id){ var e=document.getElementById(id); if(e) mo.observe(e,{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['src']}); }); };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',go); else go(); }catch(e){}
+})();
+/* ★ (2026-11-08) PC·태블릿(폭 601px 이상) + 로고 있을 때: 로고를 왼쪽 세로칸으로 (헤더 ~ Firebase 설정 줄까지)
+   휴대폰은 기존처럼 헤더 한 줄 안에 작은 로고 */
+function _pbLogoColLayout(){
+  try{
+    var html=document.documentElement, hdr=document.querySelector('.header'), img=document.getElementById('hPromoLogo'), out=document.querySelector('.header .h-promo-outer');
+    if(!hdr || !img || !out) return;
+    var col=document.getElementById('pbLogoCol');
+    if(!col){ col=document.createElement('div'); col.id='pbLogoCol'; col.title='제휴점 정보 수정'; col.onclick=function(){ try{ openPromoEdit(); }catch(e){} }; hdr.insertBefore(col, hdr.firstChild); }
+    var has=!!(img.getAttribute('src')) && img.style.display!=='none';
+    var wide=window.innerWidth>600;
+    var row=document.querySelector('.settings-toggle-row'), hr=hdr.getBoundingClientRect();
+    if(has && wide && hr.height>0){
+      if(img.parentNode!==col) col.appendChild(img);
+      html.classList.add('pb-logocol');
+      var bottom=hr.bottom;
+      var sb=document.querySelector('.search-bar'); if(sb && sb.offsetHeight) bottom=Math.max(bottom, sb.getBoundingClientRect().bottom);
+      if(row && row.offsetHeight) bottom=Math.max(bottom, row.getBoundingClientRect().bottom);
+      var H=Math.max(60, Math.round(bottom-hr.top));
+      var W=Math.round(Math.min(260, Math.max(150, (H-16)*1.9+20)));
+      if(window.innerWidth<=1100) W=Math.round(Math.max(130, Math.min(W, window.innerWidth*0.2)));
+      var _ow=html.style.getPropertyValue('--pbLogoW'); html.style.setProperty('--pbLogoH', H+'px'); html.style.setProperty('--pbLogoW', W+'px');
+      if(_ow!==W+'px' && typeof window._pbHdrFit==='function') setTimeout(window._pbHdrFit,30);
+    } else {
+      if(img.parentNode!==out) out.insertBefore(img, out.firstChild);
+      html.classList.remove('pb-logocol');
+    }
+  }catch(e){}
+}
+(function(){
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(_pbLogoColLayout,60); }
+  window._pbLogoColLater=later;
+  window.addEventListener('resize',later); window.addEventListener('orientationchange',later); window.addEventListener('load',later);
+  setTimeout(later,500); setTimeout(later,2000);
+  function obs(){
+    try{
+      if(window.ResizeObserver){ var ro=new ResizeObserver(later); ['.header','.search-bar','.settings-toggle-row'].forEach(function(s){ var e=document.querySelector(s); if(e) ro.observe(e); }); }
+      var lg=document.getElementById('hPromoLogo'); if(lg && window.MutationObserver) new MutationObserver(later).observe(lg,{attributes:true,attributeFilter:['src','style']});
+    }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',obs); else obs();
+})();
+function _applyPromoLogo(){
+  var src=_promoLogoGet();
+  var img=document.getElementById('hPromoLogo'), out=document.querySelector('.h-promo-outer');
+  if(!img || !out) return;
+  /* ★ (2026-11-08) 틀보다 가로로 훨씬 긴 로고(글자 로고)는 잘리지 않게 '전체 보이기', 나머지는 틀을 꽉 채움 */
+  img.onload=function(){ try{ var r=(img.naturalWidth||1)/(img.naturalHeight||1); img.classList.toggle('pb-logo-wide', r>2.7); }catch(e){} };
+  if(src){ img.src=src; img.style.display='block'; out.classList.add('has-logo'); }
+  else { img.removeAttribute('src'); img.style.display='none'; out.classList.remove('has-logo'); }
+  /* ★ (2026-11-08) 로고가 있으면 헤더를 한 줄로: [로고+상호(왼쪽)] [타이틀(가운데)] [실시간연결(오른쪽)]
+     없으면 예전처럼 두 줄(제휴점 문구 / 타이틀) */
+  try{
+    var hdr=document.querySelector('.header'), r1=document.querySelector('.header .h-row1'), r2=document.querySelector('.header .h-row2'), hl=document.querySelector('.header .h-left'), ca=document.querySelector('.header .h-center-abs');
+    if(hdr && r1 && r2 && hl && ca){
+      if(out.parentNode!==hl) hl.insertBefore(out, hl.firstChild);
+      /* ★ (2026-11-08) 로고 유무와 관계없이 항상 한 줄 헤더 */
+      if(ca.parentNode!==r1) r1.insertBefore(ca, hl.nextSibling); hdr.classList.add('pb-hdr1');
+      if(src) hdr.classList.add('pb-has-logo'); else hdr.classList.remove('pb-has-logo');
+    }
+  }catch(e){}
+}
+function _promoLogoPrevSet(src){
+  var b=document.getElementById('promoLogoPrev'); if(!b) return;
+  b.innerHTML = src ? '<img src="'+src+'" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;">' : '없음';
+}
+/* ★ (2026-11-08) HEIC/HEIF(아이폰·삼성 고효율) 사진 자동 변환 → JPEG
+   변환기(heic2any)는 HEIC 사진을 고를 때만 인터넷에서 불러옴 (평소 앱 속도 영향 없음) */
+var _pbHeicLibState=0, _pbHeicLibWait=[];
+function _pbLoadHeicLib(cb){
+  if(window.heic2any){ cb(true); return; }
+  _pbHeicLibWait.push(cb); if(_pbHeicLibState===1) return; _pbHeicLibState=1;
+  var urls=['https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js','https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'], i=0, done=false;
+  function finish(ok){ if(done) return; done=true; _pbHeicLibState=ok?2:0; var w=_pbHeicLibWait; _pbHeicLibWait=[]; w.forEach(function(f){ try{ f(ok); }catch(e){} }); }
+  function tryNext(){
+    if(window.heic2any){ finish(true); return; }
+    if(i>=urls.length){ finish(false); return; }
+    var s=document.createElement('script'); s.src=urls[i++]; s.async=true;
+    var to=setTimeout(function(){ s.onload=s.onerror=null; tryNext(); },20000);
+    s.onload=function(){ clearTimeout(to); if(window.heic2any) finish(true); else tryNext(); };
+    s.onerror=function(){ clearTimeout(to); tryNext(); };
+    document.head.appendChild(s);
+  }
+  tryNext();
+}
+function _pbIsHeic(f){ var nm=String((f&&f.name)||''), ty=String((f&&f.type)||'').toLowerCase(); return /heic|heif/.test(ty) || /\.(heic|heif)$/i.test(nm); }
+function _pbHeicToJpeg(f, cb){
+  _pbLoadHeicLib(function(ok){
+    if(!ok){ cb(null,'load'); return; }
+    try{
+      window.heic2any({blob:f, toType:'image/jpeg', quality:0.92}).then(function(out){
+        var b=Array.isArray(out)?out[0]:out; if(!b){ cb(null,'conv'); return; }
+        var nm=String(f.name||'photo').replace(/\.(heic|heif)$/i,'')+'.jpg', jf;
+        try{ jf=new File([b], nm, {type:'image/jpeg'}); }catch(e){ jf=b; try{ jf.name=nm; }catch(e2){} }
+        cb(jf);
+      }).catch(function(e){ console.warn('[HEIC] 변환 실패', e); cb(null,'conv'); });
+    }catch(e){ cb(null,'conv'); }
+  });
+}
+function _promoLogoPick(inp){
+  var f0=inp && inp.files && inp.files[0];
+  if(f0 && _pbIsHeic(f0)){
+    try{ inp.value=''; }catch(e){}
+    try{ showAlert('⏳ HEIC 사진을 JPG로 변환 중입니다... (몇 초 걸릴 수 있어요)'); }catch(e){}
+    _pbHeicToJpeg(f0, function(jf, why){
+      try{ hideAlert(); }catch(e){}
+      if(jf){ _promoLogoPickRaw({files:[jf], value:''}); return; }
+      /* 변환기 사용 불가(오프라인 등) → 기기 자체 해독 시도(아이폰 사파리는 가능), 안 되면 안내 */
+      window._pbHeicFailWhy = why==='load' ? 'load' : 'conv';
+      _promoLogoPickRaw({files:[f0], value:''});
+    });
+    return;
+  }
+  _promoLogoPickRaw(inp);
+}
+function _promoLogoPickRaw(inp){
+  /* ★ (2026-11-08) 휴대폰 사진도 읽히도록 3가지 방법을 차례로 시도
+     ① 파일 주소(blob)로 바로 읽기 → ② 이미지 해독기(createImageBitmap) → ③ 예전 방식(data URL)
+     HEIC(아이폰·일부 삼성 고효율 사진)처럼 브라우저가 못 여는 형식이면 이유를 알려줌 */
+  var f=inp.files && inp.files[0]; inp.value=''; if(!f) return;
+  var nm=String(f.name||''), ty=String(f.type||'').toLowerCase();
+  var isHeic=/heic|heif/.test(ty) || /\.(heic|heif)$/i.test(nm);
+  function fail(){
+    var why=isHeic ? (window._pbHeicFailWhy==='load' ? 'HEIC(고효율) 사진 변환기를 불러오지 못했습니다(인터넷 연결 확인).\n연결 후 다시 선택하거나, 사진을 캡처(스크린샷)·JPG로 저장해 선택해 주세요.' : 'HEIC(고효율) 사진을 변환하지 못했습니다.\n사진을 캡처(스크린샷)하거나 JPG로 저장한 뒤 다시 선택해 주세요.')
+                   : '이 파일('+(ty||nm.split('.').pop()||'알 수 없는 형식')+')을 읽을 수 없습니다.\nJPG·PNG 이미지로 다시 선택해 주세요.';
+    try{ showAlert('⚠️ '+why); setTimeout(hideAlert,5000); }catch(e){ try{ alert(why); }catch(e2){} }
+  }
+  function draw(src, w, h, done){
+    try{
+      if(!w || !h){ fail(); if(done) done(); return; }
+      /* ★ (2026-11-08) 고화질 로고: 서류사진 첨부처럼 큰 해상도로 저장 (최대 높이 400px · 폭 1280px)
+         가로로 긴 로고도 선명하도록 '높이' 기준으로 줄이고, 단계적으로 줄여(계단현상 방지) 화질 유지 */
+      var s=Math.min(1, 400/h, 1280/w);
+      var tw=Math.max(1,Math.round(w*s)), th=Math.max(1,Math.round(h*s));
+      var cur=src, cw=w, ch=h;
+      while(cw/2>=tw && ch/2>=th){                           /* 절반씩 단계 축소 */
+        var t=document.createElement('canvas'); t.width=Math.round(cw/2); t.height=Math.round(ch/2);
+        var tx=t.getContext('2d'); tx.imageSmoothingEnabled=true; try{ tx.imageSmoothingQuality='high'; }catch(e){}
+        tx.drawImage(cur,0,0,t.width,t.height); cur=t; cw=t.width; ch=t.height;
+      }
+      var c=document.createElement('canvas'); c.width=tw; c.height=th;
+      var cx=c.getContext('2d'); cx.imageSmoothingEnabled=true; try{ cx.imageSmoothingQuality='high'; }catch(e){}
+      cx.drawImage(cur,0,0,tw,th);
+      var url=c.toDataURL('image/png');                      /* 투명 배경 유지 */
+      if(url.length>600000){                                 /* 약 450KB 넘으면 화질 높은 압축으로 */
+        {   /* 모든 기기(구형 아이폰 포함)에서 열리도록 JPEG 사용 */
+          var c2=document.createElement('canvas'); c2.width=tw; c2.height=th; var x=c2.getContext('2d'); x.fillStyle='#FFFFFF'; x.fillRect(0,0,tw,th); x.drawImage(c,0,0);
+          var q=0.92; url=c2.toDataURL('image/jpeg',q);
+          while(url.length>600000 && q>0.6){ q-=0.08; url=c2.toDataURL('image/jpeg',q); }
+        }
+      }
+      if(!url || url.length<100){ fail(); }
+      else { _promoLogoDraft=url; _promoLogoPrevSet(url); }
+    }catch(e){ console.warn('[로고] 변환 오류', e); fail(); }
+    if(done) done();
+  }
+  function viaDataUrl(){
+    try{
+      var rd=new FileReader();
+      rd.onload=function(){ var i2=new Image(); i2.onload=function(){ draw(i2, i2.naturalWidth||i2.width, i2.naturalHeight||i2.height); }; i2.onerror=fail; i2.src=rd.result; };
+      rd.onerror=fail;
+      rd.readAsDataURL(f);
+    }catch(e){ fail(); }
+  }
+  function viaBitmap(){
+    if(typeof createImageBitmap==='function'){
+      createImageBitmap(f).then(function(bm){ draw(bm, bm.width, bm.height, function(){ try{ bm.close && bm.close(); }catch(e){} }); }).catch(viaDataUrl);
+    } else viaDataUrl();
+  }
+  try{
+    var bu=(window.URL||window.webkitURL).createObjectURL(f), im=new Image();
+    im.onload=function(){ draw(im, im.naturalWidth||im.width, im.naturalHeight||im.height, function(){ try{ (window.URL||window.webkitURL).revokeObjectURL(bu); }catch(e){} }); };
+    im.onerror=function(){ try{ (window.URL||window.webkitURL).revokeObjectURL(bu); }catch(e){} viaBitmap(); };
+    im.src=bu;
+  }catch(e){ viaBitmap(); }
+}
+function _promoLogoClear(){ _promoLogoDraft=''; _promoLogoPrevSet(''); }
+/* 다른 기기에서 로고가 바뀌면 받아오기 */
+function _promoLogoSync(ts){
+  try{
+    ts=+ts||0; var cur=+(localStorage.getItem(LS_PROMO_LOGO_TS)||0);
+    if(!ts || ts===cur) return;
+    if(typeof fbDb==='undefined' || !fbDb) return;
+    var code=(typeof _pdCode==='function')?_pdCode():(localStorage.getItem('pb_code')||'');
+    if(!code) return;
+    fbDb.ref('kd_rooms/'+code+'/pb_promo_logo').once('value').then(function(s){
+      var v=s.val(); _promoLogoStore(typeof v==='string'?v:''); try{ localStorage.setItem(LS_PROMO_LOGO_TS, String(ts)); }catch(e){}
+      _applyPromoLogo();
+    }).catch(function(){});
+  }catch(e){}
 }
 function openMemoEdit(){
   var cur=localStorage.getItem(LS_HEADER_MEMO)||'🚗 주차위치현황판';
@@ -6394,7 +6702,9 @@ function loadHeaderMemoStyle(){
   if(pe){pe.style.fontSize=fs+'px';pe.style.color=col;}
 }
 function openPromoEdit(){
-  var cur=localStorage.getItem(LS_PROMO_TEXT)||'🔴 제휴점:skv1모터스 타다할부 🔴';
+  /* ★ (2026-11-08) 입력칸에는 사용자가 저장한 문구만 표시 (기본 문구는 칸에 미리 넣지 않음 — 비워 두고 저장하면 기본 문구가 헤더에 표시) */
+  var cur=localStorage.getItem(LS_PROMO_TEXT)||'';
+  if(cur==='🔴 제휴점:skv1모터스 타다할부 🔴') cur='';
   /* ★ 상세 정보 프리필 */
   try{
     var _pd=document.getElementById('promoDetailText');
@@ -6403,6 +6713,7 @@ function openPromoEdit(){
   var fs=parseInt(localStorage.getItem(LS_PROMO_FS))||20;
   var col=localStorage.getItem(LS_PROMO_COLOR)||'#CC0000';
   _promoEditColor=col;
+  _promoLogoDraft=undefined; try{ _promoLogoPrevSet(_promoLogoGet()); }catch(e){}
   document.getElementById('promoEditPw').value='';
   document.getElementById('promoEditText').value=cur;
   document.getElementById('promoEditErr').classList.remove('show');
@@ -6451,7 +6762,21 @@ function savePromoEdit(){
   try{ _detail=(document.getElementById('promoDetailText')||{}).value||''; _detail=_detail.trim(); }catch(e){}
   try{ localStorage.setItem('pb_promo_detail', _detail); }catch(e){}
   /* Firebase 설정 동기화 */
-  pushSettings({promoText:txt, promoFs:parseInt(fs), promoColor:col, promoDetail:_detail});
+  var _promoSet={promoText:txt, promoFs:parseInt(fs), promoColor:col, promoDetail:_detail};
+  /* ★ 로고 저장 (바뀐 경우만) */
+  if(_promoLogoDraft!==undefined){
+    var _lts=Date.now();
+    _promoLogoStore(_promoLogoDraft);
+    try{ localStorage.setItem(LS_PROMO_LOGO_TS, String(_lts)); }catch(e){}
+    try{
+      var _lc=(typeof _pdCode==='function')?_pdCode():(localStorage.getItem('pb_code')||'');
+      if(typeof fbDb!=='undefined' && fbDb && _lc) fbDb.ref('kd_rooms/'+_lc+'/pb_promo_logo').set(_promoLogoDraft||null).catch(function(e){ console.warn('[로고] 서버 저장 실패', e); });
+    }catch(e){}
+    _promoSet.promoLogoTs=_lts;
+    _promoLogoDraft=undefined;
+  }
+  try{ _applyPromoLogo(); }catch(e){}
+  pushSettings(_promoSet);
   closePromoEdit();
 }
 
@@ -15620,6 +15945,7 @@ function applyRemoteSettings(data){
     }
   }
   /* 제휴점 문구 */
+  if(data.promoLogoTs!==undefined){ try{ _promoLogoSync(data.promoLogoTs); }catch(e){} }
   if(data.promoDetail!==undefined){
     try{ localStorage.setItem('pb_promo_detail', String(data.promoDetail||'')); }catch(e){}
   }
@@ -17455,7 +17781,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
      주소가 없어 브라우저가 "start_url property ignored, URL is invalid"
      경고를 띄우고 있었음 → location 기반 절대경로로 교체해 해결. */
   var _startUrl = location.href.split('?')[0].split('#')[0];
-  var manifest={name:"주차현황판",short_name:"주차현황판",start_url:_startUrl,display:"fullscreen",background_color:"#FEE500",theme_color:"#FEE500",orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
+  var manifest={name:"주차현황판",short_name:"주차현황판",start_url:_startUrl,display:"fullscreen",background_color:(document.documentElement.classList.contains("pb-premium")?"#FFFFFF":"#FEE500"),theme_color:(document.documentElement.classList.contains("pb-premium")?"#FFFFFF":"#FEE500"),orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
   var blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
   var el=document.getElementById("pwaManifest");
   if(el) el.href=URL.createObjectURL(blob);
@@ -26654,24 +26980,39 @@ function _kdShareTapAgain(files, msg, dataUrl, wasPdf, label){
 }
 /* 그림(dataURL) 목록만 인쇄 */
 function _kdPrintImages(srcs, onMsg){
+  /* ★ (2026-11-08) 서류 방향 그대로 인쇄: 세로 서류 → 세로(A4 세로) / 가로 서류 → 가로, 한 장에 한 페이지씩 맞춤 */
   var msg=onMsg||function(m){ try{ (typeof toast==='function'?toast:showAlert)(m); }catch(e){} };
   if(!srcs || !srcs.length){ msg('⚠️ 인쇄할 내용이 없습니다'); return; }
   var old=document.getElementById('_kdPrintArea'); if(old) old.remove();
   var oldSt=document.getElementById('_kdPrintStyle'); if(oldSt) oldSt.remove();
-  var area=document.createElement('div'); area.id='_kdPrintArea';
-  srcs.forEach(function(src, i){ var im=document.createElement('img'); im.src=src;
-    im.style.cssText='display:block;width:100%;height:auto;'+(i<srcs.length-1?'page-break-after:always;break-after:page;':''); area.appendChild(im); });
-  var st=document.createElement('style'); st.id='_kdPrintStyle';
-  st.textContent='#_kdPrintArea{display:none;}'
-    + '@media print{ body>*:not(#_kdPrintArea){display:none !important;} #_kdPrintArea{display:block !important;} '
-    + 'html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;overflow:visible !important;} @page{margin:8mm;} }';
-  document.head.appendChild(st); document.body.appendChild(area);
-  var ims=area.querySelectorAll('img'), left=ims.length;
-  function go(){ setTimeout(function(){
-      try{ window.print(); }catch(e){ msg('⚠️ 이 기기에서는 인쇄를 열 수 없습니다 — 📤 공유로 인쇄 앱을 이용해 주세요'); }
-      setTimeout(function(){ try{ area.remove(); st.remove(); }catch(e){} }, 1500);
-    }, 150); }
-  ims.forEach(function(im){ if(im.complete){ if(--left===0) go(); } else { im.onload=im.onerror=function(){ if(--left===0) go(); }; } });
+  Promise.all(srcs.map(function(src){ return new Promise(function(res){
+    var im=new Image(); im.onload=function(){ res({src:src, w:im.naturalWidth||1, h:im.naturalHeight||1}); }; im.onerror=function(){ res({src:src, w:1, h:1.414}); }; im.src=src; }); }))
+  .then(function(list){
+    var area=document.createElement('div'); area.id='_kdPrintArea';
+    list.forEach(function(it){
+      var land=it.w>it.h*1.05;
+      var pg=document.createElement('div'); pg.className='kdpg '+(land?'kdpg-L':'kdpg-P');
+      var im=document.createElement('img'); im.src=it.src; pg.appendChild(im); area.appendChild(pg);
+    });
+    var first=(list[0] && list[0].w>list[0].h*1.05)?'landscape':'portrait';
+    var st=document.createElement('style'); st.id='_kdPrintStyle';
+    st.textContent='#_kdPrintArea{display:none;}'
+      + '@page{size:A4 '+first+';margin:8mm;} @page kdP{size:A4 portrait;margin:8mm;} @page kdL{size:A4 landscape;margin:8mm;}'
+      + '@media print{ body>*:not(#_kdPrintArea){display:none !important;} #_kdPrintArea{display:block !important;} '
+      + 'html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;overflow:visible !important;} '
+      + '.kdpg{display:flex;align-items:flex-start;justify-content:center;width:100%;overflow:hidden;break-inside:avoid;page-break-inside:avoid;margin:0;padding:0;} '
+      + '.kdpg-P{page:kdP;height:279mm;width:194mm;} .kdpg-L{page:kdL;height:192mm;width:281mm;} '
+      + '.kdpg+.kdpg{break-before:page;page-break-before:always;} '
+      + '.kdpg img{display:block;width:100%;height:100%;object-fit:contain;object-position:center top;} }';
+    document.head.appendChild(st); document.body.appendChild(area);
+    var ims=area.querySelectorAll('img'), left=ims.length;
+    function go(){ setTimeout(function(){
+        try{ window.print(); }catch(e){ msg('⚠️ 이 기기에서는 인쇄를 열 수 없습니다 — 📤 공유로 인쇄 앱을 이용해 주세요'); }
+        setTimeout(function(){ try{ area.remove(); st.remove(); }catch(e){} }, 1500);
+      }, 150); }
+    if(!left) go();
+    ims.forEach(function(im){ if(im.complete){ if(--left===0) go(); } else { im.onload=im.onerror=function(){ if(--left===0) go(); }; } });
+  });
 }
 var _pbPdfJsP=null;
 function _pbLoadPdfJs(){
@@ -26760,74 +27101,259 @@ function _pbDocShare(doc, id){
   });
 }
 function _pbPvClose(){ var o=document.getElementById('_pbDocPv'); if(o) o.remove(); }
-function _pbDocPreview(doc, id){
+/* ★ (2026-11-08) 미리보기 확대·축소·회전 (서류앱과 동일) — 두 손가락 벌리기 / Ctrl+휠 / 두 번 톡 도 가능 */
+var _pbPvZ=1, _pbPvRot=0;
+function _pbPvBaseW(){ return Math.min(900, (window.innerWidth||400)-24); }
+function _pbPvApply(keepCenter){
+  var b=document.getElementById('_pbPvBody'); if(!b) return;
+  var oW=b.scrollWidth, oH=b.scrollHeight, cx=b.scrollLeft+b.clientWidth/2, cy=b.scrollTop+b.clientHeight/2;
+  var w=Math.round(_pbPvBaseW()*_pbPvZ);
+  b.querySelectorAll('._pbPvPage').forEach(function(el){ el.style.width=w+'px'; el.style.maxWidth=(_pbPvZ>1?'none':'100%'); el.style.height='auto'; });
+  var l=document.getElementById('_pbPvZLbl'); if(l) l.textContent=Math.round(_pbPvZ*100)+'%';
+  if(keepCenter && oW && oH){
+    b.scrollLeft=Math.max(0, cx*(b.scrollWidth/oW)-b.clientWidth/2);
+    b.scrollTop =Math.max(0, cy*(b.scrollHeight/oH)-b.clientHeight/2);
+  }
+}
+function _pbPvZoomSet(z){ _pbPvZ=Math.max(0.5, Math.min(5, z)); _pbPvApply(true); }
+function _pbPvZoom(f){ _pbPvZoomSet(_pbPvZ*f); }
+function _pbPvRotEl(el){
+  var o=el._pvOrig||el;
+  if(_pbPvRot===0) return o;
+  var sw=o.naturalWidth||o.width, sh=o.naturalHeight||o.height; if(!sw||!sh) return el;
+  var side=(_pbPvRot%180)!==0, c=document.createElement('canvas');
+  c.width=side?sh:sw; c.height=side?sw:sh;
+  var x=c.getContext('2d'); x.translate(c.width/2, c.height/2); x.rotate(_pbPvRot*Math.PI/180); x.drawImage(o, -sw/2, -sh/2);
+  c.className='_pbPvPage'; c.style.cssText=o.style.cssText; c._pvOrig=o;
+  return c;
+}
+function _pbPvRotate(){
+  var b=document.getElementById('_pbPvBody'); if(!b) return;
+  var pages=b.querySelectorAll('._pbPvPage'); if(!pages.length){ showAlert('⏳ 아직 불러오는 중입니다'); setTimeout(hideAlert,1500); return; }
+  _pbPvRot=(_pbPvRot+90)%360;
+  pages.forEach(function(el){ var n=_pbPvRotEl(el); if(n!==el) el.parentNode.replaceChild(n, el); });
+  _pbPvApply(false);
+}
+function _pbPvGestures(b){
+  if(!b) return;
+  b.style.touchAction='pan-x pan-y';
+  var d0=0, z0=1, raf=0;
+  function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
+  b.addEventListener('touchstart', function(e){ if(e.touches.length===2){ d0=dist(e.touches); z0=_pbPvZ; } }, {passive:true});
+  b.addEventListener('touchmove', function(e){
+    if(e.touches.length===2 && d0>0){ e.preventDefault(); var z=z0*dist(e.touches)/d0; if(!raf) raf=requestAnimationFrame(function(){ raf=0; _pbPvZoomSet(z); }); }
+  }, {passive:false});
+  b.addEventListener('touchend', function(e){ if(e.touches.length<2) d0=0; }, {passive:true});
+  b.addEventListener('wheel', function(e){ if(e.ctrlKey){ e.preventDefault(); _pbPvZoom(e.deltaY<0?1.15:1/1.15); } }, {passive:false});
+  b.addEventListener('dblclick', function(e){ if(e.target && e.target.classList && e.target.classList.contains('_pbPvPage')){ _pbPvZoomSet(_pbPvZ>1.05?1:2.5); } });
+}
+/* 미리보기 화면에 보이는 그대로(회전 포함) 인쇄 */
+function _pbPvPrintShown(){
+  var b=document.getElementById('_pbPvBody'); if(!b) return false;
+  var srcs=[];
+  b.querySelectorAll('._pbPvPage').forEach(function(el){ try{ srcs.push(el.tagName==='CANVAS' ? el.toDataURL('image/jpeg',0.92) : el.src); }catch(e){} });
+  if(!srcs.length) return false;
+  _kdPrintImages(srcs); return true;
+}
+/* 미리보기 창 (items: [{doc,id}] — 1건 또는 여러 건) */
+function _pbPvOpen(title, items, acts){
   _pbPvClose();
+  _pbPvZ=1; _pbPvRot=0;
   var ov=document.createElement('div'); ov.id='_pbDocPv';
   ov.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.94);display:flex;flex-direction:column;';
   var head=document.createElement('div');
-  head.style.cssText='display:flex;align-items:center;gap:6px;padding:10px 12px;background:#1E293B;color:#fff;';
+  head.style.cssText='padding:10px 12px;background:#1E293B;color:#fff;';
   var nm=document.createElement('div');
-  nm.style.cssText='flex:1;min-width:0;font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  nm.textContent='👁️ '+((doc&&doc.name)||'서류'); head.appendChild(nm);
-  function hb(label,bg,fn){ var b=document.createElement('button'); b.type='button'; b.textContent=label;
-    b.style.cssText='flex-shrink:0;padding:8px 10px;border:none;border-radius:9px;background:'+bg+';color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;';
-    b.onclick=fn; head.appendChild(b); }
-  if(_kdShowShareBtn()) hb('📤 공유', '#16A34A', function(){ _pbDocShare(doc, id); });
-  hb('⬇️ 저장', '#2563EB', function(){ _pbDocDownload(doc, id); });
-  hb('🖨️ 인쇄', '#0F766E', function(){ _pbDocPrint(doc, id); });
-  hb('✕ 닫기', '#475569', _pbPvClose);
-  var body=document.createElement('div');
+  nm.style.cssText='font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px;';
+  nm.textContent='👁️ '+title; head.appendChild(nm);
+  var r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;flex-wrap:wrap;'; head.appendChild(r1);
+  function hb(row,label,bg,fn,extra){ var b=document.createElement('button'); b.type='button'; b.textContent=label;
+    b.style.cssText=(extra||'flex:1;min-width:70px;padding:9px 8px;')+'border:none;border-radius:9px;background:'+bg+';color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;';
+    b.onclick=fn; row.appendChild(b); return b; }
+  if(_kdShowShareBtn() && acts.share) hb(r1,'📤 공유', '#16A34A', acts.share);
+  hb(r1,'🖨️ 인쇄', '#0F766E', function(){ if(!_pbPvPrintShown()){ if(acts.print) acts.print(); } });
+  if(acts.download) hb(r1,'⬇️ 다운로드', '#2563EB', acts.download);
+  hb(r1,'✕ 닫기', '#475569', _pbPvClose);
+  var r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;margin-top:6px;align-items:center;'; head.appendChild(r2);
+  var zs='padding:7px 12px;';
+  hb(r2,'－','#334155',function(){ _pbPvZoom(1/1.25); },zs);
+  var zl=hb(r2,'100%','#334155',function(){ _pbPvZoomSet(1); },zs+'min-width:64px;'); zl.id='_pbPvZLbl'; zl.title='원래 크기';
+  hb(r2,'＋','#334155',function(){ _pbPvZoom(1.25); },zs);
+  hb(r2,'⟳ 회전','#334155',_pbPvRotate,zs).title='90° 회전';
+  var tip=document.createElement('span'); tip.style.cssText='flex:1;font-size:11px;font-weight:700;color:#94A3B8;text-align:right;line-height:1.3;';
+  tip.innerHTML='두 손가락으로 벌리거나<br>두 번 톡 하면 확대'; r2.appendChild(tip);
+  var body=document.createElement('div'); body.id='_pbPvBody';
   body.style.cssText='flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px;text-align:center;color:#E2E8F0;font-size:14px;font-weight:800;';
   body.textContent='⏳ 불러오는 중...';
   ov.appendChild(head); ov.appendChild(body); document.body.appendChild(ov);
-  _pbGetFullDoc(doc, id, function(full){
-    if(!document.getElementById('_pbDocPv')) return;
-    if(!full || !full.data){ body.textContent='⚠️ 서류 데이터를 찾을 수 없습니다'; return; }
-    body.textContent=_pbIsPdf(full)?'⏳ PDF 여는 중...':'';
-    _pbDocToImages(full, Math.min(1400, (window.innerWidth||400)*2)).then(function(imgs){
+  try{ _pbPvGestures(body); }catch(e){}
+  var multi=items.length>1, chain=Promise.resolve();
+  body.innerHTML='';
+  items.forEach(function(it, idx){
+    chain=chain.then(function(){
       if(!document.getElementById('_pbDocPv')) return;
-      body.innerHTML='';
-      imgs.forEach(function(src){ var im=document.createElement('img'); im.src=src;
-        im.style.cssText='display:block;width:100%;max-width:900px;height:auto;margin:0 auto 10px;background:#fff;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.4);';
-        body.appendChild(im); });
-      if(imgs._more){ var d2=document.createElement('div'); d2.textContent='… 앞 20장만 표시 (전체는 다운로드로 확인)'; body.appendChild(d2); }
-    }).catch(function(){
-      if(!document.getElementById('_pbDocPv')) return;
-      body.innerHTML='⚠️ 이 기기에서는 PDF 미리보기를 열 수 없습니다.<br><br>위의 <b>⬇️ 다운로드</b>로 확인해 주세요.';
+      if(multi){
+        var h=document.createElement('div');
+        h.style.cssText='margin:'+(idx?'22px':'0')+' auto 8px;font-size:13.5px;font-weight:900;color:#FDE68A;';
+        h.textContent='📄 '+(idx+1)+'/'+items.length+' · '+((it.doc&&it.doc.name)||'서류'); body.appendChild(h);
+      }
+      var holder=document.createElement('div'); holder.textContent='⏳ 불러오는 중...'; body.appendChild(holder);
+      return new Promise(function(res){
+        _pbGetFullDoc(it.doc, it.id, function(full){
+          if(!document.getElementById('_pbDocPv')){ res(); return; }
+          if(!full || !full.data){ holder.textContent='⚠️ 서류 데이터를 찾을 수 없습니다'; res(); return; }
+          holder.textContent=_pbIsPdf(full)?'⏳ PDF 여는 중...':'';
+          _pbDocToImages(full, Math.min(1400, (window.innerWidth||400)*2)).then(function(imgs){
+            if(!document.getElementById('_pbDocPv')){ res(); return; }
+            holder.innerHTML='';
+            imgs.forEach(function(src){ var im=document.createElement('img'); im.src=src; im.className='_pbPvPage';
+              im.style.cssText='display:block;width:100%;max-width:100%;height:auto;margin:0 auto 10px;background:#fff;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.4);';
+              im.onload=function(){ try{ if(_pbPvRot){ var n=_pbPvRotEl(im); if(n!==im && im.parentNode) im.parentNode.replaceChild(n, im); } _pbPvApply(false); }catch(e){} };
+              holder.appendChild(im); });
+            if(imgs._more){ var d2=document.createElement('div'); d2.textContent='… 앞 20장만 표시 (전체는 다운로드로 확인)'; holder.appendChild(d2); }
+            _pbPvApply(false); res();
+          }).catch(function(){
+            if(document.getElementById('_pbDocPv')) holder.innerHTML='⚠️ 이 기기에서는 PDF 미리보기를 열 수 없습니다.<br><br><b>⬇️ 다운로드</b>로 확인해 주세요.';
+            res();
+          });
+        });
+      });
     });
+  });
+}
+function _pbDocPreview(doc, id){
+  _pbPvOpen((doc&&doc.name)||'서류', [{doc:doc, id:id}], {
+    share:function(){ _pbDocShare(doc, id); },
+    download:function(){ _pbDocDownload(doc, id); },
+    print:function(){ _pbDocPrint(doc, id); }
   });
 }
 function _pbDocPrint(doc, id){
   showAlert('⏳ 인쇄 준비 중...');
   _pbGetFullDoc(doc, id, function(full){
     if(!full || !full.data){ hideAlert(); showAlert('⚠️ 서류 데이터를 찾을 수 없습니다'); return; }
-    _pbDocToImages(full, 1600).then(function(imgs){
-      hideAlert();
-      var old=document.getElementById('_pbPrintArea'); if(old) old.remove();
-      var oldSt=document.getElementById('_pbPrintStyle'); if(oldSt) oldSt.remove();
-      var area=document.createElement('div'); area.id='_pbPrintArea';
-      imgs.forEach(function(src, i){ var im=document.createElement('img'); im.src=src;
-        im.style.cssText='display:block;width:100%;height:auto;'+(i<imgs.length-1?'page-break-after:always;break-after:page;':''); area.appendChild(im); });
-      var st=document.createElement('style'); st.id='_pbPrintStyle';
-      st.textContent='#_pbPrintArea{display:none;}'
-        + '@media print{ body>*:not(#_pbPrintArea){display:none !important;} #_pbPrintArea{display:block !important;} '
-        + 'html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;overflow:visible !important;} @page{margin:8mm;} }';
-      document.head.appendChild(st); document.body.appendChild(area);
-      /* 그림이 다 읽힌 뒤 인쇄 */
-      var ims=area.querySelectorAll('img'), left=ims.length;
-      function go(){
-        setTimeout(function(){
-          try{ window.print(); }catch(e){ showAlert('⚠️ 이 기기에서는 인쇄를 열 수 없습니다'); }
-          setTimeout(function(){ try{ area.remove(); st.remove(); }catch(e){} }, 1500);
-        }, 150);
-      }
-      if(!left) go();
-      ims.forEach(function(im){ if(im.complete){ if(--left===0) go(); } else { im.onload=im.onerror=function(){ if(--left===0) go(); }; } });
-    }).catch(function(){
-      hideAlert();
-      showAlert('⚠️ PDF를 인쇄용으로 열 수 없습니다 — 다운로드 후 인쇄해 주세요');
-    });
+    _pbDocToImages(full, 1600).then(function(imgs){ hideAlert(); _kdPrintImages(imgs); })
+    .catch(function(){ hideAlert(); showAlert('⚠️ PDF를 인쇄용으로 열 수 없습니다 — 다운로드 후 인쇄해 주세요'); });
   });
+}
+/* ═══ ★ (2026-11-08) 모든서류보기 — 이 칸 차량의 서류 전부 한번에 공유·미리보기·다운로드·인쇄 ═══ */
+function _pbAllDocItems(){
+  var m=_curDocs||{}, ord={reg:0, insp:1};
+  return Object.keys(m).filter(function(id){ return !!m[id]; }).sort(function(a,b){
+    var ca=ord.hasOwnProperty(m[a].cat||'')?ord[m[a].cat]:2, cb=ord.hasOwnProperty(m[b].cat||'')?ord[m[b].cat]:2;
+    if(ca!==cb) return ca-cb; return (m[a].at||0)-(m[b].at||0);
+  }).map(function(id){ return {doc:m[id], id:id}; });
+}
+function _pbLoadAllFull(items){
+  var out=[], chain=Promise.resolve();
+  items.forEach(function(it){ chain=chain.then(function(){ return new Promise(function(res){ _pbGetFullDoc(it.doc, it.id, function(f){ if(f && f.data) out.push(f); res(); }); }); }); });
+  return chain.then(function(){ return out; });
+}
+function _pbAllMsg(x){ showAlert(x); setTimeout(function(){ try{ hideAlert(); }catch(e){} }, 2600); }
+function _pbAllShare(items){
+  if(!window.isSecureContext || !navigator.share || !navigator.canShare){ _pbAllMsg('⚠️ 이 브라우저에서는 공유 창을 열 수 없습니다 — 「⬇️ 다운로드」 후 파일을 공유해 주세요'); return; }
+  showAlert('⏳ '+items.length+'건 공유 준비 중...');
+  _pbLoadAllFull(items).then(function(docs){
+    try{ hideAlert(); }catch(e){}
+    if(!docs.length){ _pbAllMsg('⚠️ 서류 데이터를 찾을 수 없습니다'); return; }
+    var files=docs.map(function(d){ return _kdDataUrlToFile(d.data, d.name); });
+    var hasPdf=docs.some(_pbIsPdf);
+    var ok=false; try{ ok=navigator.canShare({files:files}); }catch(e){}
+    if(ok && !(hasPdf && _kdNoPdfShare())){ _kdShareTapAgain(files, _pbAllMsg, docs[0].data, hasPdf, '📤 '+files.length+'건 준비 완료 — 눌러서 공유'); return; }
+    var out=[], chain=Promise.resolve();
+    docs.forEach(function(d){ chain=chain.then(function(){
+      if(!_pbIsPdf(d)){ out.push(_kdDataUrlToFile(d.data, d.name)); return; }
+      return _kdPdfToImageFiles(d.data, d.name).then(function(fs){ out=out.concat(fs); }).catch(function(){});
+    }); });
+    chain.then(function(){
+      var ok2=false; try{ ok2=out.length && navigator.canShare({files:out}); }catch(e){}
+      if(ok2) _kdShareTapAgain(out, _pbAllMsg, docs[0].data, false, '📤 사진으로 바꿨습니다 — 눌러서 공유 ('+out.length+'장)');
+      else _kdShareHelp(docs[0].data, docs[0].name, 'type');
+    });
+  }).catch(function(){ try{ hideAlert(); }catch(e){} _pbAllMsg('⚠️ 서류 불러오기 실패'); });
+}
+function _pbAllDownload(items){
+  _pbAllMsg('⬇️ '+items.length+'건 다운로드 시작 — 「여러 파일 다운로드」 허용을 물으면 「허용」을 눌러 주세요');
+  _pbLoadAllFull(items).then(function(docs){
+    docs.forEach(function(d, i){ setTimeout(function(){ try{ downloadDoc(d); }catch(e){} }, i*900); });
+  });
+}
+function _pbAllPrint(items){
+  showAlert('⏳ '+items.length+'건 인쇄 준비 중...');
+  _pbLoadAllFull(items).then(function(docs){
+    var all=[], chain=Promise.resolve();
+    docs.forEach(function(d){ chain=chain.then(function(){ return _pbDocToImages(d, 1600).then(function(imgs){ all=all.concat(imgs); }).catch(function(){}); }); });
+    return chain.then(function(){ hideAlert(); if(!all.length){ _pbAllMsg('⚠️ 인쇄할 서류를 열 수 없습니다'); return; } _kdPrintImages(all); });
+  }).catch(function(){ hideAlert(); _pbAllMsg('⚠️ 서류 불러오기 실패'); });
+}
+function _pbAllDocsOpen(){
+  var items=_pbAllDocItems();
+  if(!items.length){ _pbAllMsg('📂 이 칸에 첨부된 서류가 없습니다'); return; }
+  var carEl=document.getElementById('mCarInput'), car=carEl?carEl.value.trim():'';
+  var title=(car?car+' ':'')+'모든 서류 '+items.length+'건';
+  _pbMultiSheet('📂 '+title, items.map(function(it){ return ((it.doc.cat==='reg')?'📘 ':(it.doc.cat==='insp')?'📗 ':'📎 ')+(it.doc.name||'서류'); }), {
+    share:function(){ _pbAllShare(items); },
+    preview:function(){ _pbPvOpen(title, items, { share:function(){ _pbAllShare(items); }, download:function(){ _pbAllDownload(items); }, print:function(){ _pbAllPrint(items); } }); },
+    download:function(){ _pbAllDownload(items); },
+    print:function(){ _pbAllPrint(items); }
+  });
+}
+/* 공유·미리보기·다운로드·인쇄 선택 창 (여러 건용) */
+function _pbMultiSheet(title, lines, a){
+  _pbSheetClose();
+  var ov=document.createElement('div'); ov.id='_pbDocSheet';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.onclick=function(e){ if(e.target===ov) _pbSheetClose(); };
+  var box=document.createElement('div');
+  box.style.cssText='width:100%;max-width:360px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit;';
+  var t=document.createElement('div'); t.style.cssText='font-size:14px;font-weight:900;color:#1E293B;margin-bottom:8px;word-break:break-all;line-height:1.5;'; t.textContent=title; box.appendChild(t);
+  if(lines && lines.length){ var ul=document.createElement('div'); ul.style.cssText='font-size:12px;font-weight:700;color:#475569;background:#F1F5F9;border-radius:10px;padding:8px 10px;margin-bottom:12px;line-height:1.7;word-break:break-all;';
+    lines.forEach(function(l){ var d=document.createElement('div'); d.textContent=l; ul.appendChild(d); }); box.appendChild(ul); }
+  function btn(label, bg, fn){ var b=document.createElement('button'); b.type='button'; b.textContent=label;
+    b.style.cssText='display:block;width:100%;margin:0 0 8px;padding:13px;border:none;border-radius:11px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;font-family:inherit;background:'+bg+';';
+    b.onclick=function(){ _pbSheetClose(); fn(); }; box.appendChild(b); }
+  if(_kdShowShareBtn() && a.share) btn('📤 공유 (카톡·문자·메일·인쇄 앱 등)', '#16A34A', a.share);
+  btn('👁️ 미리보기', '#F59E0B', a.preview);
+  btn('⬇️ 다운로드', '#2563EB', a.download);
+  btn('🖨️ 인쇄', '#0F766E', a.print);
+  var c=document.createElement('button'); c.type='button'; c.textContent='닫기';
+  c.style.cssText='display:block;width:100%;padding:11px;border:none;border-radius:11px;font-size:14px;font-weight:800;color:#475569;background:#E2E8F0;cursor:pointer;font-family:inherit;';
+  c.onclick=_pbSheetClose; box.appendChild(c);
+  ov.appendChild(box); document.body.appendChild(ov);
+}
+/* ═══ ★ (2026-11-08) 판매확인서 — 공통서류(kd_common_meta / kd_common_data) 공유·미리보기·다운로드·인쇄 ═══ */
+function _pbSaleDocOpen(){
+  var room=(typeof _commonRoomRef==='function')?_commonRoomRef():null;
+  if(!room){ _pbAllMsg('⚠️ Firebase 연결 후 사용할 수 있습니다'); return; }
+  showAlert('⏳ 판매확인서 불러오는 중...');
+  var done=false, to=setTimeout(function(){ if(done) return; done=true; hideAlert(); _pbAllMsg('⚠️ 서버 응답이 없습니다 — 인터넷 연결을 확인해 주세요'); }, 15000);
+  var go=function(){ room.child('kd_common_meta').once('value').then(function(snap){
+    if(done) return; done=true; clearTimeout(to); hideAlert();
+    var m=snap.val()||{}, ids=Object.keys(m).filter(function(k){ return m[k]; }).sort(function(a,b){ return (m[a].at||0)-(m[b].at||0); });
+    if(!ids.length){ _pbAllMsg('📄 등록된 판매확인서가 없습니다 — 설정의 「공통서류 (판매확인서 등)」에서 먼저 올려 주세요'); return; }
+    var items=ids.map(function(id){ var d=m[id]||{}; return {id:'common_'+id, cid:id, doc:{name:d.name||'판매확인서', type:d.type||'', size:d.size||0, at:d.at||0, _common:id}}; });
+    function load(it, cb){
+      if(it.doc.data){ cb(it.doc); return; }
+      room.child('kd_common_data/'+it.cid).once('value').then(function(s){ var v=s.val(); if(!v){ _pbAllMsg('⚠️ 판매확인서 파일을 찾을 수 없습니다'); cb(null); return; } it.doc.data=String(v); cb(it.doc); })
+        .catch(function(){ _pbAllMsg('⚠️ 판매확인서를 불러오지 못했습니다'); cb(null); });
+    }
+    function openOne(it){ showAlert('⏳ 불러오는 중...'); load(it, function(full){ hideAlert(); if(full) _pbDocActions(full, it.id); }); }
+    if(items.length===1){ openOne(items[0]); return; }
+    /* 여러 개면 고르기 */
+    _pbSheetClose();
+    var ov=document.createElement('div'); ov.id='_pbDocSheet';
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.onclick=function(e){ if(e.target===ov) _pbSheetClose(); };
+    var box=document.createElement('div'); box.style.cssText='width:100%;max-width:360px;max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit;';
+    var t=document.createElement('div'); t.style.cssText='font-size:14px;font-weight:900;color:#1E293B;margin-bottom:10px;'; t.textContent='🧾 판매확인서 선택'; box.appendChild(t);
+    items.forEach(function(it){ var b=document.createElement('button'); b.type='button'; b.textContent=((it.doc.type==='pdf'||/\.pdf$/i.test(it.doc.name))?'📄 ':'🖼️ ')+it.doc.name;
+      b.style.cssText='display:block;width:100%;margin:0 0 8px;padding:12px;border:1.5px solid #CBD5E1;border-radius:11px;font-size:14px;font-weight:800;color:#1E293B;background:#F8FAFC;cursor:pointer;font-family:inherit;text-align:left;word-break:break-all;';
+      b.onclick=function(){ _pbSheetClose(); openOne(it); }; box.appendChild(b); });
+    var c=document.createElement('button'); c.type='button'; c.textContent='닫기';
+    c.style.cssText='display:block;width:100%;padding:11px;border:none;border-radius:11px;font-size:14px;font-weight:800;color:#475569;background:#E2E8F0;cursor:pointer;font-family:inherit;';
+    c.onclick=_pbSheetClose; box.appendChild(c); ov.appendChild(box); document.body.appendChild(ov);
+  }).catch(function(){ if(done) return; done=true; clearTimeout(to); hideAlert(); _pbAllMsg('⚠️ 판매확인서 목록을 불러오지 못했습니다'); }); };
+  if(typeof _migrateCommonDocsIfNeeded==='function') _migrateCommonDocsIfNeeded(go); else go();
 }
 </script>
 </body>
