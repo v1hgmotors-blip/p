@@ -6484,12 +6484,33 @@ function loadHeaderMemo(){
 }
 /* ★ (2026-11-08) 제휴점 업체 로고 — 로고 아래에 문구(업체 상호) 표시
    로고는 256px 이하로 줄여 저장 · 서버는 pb_promo_logo(따로 저장)에 올리고 pb_settings엔 변경시각만 → 다른 기기가 바뀔 때만 받음 */
-var LS_PROMO_LOGO='pb_promo_logo', LS_PROMO_LOGO_TS='pb_promo_logo_ts';
+/* ★ (2026-11-08) 로고 저장 키를 pb_ 밖으로 옮김 — pb_ 키는 자동백업·스냅샷에 통째로 들어가서
+   고화질 로고가 백업마다 복사돼 휴대폰/PC 저장공간(약 5MB)이 차고, 그러면 로고·데이터 저장이 실패해
+   로고가 사라지는 문제가 있었음. 로고 원본은 서버(pb_promo_logo)에 따로 있으므로 백업에 넣을 필요 없음 */
+var LS_PROMO_LOGO='kdpb_promo_logo', LS_PROMO_LOGO_TS='kdpb_promo_logo_ts';
+(function(){
+  try{
+    var o=localStorage.getItem('pb_promo_logo'), ot=localStorage.getItem('pb_promo_logo_ts');
+    if(o!==null || ot!==null){
+      if(!localStorage.getItem(LS_PROMO_LOGO) && o){ try{ localStorage.removeItem('pb_promo_logo'); localStorage.setItem(LS_PROMO_LOGO, o); if(ot) localStorage.setItem(LS_PROMO_LOGO_TS, ot); }catch(e){ window._promoLogoMem=o; } }
+      try{ localStorage.removeItem('pb_promo_logo'); localStorage.removeItem('pb_promo_logo_ts'); }catch(e){}
+    }
+  }catch(e){}
+  /* 예전 백업(스냅샷)에 들어간 로고 사본 정리 → 저장공간 확보 (차량 데이터는 그대로) */
+  setTimeout(function(){
+    try{
+      var ks=[]; for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k && k.indexOf('pb_snapshot_')===0) ks.push(k); }
+      ks.forEach(function(k){ try{ var v=localStorage.getItem(k); if(!v || v.indexOf('pb_promo_logo')<0) return; var d=JSON.parse(v); if(d && typeof d==='object' && (d.pb_promo_logo!==undefined || d.pb_promo_logo_ts!==undefined)){ delete d.pb_promo_logo; delete d.pb_promo_logo_ts; localStorage.setItem(k, JSON.stringify(d)); } }catch(e){} });
+    }catch(e){}
+  }, 6000);
+})();
 var _promoLogoDraft;   /* undefined = 변경 없음, '' = 삭제, 'data:...' = 새 로고 */
 function _promoLogoGet(){ try{ return localStorage.getItem(LS_PROMO_LOGO) || window._promoLogoMem || ''; }catch(e){ return window._promoLogoMem || ''; } }
 function _promoLogoStore(src){
   window._promoLogoMem = src || '';
-  try{ if(src) localStorage.setItem(LS_PROMO_LOGO, src); else localStorage.removeItem(LS_PROMO_LOGO); }catch(e){}
+  /* ★ 로고는 1장만: 기존 로고(예전 저장 이름 포함)를 먼저 지운 뒤 새 로고 저장 */
+  try{ localStorage.removeItem(LS_PROMO_LOGO); localStorage.removeItem('pb_promo_logo'); localStorage.removeItem('pb_promo_logo_ts'); }catch(e){}
+  try{ if(src) localStorage.setItem(LS_PROMO_LOGO, src); else localStorage.removeItem(LS_PROMO_LOGO); return true; }catch(e){ return false; }   /* 실패해도 화면엔 메모리 사본으로 표시 */
 }
 
 /* ★ (2026-11-08) 휴대폰 헤더 글자 자동 맞춤: 칸에 넘치면 글자를 조금씩 줄임 (사용자 설정 크기는 그대로 보관) */
@@ -6796,6 +6817,14 @@ function _pbHeicToJpeg(f, cb){
 }
 function _promoLogoPick(inp){
   var f0=inp && inp.files && inp.files[0];
+  /* ★ (2026-11-08) 로고는 1장만 — 이미 로고가 있으면 교체 확인 */
+  try{
+    var _cur=(typeof _promoLogoDraft!=='undefined' && _promoLogoDraft!==undefined)?_promoLogoDraft:_promoLogoGet();
+    if(f0 && _cur){
+      if(!confirm('🖼️ 로고는 1장만 저장됩니다.\n\n기존 로고를 삭제하고 새 로고로 바꿀까요?')){ try{ inp.value=''; }catch(e){} return; }
+      window._promoLogoReplacing=true;
+    }
+  }catch(e){}
   if(f0 && _pbIsHeic(f0)){
     try{ inp.value=''; }catch(e){}
     try{ showAlert('⏳ HEIC 사진을 JPG로 변환 중입니다... (몇 초 걸릴 수 있어요)'); }catch(e){}
@@ -6871,17 +6900,19 @@ function _promoLogoPickRaw(inp){
     im.src=bu;
   }catch(e){ viaBitmap(); }
 }
-function _promoLogoClear(){ _promoLogoDraft=''; _promoLogoPrevSet(''); }
+function _promoLogoClear(){
+  window._promoLogoReplacing=false; _promoLogoDraft=''; _promoLogoPrevSet(''); }
 /* 다른 기기에서 로고가 바뀌면 받아오기 */
 function _promoLogoSync(ts){
   try{
     ts=+ts||0; var cur=+(localStorage.getItem(LS_PROMO_LOGO_TS)||0);
-    if(!ts || ts===cur) return;
+    /* ★ 시각이 같아도 이 기기에 로고가 없으면(저장 실패·삭제 등) 서버에서 다시 받아옴 */
+    if(!ts || (ts===cur && _promoLogoGet())) return;
     if(typeof fbDb==='undefined' || !fbDb) return;
     var code=(typeof _pdCode==='function')?_pdCode():(localStorage.getItem('pb_code')||'');
     if(!code) return;
     fbDb.ref('kd_rooms/'+code+'/pb_promo_logo').once('value').then(function(s){
-      var v=s.val(); _promoLogoStore(typeof v==='string'?v:''); try{ localStorage.setItem(LS_PROMO_LOGO_TS, String(ts)); }catch(e){}
+      var v=s.val(); var ok=_promoLogoStore(typeof v==='string'?v:''); if(ok){ try{ localStorage.setItem(LS_PROMO_LOGO_TS, String(ts)); }catch(e){} }
       _applyPromoLogo();
     }).catch(function(){});
   }catch(e){}
@@ -7019,6 +7050,7 @@ function savePromoEdit(){
   try{ _applyPromoLogo(); }catch(e){}
   pushSettings(_promoSet);
   closePromoEdit();
+  if(window._promoLogoReplacing){ window._promoLogoReplacing=false; if(_promoSet.promoLogoTs){ try{ showAlert('🔄 기존 로고를 삭제하고 새 로고로 교체했습니다 (로고는 1장만 저장)'); setTimeout(hideAlert,3000); }catch(e){} } }
 }
 
 /* ── 화면 맞춤 레이아웃 ── */
