@@ -290,6 +290,22 @@ html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbL
   html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs .h-memo-text{font-size:var(--pbFitFs,clamp(15px,4.8vw,19px)) !important;}
   html.pb-logocol .search-bar{padding-left:calc(var(--pbLogoW,110px) + 6px);}
 }
+/* ★ (2026-11-08) 휴대폰 정리: 차량대수 배지 작게 / 로고칸 있을 때 '열편집'은 Firebase 설정 줄로 / ＋버튼 기본 위치 오른쪽 아래 */
+@media(max-width:600px){
+  .part-label .part-car-count{font-size:14px !important;min-width:34px;padding:1px 7px;line-height:1.35;border-radius:11px;}
+  .settings-toggle-row .col-edit-toggle-group{display:inline-flex;align-items:center;gap:4px;margin-left:auto;margin-right:6px;}
+  html.pb-logocol .search-bar{gap:4px;}
+  html.pb-logocol .search-row1{flex-wrap:nowrap !important;gap:4px !important;}
+  html.pb-logocol .search-row1 .search-wrap{flex:1 1 36px !important;min-width:36px !important;}
+  html.pb-logocol .search-row1 .search-input{min-width:0 !important;width:100% !important;font-size:12px !important;padding-left:6px !important;padding-right:6px !important;}
+  html.pb-logocol #dragLockToggleBtn{font-size:9px !important;padding:3px 5px !important;letter-spacing:-.4px;gap:1px !important;}
+  html.pb-logocol #partViewToggleBtn{font-size:10px !important;padding:3px 6px !important;gap:2px !important;}
+  html.pb-logocol #searchResult.idle{display:none !important;}
+  html.pb-logocol .search-row1{gap:3px !important;}
+  html.pb-logocol #carCountBadge{padding:3px 7px !important;}
+  .settings-toggle-row .settings-toggle-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;}
+  #pmbAddBtn:not([style*="top"]){top:auto;bottom:calc(84px + env(safe-area-inset-bottom,0px));right:12px;}
+}
 /* ★ (2026-11-08) 로고 = 모서리 둥근 가로 직사각형 틀 (가로:세로 ≈ 2.3:1, 틀을 꽉 채움) */
 .h-promo-outer .h-promo-logo.pb-logo-wide{object-fit:contain;padding:2px 4px;}
 .h-promo-outer .h-promo-logo{aspect-ratio:23/10;object-fit:cover;object-position:center;border-radius:9px;border:1px solid #E2E8F0;background:#FFFFFF;box-shadow:0 1px 3px rgba(15,23,42,.12);box-sizing:border-box;}
@@ -6659,6 +6675,65 @@ function _pbLogoColLayout(){
     }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(install,0); }); else setTimeout(install,0);
+})();
+/* ★ (2026-11-08) 휴대폰 + 로고칸: '열편집' 스위치를 Firebase 설정 줄 오른쪽으로 옮겨 검색줄을 한 줄로 */
+(function(){
+  var home=null, nextSib=null;
+  function place(){
+    try{
+      var g=document.querySelector('.col-edit-toggle-group'); var row=document.querySelector('.settings-toggle-row'); if(!g || !row) return;
+      if(!home){ home=g.parentNode; nextSib=g.nextSibling; g.addEventListener('click',function(e){ if(g.parentNode===row) e.stopPropagation(); }); }
+      var want=(window.innerWidth<=600 && document.documentElement.classList.contains('pb-logocol'));
+      if(want && g.parentNode!==row){ var btn=document.getElementById('settingsToggleBtn'); row.insertBefore(g, btn||null); }
+      else if(!want && g.parentNode!==home){ home.insertBefore(g, (nextSib && nextSib.parentNode===home)?nextSib:null); }
+    }catch(e){}
+  }
+  window._pbColEditPlace=place;
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(place,60); }
+  window.addEventListener('resize',later); window.addEventListener('orientationchange',later);
+  try{ new MutationObserver(later).observe(document.documentElement,{attributes:true,attributeFilter:['class']}); }catch(e){}
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',later); else later();
+  setTimeout(place,1500);
+})();
+/* ★ (2026-11-08) ＋버튼: 저장된 위치가 휴대폰 상단 헤더(로고·검색·설정 줄)를 가리면 오른쪽 아래 기본 위치로 */
+(function(){
+  function fix(){
+    try{
+      if(window.innerWidth>600) return;
+      var b=document.getElementById('pmbAddBtn'); if(!b || !b.style.top) return;
+      var row=document.querySelector('.settings-toggle-row'), hb=row?row.getBoundingClientRect().bottom:0;
+      if(!hb){ var sb=document.querySelector('.search-bar'); hb=sb?sb.getBoundingClientRect().bottom:120; }
+      var r=b.getBoundingClientRect();
+      if(r.top < hb+4){ b.style.top=''; b.style.left=''; b.style.right=''; try{ localStorage.removeItem('pb_product_memo_addbtn_pos'); }catch(e){} }
+    }catch(e){}
+  }
+  setTimeout(fix,1200); setTimeout(fix,3000);
+  window.addEventListener('orientationchange',function(){ setTimeout(fix,500); });
+})();
+/* ★ (2026-11-08) 휴대폰 파트 이름 자동 크기 — 칸에 넘치면 글씨를 줄여 끝까지 보이게 */
+(function(){
+  var cv=null;
+  function tw(t,font){ try{ cv=cv||document.createElement('canvas'); var x=cv.getContext('2d'); x.font=font; return x.measureText(t).width; }catch(e){ return t.length*13; } }
+  function fit(){
+    if(window.innerWidth>600) return;
+    document.querySelectorAll('.part-label .part-label-extra').forEach(function(el){
+      try{
+        if(!el.offsetWidth) return;
+        var cs=getComputedStyle(el), txt=(el.value!==undefined && el.tagName==='INPUT')?(el.value||el.placeholder||''):(el.textContent||'');
+        var pad=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+        var avail=el.clientWidth-pad-2; if(avail<20) return;
+        var fs=15, fam=cs.fontFamily, wt=cs.fontWeight||'800';
+        while(fs>10.5 && tw(txt, wt+' '+fs+'px '+fam) > avail) fs-=0.5;   /* 너무 작아지지 않게 10.5px까지, 더 길면 끝을 … 로 */
+        el.style.textOverflow='ellipsis';
+        el.style.fontSize=fs+'px';
+      }catch(e){}
+    });
+  }
+  window._pbMobZoneFit=fit;
+  var t=null; function later(){ clearTimeout(t); t=setTimeout(fit,80); }
+  window.addEventListener('resize',later);
+  document.addEventListener('input',function(e){ if(e.target && e.target.classList && e.target.classList.contains('part-label-extra')) setTimeout(fit,0); },true);
+  setInterval(fit,1500); setTimeout(fit,600);
 })();
 function _applyPromoLogo(){
   var src=_promoLogoGet();
