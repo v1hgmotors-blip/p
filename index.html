@@ -293,6 +293,8 @@ html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbL
 /* ★ (2026-11-08) 휴대폰 정리: 차량대수 배지 작게 / 로고칸 있을 때 '열편집'은 Firebase 설정 줄로 / ＋버튼 기본 위치 오른쪽 아래 */
 @media(max-width:600px){
   .part-label .part-car-count{font-size:14px !important;min-width:34px;padding:1px 7px;line-height:1.35;border-radius:11px;}
+  /* ★ (2026-11-08) 휴대폰: 엔카사진완료 카운트·초기화 버튼 숨김 (PC·태블릿에서는 그대로 표시) */
+  #encarCountBadge, #encarCountReset{display:none !important;}
   .settings-toggle-row .col-edit-toggle-group{display:inline-flex;align-items:center;gap:4px;margin-left:auto;margin-right:6px;}
   html.pb-logocol .search-bar{gap:4px;}
   html.pb-logocol .search-row1{flex-wrap:nowrap !important;gap:4px !important;}
