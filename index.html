@@ -6813,6 +6813,51 @@ function _pbLogoColLayout(){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(hook,0); }); else setTimeout(hook,0);
   setInterval(scan,2000); setTimeout(function(){ scan(); later(); },1200);
 })();
+/* ★ (2026-11-09) ① 차량 모달이 열려 있으면 상품화중 메모(주황 배지)를 숨김
+   ② 「👥 등록된 차주」 펼치기 → 모달 밖 큰 창에 차주 이름 전체 표시 */
+(function(){
+  function _st(){ if(document.getElementById('pbOwnerOvCss')) return; var s=document.createElement('style'); s.id='pbOwnerOvCss';
+    s.textContent='html.pb-modal-open .pmb-badge,html.pb-modal-open #pmbAddBtn{visibility:hidden !important;pointer-events:none !important;}'
+     +'#pbOwnerOv{position:fixed;inset:0;z-index:260;background:rgba(15,23,42,.55);display:none;align-items:flex-start;justify-content:center;padding:max(10px,env(safe-area-inset-top)) 10px 10px;box-sizing:border-box;}'
+     +'#pbOwnerOv.show{display:flex;}'
+     +'#pbOwnerOv .pbo-card{width:min(760px,100%);max-height:calc(100dvh - 20px);max-height:calc(100vh - 20px);display:flex;flex-direction:column;background:#FFFBEB;border:2px solid #F59E0B;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.4);overflow:hidden;}'
+     +'#pbOwnerOv .pbo-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FDE68A;border-bottom:1.5px solid #F59E0B;}'
+     +'#pbOwnerOv .pbo-title{flex:1;min-width:0;font-size:15px;font-weight:900;color:#92400E;}'
+     +'#pbOwnerOv .pbo-x{border:none;border-radius:10px;background:#92400E;color:#fff;font-size:14px;font-weight:900;padding:9px 14px;cursor:pointer;font-family:inherit;touch-action:manipulation;}'
+     +'#pbOwnerOv .pbo-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;overscroll-behavior:contain;}'
+     +'#pbOwnerOv .owner-list,#pbOwnerOv .owner-list.mode-on{max-height:none !important;overflow:visible !important;}';
+    document.head.appendChild(s); }
+  /* ① 모달 열림 감시 */
+  function _watch(){ var m=document.getElementById('modalOv'); if(!m) return;
+    var f=function(){ var on=m.classList.contains('show'); document.documentElement.classList.toggle('pb-modal-open',on);
+      if(!on){ var o=document.getElementById('pbOwnerOv'); if(o && o.classList.contains('show')){ try{ window.toggleOwnerListFold(false); }catch(e){} } } };
+    try{ new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['class']}); }catch(e){} f(); }
+  /* ② 차주 목록 바깥 창 */
+  var ph=null;
+  function _ov(){ var o=document.getElementById('pbOwnerOv'); if(o) return o;
+    o=document.createElement('div'); o.id='pbOwnerOv';
+    o.innerHTML='<div class="pbo-card"><div class="pbo-head"><span class="pbo-title" id="pbOwnerOvTitle">👥 등록된 차주</span><button type="button" class="pbo-x">▲ 접기</button></div><div class="pbo-body"></div></div>';
+    o.addEventListener('click',function(e){ if(e.target===o){ try{ window.toggleOwnerListFold(false); }catch(x){} } });
+    o.querySelector('.pbo-x').onclick=function(){ try{ window.toggleOwnerListFold(false); }catch(x){} };
+    document.body.appendChild(o); return o; }
+  function _hook(){
+    var orig=window.toggleOwnerListFold; if(typeof orig!=='function' || orig._pbOv) return;
+    var nf=function(force){
+      orig(force);
+      var wrap=document.getElementById('ownerListWrap'); if(!wrap) return;
+      var open=wrap.style.display!=='none';
+      if(open){ _st(); var o=_ov(); if(!ph){ ph=document.createComment('ownerListWrap'); wrap.parentNode.insertBefore(ph,wrap); }
+        o.querySelector('.pbo-body').appendChild(wrap);
+        var b=document.getElementById('ownerFoldBtn'); document.getElementById('pbOwnerOvTitle').textContent=b?b.textContent.replace(/[▲▼]/g,'').trim():'👥 등록된 차주';
+        o.classList.add('show'); }
+      else { if(ph && ph.parentNode && wrap.parentNode!==ph.parentNode) ph.parentNode.insertBefore(wrap,ph);
+        var o2=document.getElementById('pbOwnerOv'); if(o2) o2.classList.remove('show'); }
+    };
+    nf._pbOv=1; window.toggleOwnerListFold=nf;
+  }
+  function _init(){ _st(); _watch(); _hook(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_init); else setTimeout(_init,0);
+})();
 function _applyPromoLogo(){
   var src=_promoLogoGet();
   var img=document.getElementById('hPromoLogo'), out=document.querySelector('.h-promo-outer');
