@@ -885,6 +885,7 @@ window._docMissingTap = function(k){
   }catch(e){}
 };
 function _docChoose(kind){
+  window._vpvWant=0;
   var meta = { reg:   { label:'📘 차량등록증', fn:'downloadRegDocs' },
                insp:  { label:'📗 성능점검표', fn:'downloadInspDocs' },
                common:{ label:'📄 판매확인서', fn:'downloadCommonDocs' } }[kind];
@@ -907,6 +908,9 @@ function _docChoose(kind){
       + '<button id="docChooseShare" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
       + 'background:#16A34A;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
       + '📤 공유하기<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">카카오톡 · 모바일팩스 · 메일</div></button>'
+      + '<button id="docChoosePv" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
+      + 'background:#D97706;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
+      + '👁️ 미리보기<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">확대 · 축소 · 회전 · 인쇄</div></button>'
       + '<button id="docChooseDl" type="button" style="width:100%;padding:15px;margin-bottom:9px;border:none;border-radius:12px;'
       + 'background:#2563EB;color:#fff;font-size:16px;font-weight:900;font-family:inherit;cursor:pointer;touch-action:manipulation;">'
       + '📥 다운로드<div style="font-size:11px;font-weight:700;opacity:.85;margin-top:3px;">이 기기에 저장</div></button>'
@@ -940,6 +944,7 @@ function _docChoose(kind){
     setTimeout(_docChooseClose, 0);
   };
   document.getElementById('docChooseDl').onclick = function(){ _docChooseClose(); _docMode='dl'; try{ window[meta.fn](); }catch(e){} };
+  document.getElementById('docChoosePv').onclick = function(){ _docChooseClose(); window._vpvWant=Date.now(); _docMode='preview'; try{ window[meta.fn](); }catch(e){} _docMode='dl'; };
   _docChooseEl.style.display = 'flex';
 }
 /* ★ 버튼 onclick 은 전역에서 실행된다 → 반드시 window 에 올려야 한다 */
@@ -1231,10 +1236,117 @@ window._docChoose = _docChoose;
   }
   /* ★ 공통서류(판매확인서) 다운로드 — 메타만 갖고 있다가, 다운로드 버튼을 누른 이 순간에만
      실제 파일(kd_common_data)을 받는다. (예전 구조 폴백이면 이미 데이터가 있으니 바로 받음) */
+  /* ═══ ★ (2026-11-08) 서류 미리보기 — 확대·축소·회전·인쇄·공유·다운로드 ═══ */
+  var _vpvZ=1, _vpvRot=0, _vpvDocs=null, _vpvLabel='';
+  function _vpvBaseW(){ return Math.min(900, (window.innerWidth||400)-24); }
+  function _vpvApply(keep){
+    var b=document.getElementById('_vpvBody'); if(!b) return;
+    var oW=b.scrollWidth, oH=b.scrollHeight, cx=b.scrollLeft+b.clientWidth/2, cy=b.scrollTop+b.clientHeight/2;
+    var w=Math.round(_vpvBaseW()*_vpvZ);
+    b.querySelectorAll('._vpvPage').forEach(function(el){ el.style.width=w+'px'; el.style.maxWidth=(_vpvZ>1?'none':'100%'); el.style.height='auto'; });
+    var l=document.getElementById('_vpvZLbl'); if(l) l.textContent=Math.round(_vpvZ*100)+'%';
+    if(keep && oW && oH){ b.scrollLeft=Math.max(0,cx*(b.scrollWidth/oW)-b.clientWidth/2); b.scrollTop=Math.max(0,cy*(b.scrollHeight/oH)-b.clientHeight/2); }
+  }
+  function _vpvZoomSet(z){ _vpvZ=Math.max(0.5,Math.min(5,z)); _vpvApply(true); }
+  function _vpvRotEl(el){
+    var o=el._pvOrig||el; if(_vpvRot===0) return o;
+    var sw=o.naturalWidth||o.width, sh=o.naturalHeight||o.height; if(!sw||!sh) return el;
+    var side=(_vpvRot%180)!==0, c=document.createElement('canvas'); c.width=side?sh:sw; c.height=side?sw:sh;
+    var x=c.getContext('2d'); x.translate(c.width/2,c.height/2); x.rotate(_vpvRot*Math.PI/180); x.drawImage(o,-sw/2,-sh/2);
+    c.className='_vpvPage'; c.style.cssText=o.style.cssText; c._pvOrig=o; return c;
+  }
+  function _vpvRotate(){
+    var b=document.getElementById('_vpvBody'); if(!b) return; var ps=b.querySelectorAll('._vpvPage'); if(!ps.length) return;
+    _vpvRot=(_vpvRot+90)%360; ps.forEach(function(el){ var n=_vpvRotEl(el); if(n!==el) el.parentNode.replaceChild(n,el); }); _vpvApply(false);
+  }
+  function _vpvMsg(t){ var m=document.getElementById('_vpvMsg'); if(!m) return; m.textContent=t||''; m.style.display=t?'block':'none'; if(t){ clearTimeout(m._t); m._t=setTimeout(function(){ m.style.display='none'; },3500); } }
+  function _vpvClose(){ var o=document.getElementById('_vpvOv'); if(o) o.remove(); }
+  /* 서류 방향 그대로 인쇄 (세로 서류=A4 세로 / 가로 서류=A4 가로, 한 장에 한 페이지) */
+  function _vpvPrint(srcs){
+    if(!srcs || !srcs.length){ _vpvMsg('⚠️ 인쇄할 내용이 없습니다'); return; }
+    var old=document.getElementById('_vpvPrintArea'); if(old) old.remove(); var os=document.getElementById('_vpvPrintStyle'); if(os) os.remove();
+    Promise.all(srcs.map(function(s){ return new Promise(function(res){ var im=new Image(); im.onload=function(){ res({src:s,w:im.naturalWidth||1,h:im.naturalHeight||1}); }; im.onerror=function(){ res({src:s,w:1,h:1.414}); }; im.src=s; }); })).then(function(list){
+      var area=document.createElement('div'); area.id='_vpvPrintArea';
+      list.forEach(function(it){ var L=it.w>it.h*1.05; var pg=document.createElement('div'); pg.className='vpg '+(L?'vpg-L':'vpg-P'); var im=document.createElement('img'); im.src=it.src; pg.appendChild(im); area.appendChild(pg); });
+      var first=(list[0] && list[0].w>list[0].h*1.05)?'landscape':'portrait';
+      var st=document.createElement('style'); st.id='_vpvPrintStyle';
+      st.textContent='#_vpvPrintArea{display:none;}@page{size:A4 '+first+';margin:8mm;} @page vP{size:A4 portrait;margin:8mm;} @page vL{size:A4 landscape;margin:8mm;}'
+        +'@media print{ body>*:not(#_vpvPrintArea){display:none !important;} #_vpvPrintArea{display:block !important;} html,body{background:#fff !important;margin:0 !important;padding:0 !important;height:auto !important;overflow:visible !important;}'
+        +'.vpg{display:flex;align-items:flex-start;justify-content:center;overflow:hidden;break-inside:avoid;page-break-inside:avoid;margin:0;padding:0;}'
+        +'.vpg-P{page:vP;height:279mm;width:194mm;} .vpg-L{page:vL;height:192mm;width:281mm;} .vpg+.vpg{break-before:page;page-break-before:always;}'
+        +'.vpg img{display:block;width:100%;height:100%;object-fit:contain;object-position:center top;} }';
+      document.head.appendChild(st); document.body.appendChild(area);
+      setTimeout(function(){ try{ window.print(); }catch(e){ _vpvMsg('⚠️ 이 기기에서는 인쇄를 열 수 없습니다 — 공유로 인쇄 앱을 이용해 주세요'); } setTimeout(function(){ try{ area.remove(); st.remove(); }catch(e){} },1500); },250);
+    });
+  }
+  function _vpvDocToImgs(d){
+    var du=String(d.data||'');
+    var isPdf=/^data:application\/pdf/i.test(du) || /\.pdf$/i.test(d.name||'') || d.type==='pdf';
+    if(!isPdf) return Promise.resolve([du]);
+    return _loadPdfLib().then(function(lib){
+      var ci=du.indexOf(','), bin=atob(du.slice(ci+1)), arr=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+      return lib.getDocument({data:arr}).promise;
+    }).then(function(pdf){
+      var n=Math.min(pdf.numPages||1,20), jobs=[];
+      for(var p=1;p<=n;p++) jobs.push(pdf.getPage(p).then(function(page){
+        var v1=page.getViewport({scale:1}), sc=Math.min(2.4,Math.max(1.2,1600/Math.max(1,v1.width))), vp=page.getViewport({scale:sc});
+        var cv=document.createElement('canvas'); cv.width=Math.ceil(vp.width); cv.height=Math.ceil(vp.height); var cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,cv.width,cv.height);
+        return page.render({canvasContext:cx,viewport:vp}).promise.then(function(){ return cv.toDataURL('image/jpeg',0.92); });
+      }));
+      return Promise.all(jobs);
+    });
+  }
+  window._vPreview=function(docs, label){
+    window._vpvWant=0; _vpvClose(); _vpvZ=1; _vpvRot=0; _vpvDocs=docs; _vpvLabel=label;
+    var ov=document.createElement('div'); ov.id='_vpvOv';
+    ov.style.cssText='position:fixed;inset:0;z-index:99600;background:rgba(2,6,23,.95);display:flex;flex-direction:column;font-family:inherit;';
+    var head=document.createElement('div'); head.style.cssText='padding:10px 12px;background:#0F2447;color:#fff;border-bottom:1px solid #2C4E7E;';
+    var nm=document.createElement('div'); nm.style.cssText='font-size:15px;font-weight:900;color:#DBEAFE;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    nm.textContent='👁️ '+label+(docs.length>1?' ('+docs.length+'건)':''); head.appendChild(nm);
+    function hb(row,t,bg,fn,ex){ var b=document.createElement('button'); b.type='button'; b.textContent=t; b.style.cssText=(ex||'flex:1;min-width:64px;padding:10px 6px;')+'border:none;border-radius:10px;background:'+bg+';color:#fff;font-size:13.5px;font-weight:900;cursor:pointer;font-family:inherit;touch-action:manipulation;'; b.onclick=fn; row.appendChild(b); return b; }
+    var r1=document.createElement('div'); r1.style.cssText='display:flex;gap:6px;flex-wrap:wrap;'; head.appendChild(r1);
+    hb(r1,'📤 공유','#16A34A',function(){ if(!_docCanShare()){ _vpvMsg('⚠️ 이 브라우저는 공유 기능이 없습니다 — 「📥 다운로드」를 이용해 주세요'); return; } _docMode='share'; try{ _docShareOrPrep(_vpvDocs,_vpvLabel); }catch(e){} _docMode='dl'; if(_docShareWhy) _vpvMsg('⚠️ '+_docShareWhy); });
+    hb(r1,'🖨️ 인쇄','#0F766E',function(){ var b=document.getElementById('_vpvBody'), s=[]; b.querySelectorAll('._vpvPage').forEach(function(el){ try{ s.push(el.tagName==='CANVAS'?el.toDataURL('image/jpeg',0.92):el.src); }catch(e){} }); _vpvPrint(s); });
+    hb(r1,'📥 다운로드','#2563EB',function(){ _vpvDocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,_vpvLabel+(i+1)); },i*300); }); _vpvMsg('📥 '+_vpvDocs.length+'개 다운로드'); });
+    hb(r1,'✕ 닫기','#475569',_vpvClose);
+    var r2=document.createElement('div'); r2.style.cssText='display:flex;gap:6px;margin-top:6px;align-items:center;'; head.appendChild(r2);
+    var zs='padding:8px 12px;';
+    hb(r2,'－','#1E3A5F',function(){ _vpvZoomSet(_vpvZ/1.25); },zs);
+    var zl=hb(r2,'100%','#1E3A5F',function(){ _vpvZoomSet(1); },zs+'min-width:64px;'); zl.id='_vpvZLbl';
+    hb(r2,'＋','#1E3A5F',function(){ _vpvZoomSet(_vpvZ*1.25); },zs);
+    hb(r2,'⟳ 회전','#1E3A5F',_vpvRotate,zs);
+    var tip=document.createElement('span'); tip.style.cssText='flex:1;font-size:11px;font-weight:700;color:#94A3B8;text-align:right;line-height:1.3;'; tip.innerHTML='두 손가락으로 벌리거나<br>두 번 톡 하면 확대'; r2.appendChild(tip);
+    var msg=document.createElement('div'); msg.id='_vpvMsg'; msg.style.cssText='display:none;margin-top:6px;font-size:12.5px;font-weight:800;color:#FDE68A;'; head.appendChild(msg);
+    var body=document.createElement('div'); body.id='_vpvBody'; body.style.cssText='flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px;text-align:center;color:#E2E8F0;font-size:14px;font-weight:800;touch-action:pan-x pan-y;';
+    ov.appendChild(head); ov.appendChild(body); document.body.appendChild(ov);
+    /* 두 손가락 확대 · Ctrl+휠 · 두 번 톡 */
+    (function(){ var d0=0,z0=1,raf=0; function dist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
+      body.addEventListener('touchstart',function(e){ if(e.touches.length===2){ d0=dist(e.touches); z0=_vpvZ; } },{passive:true});
+      body.addEventListener('touchmove',function(e){ if(e.touches.length===2&&d0>0){ e.preventDefault(); var z=z0*dist(e.touches)/d0; if(!raf) raf=requestAnimationFrame(function(){ raf=0; _vpvZoomSet(z); }); } },{passive:false});
+      body.addEventListener('touchend',function(e){ if(e.touches.length<2) d0=0; },{passive:true});
+      body.addEventListener('wheel',function(e){ if(e.ctrlKey){ e.preventDefault(); _vpvZoomSet(_vpvZ*(e.deltaY<0?1.15:1/1.15)); } },{passive:false});
+      body.addEventListener('dblclick',function(e){ if(e.target&&e.target.classList&&e.target.classList.contains('_vpvPage')) _vpvZoomSet(_vpvZ>1.05?1:2.5); });
+    })();
+    var chain=Promise.resolve();
+    docs.forEach(function(d,idx){ chain=chain.then(function(){
+      if(!document.getElementById('_vpvOv')) return;
+      if(docs.length>1){ var h=document.createElement('div'); h.style.cssText='margin:'+(idx?'20px':'0')+' auto 8px;font-size:13px;font-weight:900;color:#FDE68A;'; h.textContent='📄 '+(idx+1)+'/'+docs.length+' · '+(d.name||label); body.appendChild(h); }
+      var hold=document.createElement('div'); hold.textContent='⏳ 불러오는 중...'; body.appendChild(hold);
+      return _vpvDocToImgs(d).then(function(imgs){
+        hold.innerHTML='';
+        imgs.forEach(function(src){ var im=document.createElement('img'); im.src=src; im.className='_vpvPage';
+          im.style.cssText='display:block;width:100%;max-width:100%;height:auto;margin:0 auto 10px;background:#fff;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.45);';
+          im.onload=function(){ try{ if(_vpvRot){ var n=_vpvRotEl(im); if(n!==im&&im.parentNode) im.parentNode.replaceChild(n,im); } _vpvApply(false); }catch(e){} };
+          hold.appendChild(im); });
+        _vpvApply(false);
+      }).catch(function(){ hold.innerHTML='⚠️ 이 기기에서는 미리보기를 열 수 없습니다.<br>「📥 다운로드」로 확인해 주세요.'; });
+    }); });
+  };
   window.downloadCommonDocs = function(){
     /* ★ FIX(2026-10-06): 미리 받아둔 것이 있으면 바로 쓴다 — 공유가 막히지 않게 */
     if (_commonCache && _commonCache.length){
       var cdocs = _commonCache;
+      if (_docMode === 'preview' || (_docMode === 'dl' && window._vpvWant && Date.now()-window._vpvWant < 60000)){ window._vPreview(cdocs, '판매확인서'); return; }
       if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(cdocs, '판매확인서'); return;
       }
       cdocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
@@ -1244,6 +1356,7 @@ window._docChoose = _docChoose;
     if(_commonLegacy){
       var legacyDocs=Object.keys(_commonLegacy).map(function(id){ return _commonLegacy[id]; }).filter(function(d){ return d&&d.data; });
       if(!legacyDocs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      if (_docMode === 'preview' || (_docMode === 'dl' && window._vpvWant && Date.now()-window._vpvWant < 60000)){ window._vPreview(legacyDocs, '판매확인서'); return; }
       if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(legacyDocs, '판매확인서'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
       }
       legacyDocs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
@@ -1265,6 +1378,7 @@ window._docChoose = _docChoose;
     })).then(function(list){
       var docs=list.filter(function(d){ return d && d.data; });
       if(!docs.length){ _setDocStatus('등록된 판매확인서가 없습니다.'); return; }
+      if (_docMode === 'preview' || (_docMode === 'dl' && window._vpvWant && Date.now()-window._vpvWant < 60000)){ window._vPreview(docs, '판매확인서'); return; }
       if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '판매확인서'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
       }
       docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'판매확인서'+(i+1)); },i*300); });
@@ -1283,7 +1397,8 @@ window._docChoose = _docChoose;
     var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
       .filter(function(d){ return d && d.data && d.cat==='insp'; });
     if(!docs.length){ _setDocStatus('등록된 성능점검표가 없습니다.'); return; }
-    if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '성능점검표'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+    if (_docMode === 'preview' || (_docMode === 'dl' && window._vpvWant && Date.now()-window._vpvWant < 60000)){ window._vPreview(docs, '성능점검표'); return; }
+      if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '성능점검표'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
     }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'성능점검표'+(i+1)); },i*300); });
     _setDocStatus('📗 성능점검표 '+docs.length+'개 다운로드됨');
@@ -1300,7 +1415,8 @@ window._docChoose = _docChoose;
     var docs=Object.keys(_carDocs).map(function(id){ return _carDocs[id]; })
       .filter(function(d){ return d && d.data && d.cat==='reg'; });
     if(!docs.length){ _setDocStatus('등록된 차량등록증이 없습니다.'); return; }
-    if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '차량등록증'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
+    if (_docMode === 'preview' || (_docMode === 'dl' && window._vpvWant && Date.now()-window._vpvWant < 60000)){ window._vPreview(docs, '차량등록증'); return; }
+      if (_docMode === 'share' || _docMode === 'prep'){ _docShareOrPrep(docs, '차량등록증'); return;   /* ★ FIX(2026-10-06): 공유를 고르셨으면 다운로드로 넘어가지 않는다 */
     }
     docs.forEach(function(d,i){ setTimeout(function(){ _dlOne(d,'차량등록증'+(i+1)); },i*300); });
     _setDocStatus('📘 차량등록증 '+docs.length+'개 다운로드됨');
