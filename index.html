@@ -131,6 +131,111 @@ window._PB_NS_OK = null;         /* 격리 성공 여부(진단용): true/false/
 })();
 </script>
 <meta charset="UTF-8">
+<script>
+/* ★ (2026-11-09) 전체초기화 관리자 승인 — 공용 해시 + 휴대폰 승인 화면
+   QR 주소(?pbApprove=1&c=상사코드&r=요청ID&db=Firebase주소&p=wipe|admin)로 열리면
+   주차현황판 대신 「승인 화면」만 띄운다(앱 본체는 불러오지 않음). */
+(function(){
+  /* SHA-256 (hex) — 비밀번호는 원문이 아니라 해시만 저장·비교 */
+  function sha256(ascii){
+    function rr(v,a){ return (v>>>a)|(v<<(32-a)); }
+    var mp=Math.pow, mw=mp(2,32), i, j, res='', words=[], bl=ascii.length*8, hash=[], k=[], pc=0, ic={};
+    for(var c=2;pc<64;c++){ if(!ic[c]){ for(i=0;i<313;i+=c) ic[i]=c; hash[pc]=(mp(c,.5)*mw)|0; k[pc++]=(mp(c,1/3)*mw)|0; } }
+    hash=hash.slice(0,8); ascii+='\x80'; while(ascii.length%64-56) ascii+='\x00';
+    for(i=0;i<ascii.length;i++){ j=ascii.charCodeAt(i); words[i>>2]|=j<<((3-i)%4)*8; }
+    words[words.length]=((bl/mw)|0); words[words.length]=(bl);
+    for(j=0;j<words.length;){ var w=words.slice(j,j+=16), oh=hash; hash=hash.slice(0,8);
+      for(i=0;i<64;i++){ var w15=w[i-15], w2=w[i-2], a=hash[0], e=hash[4];
+        var t1=hash[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&hash[5])^((~e)&hash[6]))+k[i]+(w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10)))|0);
+        var t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
+        hash=[(t1+t2)|0].concat(hash); hash[4]=(hash[4]+t1)|0; }
+      for(i=0;i<8;i++) hash[i]=(hash[i]+oh[i])|0; }
+    for(i=0;i<8;i++){ for(j=3;j+1;j--){ var b=(hash[i]>>(j*8))&255; res+=((b<16)?0:'')+b.toString(16); } }
+    return res;
+  }
+  window._pbAdminHash=function(code,pw){ return sha256(unescape(encodeURIComponent(String(code)+':'+String(pw)))); };
+
+  var q; try{ q=new URLSearchParams(location.search); }catch(e){ return; }
+  if(q.get('pbApprove')!=='1') return;
+  window.__PB_APPROVE_MODE=true;
+  var code=q.get('c')||'', rid=q.get('r')||'', db=(q.get('db')||'').replace(/\/+$/,''), purpose=(q.get('p')==='admin'?'admin':'wipe');
+  /* 앱 본체를 실행하지 않도록 파일 나머지를 「글자」로만 읽게 만든다(<plaintext>) → 승인 화면만 따로 그림 */
+  document.write('<plaintext id="pbApproveRest" style="display:none">');
+  document.addEventListener('DOMContentLoaded', _pbApproveUi);
+  function _pbApproveUi(){
+  var _vp=document.createElement('meta'); _vp.name='viewport'; _vp.content='width=device-width,initial-scale=1'; document.head.appendChild(_vp);
+  document.title='관리자 승인';
+  var CSS='body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#0F2447;color:#0F172A;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:18px 12px;box-sizing:border-box;}'
+   +'.c{width:100%;max-width:440px;background:#fff;border-radius:18px;padding:20px 18px;box-shadow:0 10px 40px rgba(0,0,0,.4);}'
+   +'h1{font-size:20px;margin:0 0 6px;color:#B91C1C;} .s{font-size:14px;color:#334155;line-height:1.6;margin-bottom:12px;}'
+   +'.box{background:#F1F5F9;border-radius:12px;padding:10px 12px;font-size:14px;font-weight:700;margin-bottom:12px;line-height:1.7;}'
+   +'input{width:100%;box-sizing:border-box;font-size:20px;padding:13px;border:2px solid #CBD5E1;border-radius:12px;margin-bottom:10px;font-family:inherit;text-align:center;letter-spacing:2px;}'
+   +'button{width:100%;padding:15px;border:none;border-radius:12px;font-size:16px;font-weight:900;color:#fff;cursor:pointer;margin-bottom:9px;font-family:inherit;}'
+   +'.ok{background:#16A34A}.no{background:#64748B}.bl{background:#2563EB}'
+   +'.m{font-size:14px;font-weight:800;min-height:20px;margin:4px 0 10px;text-align:center;} .bad{color:#B91C1C}.good{color:#15803D}';
+  var st=document.createElement('style'); st.textContent=CSS; document.head.appendChild(st);
+  var card=document.createElement('div'); card.className='c'; document.body.appendChild(card);
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  var WHAT = purpose==='admin' ? '관리자 승인 설정 변경' : '주차현황판 전체초기화 (상사 데이터 전체 삭제)';
+  function head(){ return '<h1>🛡️ 관리자 승인 요청</h1><div class="box">요청 내용: '+esc(WHAT)+'<br>상사코드: '+esc(code)+'</div>'; }
+  function msg(t,cls){ var m=document.getElementById('m'); if(m){ m.className='m '+(cls||''); m.textContent=t||''; } }
+  if(!code || !rid || !/^https:\/\/[^\/]+$/.test(db) || !/^[^.#$\[\]\/]+$/.test(code)){ card.innerHTML='<h1>⚠️ 잘못된 승인 주소</h1><div class="s">QR을 다시 스캔해 주세요.</div>'; return; }
+  card.innerHTML=head()+'<div class="m">⏳ 확인 중...</div>';
+  function load(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+  var V='https://www.gstatic.com/firebasejs/9.23.0/';
+  load(V+'firebase-app-compat.js').then(function(){ return load(V+'firebase-database-compat.js'); }).then(function(){
+    var app=firebase.initializeApp({databaseURL:db},'pbApprove'); var fdb=firebase.database(app);
+    var reqRef=fdb.ref('kd_wipe_req/'+code+'/'+rid);
+    return Promise.all([fdb.ref('kd_admin/'+code+'/mode').once('value'), fdb.ref('kd_admin/'+code+'/phoneMask').once('value'), reqRef.once('value')]).then(function(r){
+      var mode=r[0].val(), mask=r[1].val()||'', req=r[2].val();
+      if(!req){ card.innerHTML=head()+'<div class="s bad">⚠️ 요청을 찾을 수 없습니다. 이미 처리됐거나 취소된 요청입니다.</div>'; return; }
+      if(req.status==='approved' || req.status==='done'){ card.innerHTML=head()+'<div class="m good">✅ 이미 승인된 요청입니다.</div>'; return; }
+      if(Date.now()-(+req.ts||0) > 10*60*1000){ card.innerHTML=head()+'<div class="s bad">⏰ 요청 시간(10분)이 지났습니다. PC에서 다시 요청해 주세요.</div>'; return; }
+      var deny='<button class="no" id="deny">✋ 거절 (승인 안 함)</button>';
+      function onDeny(){ reqRef.child('status').set('denied').then(function(){ card.innerHTML=head()+'<div class="m bad">✋ 거절했습니다. PC의 초기화는 진행되지 않습니다.</div>'; }); }
+      function done(){ reqRef.child('status').set('approved').catch(function(){}); card.innerHTML=head()+'<div class="m good" style="font-size:18px;">✅ 승인 완료</div><div class="s">PC 화면에서 작업이 이어집니다. 이 창은 닫아도 됩니다.</div>'; }
+      if(mode==='pw'){
+        card.innerHTML=head()+'<div class="s">관리자 <b>승인 비밀번호</b>를 입력하면 승인됩니다.</div><input id="pw" type="password" autocomplete="off" placeholder="승인 비밀번호"><div class="m" id="m"></div><button class="ok" id="go">✅ 승인</button>'+deny;
+        document.getElementById('deny').onclick=onDeny;
+        var go=document.getElementById('go'); var pwEl=document.getElementById('pw');
+        pwEl.onkeydown=function(e){ if(e.key==='Enter') go.click(); };
+        go.onclick=function(){
+          var pw=pwEl.value; if(!pw){ msg('비밀번호를 입력해 주세요','bad'); return; }
+          var h=window._pbAdminHash(code,pw); go.disabled=true; msg('⏳ 확인 중...');
+          var fail=function(){ go.disabled=false; pwEl.value=''; msg('❌ 비밀번호가 틀렸습니다','bad'); };
+          /* 규칙 적용 전(열린 DB)에도 틀린 비밀번호로 승인되지 않도록 먼저 대조 — 규칙 적용 후엔 읽기가 막히므로 쓰기에서 규칙이 판정 */
+          fdb.ref('kd_admin/'+code+'/h/'+h).once('value').then(function(s){ return s.val()===true ? 'ok' : 'bad'; }, function(){ return 'rules'; }).then(function(v){
+            if(v==='bad'){ fail(); return; }
+            return fdb.ref('kd_wipe_grant/'+code).set({ts:firebase.database.ServerValue.TIMESTAMP, key:h, purpose:purpose, rid:rid}).then(done, fail);
+          });
+        };
+      } else if(mode==='sms'){
+        card.innerHTML=head()+'<div class="s">관리자 휴대폰(<b>'+esc(mask)+'</b>)으로 인증번호를 보냅니다.</div><button class="bl" id="send">📩 인증번호 받기</button><input id="otp" type="tel" inputmode="numeric" maxlength="6" placeholder="인증번호 6자리"><div class="m" id="m"></div><button class="ok" id="go">✅ 승인</button>'+deny;
+        document.getElementById('deny').onclick=onDeny;
+        var tmo=null;
+        reqRef.child('status').on('value',function(s){ var v=s.val(); clearTimeout(tmo);
+          if(v==='otp_sent') msg('📩 인증번호를 보냈습니다 (5분 안에 입력)','good');
+          else if(v==='otp_bad'){ msg('❌ 인증번호가 틀렸거나 만료됐습니다','bad'); document.getElementById('go').disabled=false; }
+          else if(v==='otp_lock') msg('⛔ 입력 횟수를 넘었습니다. PC에서 다시 요청해 주세요','bad');
+          else if(v==='otp_limit') msg('⛔ 오늘 보낼 수 있는 인증번호 횟수를 넘었습니다','bad');
+          else if(v==='otp_nophone') msg('⚠️ 관리자 휴대폰이 등록되어 있지 않습니다','bad');
+          else if(v==='otp_fail') msg('⚠️ 문자 발송에 실패했습니다. 잠시 후 다시 시도해 주세요','bad');
+          else if(v==='approved') done();
+        });
+        function waitSrv(){ clearTimeout(tmo); tmo=setTimeout(function(){ msg('⚠️ 서버 응답이 없습니다 — 알림톡 서버(sms-server)가 설치되어 있어야 합니다','bad'); var g=document.getElementById('go'); if(g) g.disabled=false; },20000); }
+        document.getElementById('send').onclick=function(){ msg('⏳ 보내는 중...'); waitSrv();
+          fdb.ref('kd_wipe_otp_req/'+code+'/'+rid).set({ts:firebase.database.ServerValue.TIMESTAMP, purpose:purpose}).catch(function(){ clearTimeout(tmo); msg('⚠️ 요청 실패 — 인터넷 연결을 확인해 주세요','bad'); }); };
+        document.getElementById('go').onclick=function(){ var o=(document.getElementById('otp').value||'').replace(/\D/g,''); if(o.length!==6){ msg('인증번호 6자리를 입력해 주세요','bad'); return; }
+          this.disabled=true; msg('⏳ 확인 중...'); waitSrv();
+          fdb.ref('kd_wipe_otp_try/'+code+'/'+rid).set({otp:o, ts:firebase.database.ServerValue.TIMESTAMP}).catch(function(){ clearTimeout(tmo); msg('⚠️ 요청 실패','bad'); }); };
+      } else {
+        card.innerHTML=head()+'<div class="s bad">⚠️ 이 상사코드는 관리자 승인 설정이 아직 없습니다. PC 주차현황판에서 먼저 등록해 주세요.</div>';
+      }
+    });
+  }).catch(function(){ card.innerHTML=head()+'<div class="s bad">⚠️ 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 QR을 다시 스캔해 주세요.</div>'; });
+  }
+})();
+</script>
   <!-- PWA: 앱처럼 실행 (주소줄 숨기기) -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -6857,6 +6962,168 @@ function _pbLogoColLayout(){
   }
   function _init(){ _st(); _watch(); _hook(); }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_init); else setTimeout(_init,0);
+})();
+/* ═══ ★ (2026-11-09) 전체초기화 = 관리자 승인 필수 (QR 스캔 → 관리자 휴대폰에서 승인)
+   · 승인 방식: 'pw'  = 관리자 승인 비밀번호 (서버 없이 Firebase 보안규칙만으로 검증)
+               'sms' = 관리자 휴대폰 인증번호 (알림톡 서버 sms-server 필요)
+   · kd_admin/{코드}       : {mode, set, h:{해시:true} | phone, phoneMask}  — 최초 1회 등록, 이후 변경은 승인 필요
+   · kd_wipe_req/{코드}/{id}: 승인 요청(상태 표시용)
+   · kd_wipe_grant/{코드}   : 승인 증표(10분 유효) — 보안규칙이 이것이 있어야만 상사 데이터 전체 삭제를 허용 ═══ */
+(function(){
+  if(window.__PB_APPROVE_MODE) return;
+  var ADM={};
+  function _ctx(){
+    var url=String((typeof fbDb!=='undefined' && fbDb && fbDb.app && fbDb.app.options && fbDb.app.options.databaseURL) || localStorage.getItem(LS_URL) || (typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS.url) || '').trim().replace(/\/+$/,'');
+    var code=String(localStorage.getItem(LS_CODE) || (typeof _PB_DEFAULTS!=='undefined' && _PB_DEFAULTS.code) || '').trim();
+    if(!/^[^.#$\[\]\/]+$/.test(code)) code='';
+    if(!/^https:\/\//.test(url)) url='';
+    return {url:url, code:code};
+  }
+  function _db(url){
+    if(typeof fbDb!=='undefined' && fbDb && fbDb.app && String(fbDb.app.options.databaseURL||'').replace(/\/+$/,'')===url) return fbDb;
+    var nm='pbAdm_'+url.replace(/[^a-z0-9]/gi,'').slice(-40);
+    var app=null; try{ app=firebase.app(nm); }catch(e){ app=firebase.initializeApp({databaseURL:url},nm); }
+    return firebase.database(app);
+  }
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function _css(){ if(document.getElementById('pbAdmCss')) return; var s=document.createElement('style'); s.id='pbAdmCss';
+    s.textContent='#pbAdmOv{position:fixed;inset:0;z-index:100500;background:rgba(15,23,42,.6);display:flex;align-items:flex-start;justify-content:center;padding:16px 10px;box-sizing:border-box;overflow:auto;}'
+     +'#pbAdmOv .pa-card{width:min(460px,100%);background:#fff;border-radius:18px;padding:18px 16px;box-shadow:0 14px 44px rgba(0,0,0,.45);font-family:inherit;color:#0F172A;}'
+     +'#pbAdmOv h3{margin:0 0 8px;font-size:18px;font-weight:900;color:#0F2447;} #pbAdmOv .pa-s{font-size:13.5px;line-height:1.65;color:#334155;margin-bottom:10px;}'
+     +'#pbAdmOv .pa-box{background:#F1F5F9;border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:700;margin-bottom:10px;line-height:1.7;}'
+     +'#pbAdmOv input{width:100%;box-sizing:border-box;font-size:16px;padding:11px 12px;border:2px solid #CBD5E1;border-radius:11px;margin-bottom:8px;font-family:inherit;}'
+     +'#pbAdmOv .pa-b{width:100%;padding:13px;border:none;border-radius:12px;font-size:15px;font-weight:900;color:#fff;cursor:pointer;margin-bottom:8px;font-family:inherit;}'
+     +'#pbAdmOv .pa-ok{background:#16A34A}#pbAdmOv .pa-no{background:#64748B}#pbAdmOv .pa-bl{background:#2563EB}#pbAdmOv .pa-rd{background:#DC2626}'
+     +'#pbAdmOv .pa-m{font-size:13.5px;font-weight:800;min-height:18px;margin:2px 0 8px;text-align:center;} #pbAdmOv .pa-bad{color:#B91C1C} #pbAdmOv .pa-good{color:#15803D}'
+     +'#pbAdmOv .pa-qr{display:flex;justify-content:center;margin:6px 0 4px;} #pbAdmOv .pa-tabs{display:flex;gap:6px;margin-bottom:10px;}'
+     +'#pbAdmOv .pa-tab{flex:1;padding:10px 6px;border-radius:10px;border:2px solid #CBD5E1;background:#fff;font-weight:900;font-size:13.5px;cursor:pointer;font-family:inherit;color:#334155;}'
+     +'#pbAdmOv .pa-tab.on{border-color:#0F2447;background:#0F2447;color:#fff;} #pbAdmOv details{margin:4px 0 8px;font-size:13px;} #pbAdmOv summary{cursor:pointer;font-weight:800;color:#1D4ED8;}';
+    document.head.appendChild(s); }
+  function _close(){ var o=document.getElementById('pbAdmOv'); if(o){ try{ if(o._cleanup) o._cleanup(); }catch(e){} o.remove(); } }
+  function _open(html){ _close(); _css(); var o=document.createElement('div'); o.id='pbAdmOv'; o.innerHTML='<div class="pa-card">'+html+'</div>'; document.body.appendChild(o); return o; }
+  function _m(o,t,cls){ var m=o.querySelector('.pa-m'); if(m){ m.className='pa-m '+(cls?('pa-'+cls):''); m.textContent=t||''; } }
+  function _mask(p){ p=String(p).replace(/\D/g,''); return p.slice(0,3)+'-****-'+p.slice(-4); }
+
+  /* 관리자 설정 읽기 → {mode:'pw'|'sms'|null} */
+  function _readAdmin(c){ var d=_db(c.url); return d.ref('kd_admin/'+c.code+'/mode').once('value').then(function(s){ return s.val()||null; }); }
+
+  /* ── 관리자 승인 설정 등록/변경 화면 ── */
+  function _setupForm(c, isChange, after){
+    var o=_open('<h3>🛡️ 관리자 승인 설정'+(isChange?' 변경':' 등록')+'</h3>'
+      +'<div class="pa-s">전체초기화(상사 데이터 전체 삭제)는 이제 <b>관리자 승인</b>이 있어야만 됩니다. 승인 방식을 고르세요.<br>상사코드: <b>'+_esc(c.code)+'</b></div>'
+      +'<div class="pa-tabs"><button type="button" class="pa-tab on" data-m="pw">🔑 승인 비밀번호</button><button type="button" class="pa-tab" data-m="sms">📱 휴대폰 인증번호</button></div>'
+      +'<div id="paPw"><div class="pa-s" style="margin-bottom:6px;">관리자만 아는 비밀번호(6자 이상). 관리자 휴대폰으로 QR을 스캔한 뒤 이 비밀번호를 넣어 승인합니다.</div>'
+      +'<input id="paPw1" type="password" autocomplete="new-password" placeholder="승인 비밀번호 (6자 이상)"><input id="paPw2" type="password" autocomplete="new-password" placeholder="비밀번호 한 번 더"></div>'
+      +'<div id="paSms" style="display:none;"><div class="pa-s" style="margin-bottom:6px;">QR 스캔 후 이 휴대폰으로 6자리 인증번호 문자가 갑니다. <b style="color:#B45309;">알림톡 서버(sms-server)를 설치한 경우에만</b> 고르세요.</div>'
+      +'<input id="paPh" type="tel" inputmode="numeric" placeholder="관리자 휴대폰 (010...)"></div>'
+      +'<div class="pa-m"></div><button type="button" class="pa-b pa-ok" id="paSave">💾 등록</button><button type="button" class="pa-b pa-no" id="paCancel">취소</button>'
+      +'<div class="pa-s" style="font-size:12px;color:#64748B;margin:4px 0 0;">※ 등록 후에는 승인 없이 바꿀 수 없습니다. 잊어버리면 Firebase 콘솔의 kd_admin/'+_esc(c.code)+' 에서 관리자가 직접 지워야 합니다.</div>');
+    var mode='pw';
+    o.querySelectorAll('.pa-tab').forEach(function(b){ b.onclick=function(){ mode=b.getAttribute('data-m'); o.querySelectorAll('.pa-tab').forEach(function(x){ x.classList.toggle('on',x===b); }); o.querySelector('#paPw').style.display=mode==='pw'?'':'none'; o.querySelector('#paSms').style.display=mode==='sms'?'':'none'; }; });
+    o.querySelector('#paCancel').onclick=_close;
+    o.querySelector('#paSave').onclick=function(){
+      var rec={mode:mode, set:true, at:firebase.database.ServerValue.TIMESTAMP};
+      if(mode==='pw'){ var a=o.querySelector('#paPw1').value, b=o.querySelector('#paPw2').value;
+        if(a.length<6){ _m(o,'비밀번호는 6자 이상으로 해 주세요','bad'); return; } if(a!==b){ _m(o,'두 비밀번호가 다릅니다','bad'); return; }
+        rec.h={}; rec.h[window._pbAdminHash(c.code,a)]=true; }
+      else { var p=o.querySelector('#paPh').value.replace(/\D/g,''); if(!/^01[016789]\d{7,8}$/.test(p)){ _m(o,'휴대폰 번호를 확인해 주세요','bad'); return; } rec.phone=p; rec.phoneMask=_mask(p); }
+      this.disabled=true; _m(o,'⏳ 저장 중...');
+      _db(c.url).ref('kd_admin/'+c.code).set(rec).then(function(){ _close(); try{ showAlert('🛡️ 관리자 승인 설정을 '+(isChange?'변경':'등록')+'했습니다 ('+(mode==='pw'?'승인 비밀번호':'휴대폰 인증번호')+')'); setTimeout(hideAlert,5000); }catch(e){} if(after) after(); })
+        .catch(function(){ o.querySelector('#paSave').disabled=false; _m(o,isChange?'⛔ 변경 승인이 없거나 만료됐습니다 — 다시 승인받아 주세요':'⛔ 이미 다른 기기에서 등록됐습니다 — 변경은 「설정 변경」으로 승인 후 가능합니다','bad'); });
+    };
+  }
+
+  /* ── 승인 요청 화면 (QR) ── purpose: 'wipe' | 'admin' */
+  function _approve(c, mode, purpose, onOk){
+    var d=_db(c.url); var rRef=d.ref('kd_wipe_req/'+c.code).push(); var rid=rRef.key;
+    var base=String(location.href).split('#')[0].split('?')[0];
+    var link=base+'?pbApprove=1&c='+encodeURIComponent(c.code)+'&r='+encodeURIComponent(rid)+'&p='+purpose+'&db='+encodeURIComponent(c.url);
+    var canQr=/^https?:/.test(location.protocol);
+    var what = purpose==='admin' ? '관리자 승인 설정 변경' : '전체초기화 (상사 데이터 전체 삭제)';
+    var o=_open('<h3>🛡️ 관리자 승인이 필요합니다</h3>'
+      +'<div class="pa-box">요청: '+what+'<br>상사코드: '+_esc(c.code)+'<br>승인 방식: '+(mode==='sms'?'📱 관리자 휴대폰 인증번호':'🔑 승인 비밀번호')+'</div>'
+      +(canQr ? '<div class="pa-s" style="text-align:center;margin-bottom:2px;"><b>관리자 휴대폰 카메라로 QR을 스캔</b>해서 승인해 주세요.</div><div class="pa-qr" id="paQr"></div>'
+              : '<div class="pa-s" style="color:#B45309;">⚠️ 이 주차현황판은 PC에 저장된 파일로 열려 있어 휴대폰에서 QR 주소를 열 수 없습니다. 아래 「이 화면에서 승인」을 이용해 주세요.</div>')
+      +'<div class="pa-m">⏳ 승인 기다리는 중... (10분 유효)</div>'
+      +'<details id="paHere"'+(canQr?'':' open')+'><summary>이 화면에서 승인하기 (관리자가 옆에 있을 때)</summary><div style="margin-top:8px;">'
+      +(mode==='sms' ? '<button type="button" class="pa-b pa-bl" id="paSend">📩 관리자 휴대폰으로 인증번호 받기</button><input id="paOtp" type="tel" inputmode="numeric" maxlength="6" placeholder="인증번호 6자리">'
+                     : '<input id="paPwIn" type="password" autocomplete="off" placeholder="승인 비밀번호">')
+      +'<button type="button" class="pa-b pa-ok" id="paGo">✅ 승인</button></div></details>'
+      +'<button type="button" class="pa-b pa-no" id="paCancel">취소</button>');
+    var finished=false, tmo=null, life=setTimeout(function(){ if(!finished){ _m(o,'⏰ 10분이 지났습니다 — 다시 요청해 주세요','bad'); } },10*60*1000);
+    var stRef=rRef.child('status');
+    var onSt=function(s){ var v=s.val(); clearTimeout(tmo);
+      if(v==='approved' && !finished){
+        /* 상태값은 누구나 쓸 수 있으므로 「승인 증표(grant)」가 이 요청 것인지 직접 확인 */
+        d.ref('kd_wipe_grant/'+c.code).once('value').then(function(g){ return g.val(); }, function(){
+          return Promise.all(['rid','ts','purpose'].map(function(k){ return d.ref('kd_wipe_grant/'+c.code+'/'+k).once('value').then(function(x){ return x.val(); }); })).then(function(a){ return {rid:a[0],ts:a[1],purpose:a[2]}; });
+        }).then(function(g){
+          if(finished) return;
+          if(g && g.rid===rid && g.purpose===purpose && (+g.ts||0) > Date.now()-10*60*1000-120000){ finished=true; _close(); onOk(); }
+          else _m(o,'⚠️ 승인 증표를 확인하지 못했습니다 — 다시 승인받아 주세요','bad');
+        }).catch(function(){ _m(o,'⚠️ 승인 확인 실패 — 인터넷 연결을 확인해 주세요','bad'); });
+      }
+      else if(v==='denied'){ finished=true; _m(o,'✋ 관리자가 거절했습니다 — 진행하지 않습니다','bad'); }
+      else if(v==='otp_sent') _m(o,'📩 관리자 휴대폰으로 인증번호를 보냈습니다','good');
+      else if(v==='otp_bad'){ _m(o,'❌ 인증번호가 틀렸거나 만료됐습니다','bad'); var g=o.querySelector('#paGo'); if(g) g.disabled=false; }
+      else if(v==='otp_lock') _m(o,'⛔ 입력 횟수를 넘었습니다 — 취소 후 다시 요청해 주세요','bad');
+      else if(v==='otp_limit') _m(o,'⛔ 오늘 보낼 수 있는 인증번호 횟수를 넘었습니다','bad');
+      else if(v==='otp_nophone') _m(o,'⚠️ 관리자 휴대폰이 등록되어 있지 않습니다','bad');
+      else if(v==='otp_fail') _m(o,'⚠️ 문자 발송 실패 — 잠시 후 다시 시도해 주세요','bad'); };
+    o._cleanup=function(){ finished=true; clearTimeout(life); clearTimeout(tmo); try{ stRef.off('value',onSt); }catch(e){} try{ rRef.remove(); }catch(e){} };
+    o.querySelector('#paCancel').onclick=_close;
+    rRef.set({ts:firebase.database.ServerValue.TIMESTAMP, status:'wait', purpose:purpose, dev:String(navigator.userAgent||'').slice(0,80)}).then(function(){
+      stRef.on('value',onSt);
+      if(canQr){ try{ _drawQRCanvas(o.querySelector('#paQr'), link, 210); }catch(e){ o.querySelector('#paQr').textContent='QR을 만들지 못했습니다'; } }
+    }).catch(function(){ _m(o,'⚠️ 요청을 만들지 못했습니다 — 인터넷 연결을 확인해 주세요','bad'); });
+    function waitSrv(){ clearTimeout(tmo); tmo=setTimeout(function(){ _m(o,'⚠️ 서버 응답이 없습니다 — 알림톡 서버(sms-server)가 설치되어 있어야 합니다','bad'); var g=o.querySelector('#paGo'); if(g) g.disabled=false; },20000); }
+    var go=o.querySelector('#paGo');
+    if(mode==='sms'){
+      o.querySelector('#paSend').onclick=function(){ _m(o,'⏳ 보내는 중...'); waitSrv(); d.ref('kd_wipe_otp_req/'+c.code+'/'+rid).set({ts:firebase.database.ServerValue.TIMESTAMP, purpose:purpose}).catch(function(){ clearTimeout(tmo); _m(o,'⚠️ 요청 실패','bad'); }); };
+      go.onclick=function(){ var v=(o.querySelector('#paOtp').value||'').replace(/\D/g,''); if(v.length!==6){ _m(o,'인증번호 6자리를 입력해 주세요','bad'); return; } go.disabled=true; _m(o,'⏳ 확인 중...'); waitSrv(); d.ref('kd_wipe_otp_try/'+c.code+'/'+rid).set({otp:v, ts:firebase.database.ServerValue.TIMESTAMP}).catch(function(){ clearTimeout(tmo); go.disabled=false; _m(o,'⚠️ 요청 실패','bad'); }); };
+    } else {
+      var pwIn=o.querySelector('#paPwIn'); pwIn.onkeydown=function(e){ if(e.key==='Enter') go.click(); };
+      go.onclick=function(){ var pw=pwIn.value; if(!pw){ _m(o,'비밀번호를 입력해 주세요','bad'); return; }
+        var h=window._pbAdminHash(c.code,pw); go.disabled=true; _m(o,'⏳ 확인 중...');
+        var fail=function(){ go.disabled=false; pwIn.value=''; _m(o,'❌ 비밀번호가 틀렸습니다','bad'); };
+        d.ref('kd_admin/'+c.code+'/h/'+h).once('value').then(function(s){ return s.val()===true?'ok':'bad'; }, function(){ return 'rules'; }).then(function(v){
+          if(v==='bad'){ fail(); return; }
+          return d.ref('kd_wipe_grant/'+c.code).set({ts:firebase.database.ServerValue.TIMESTAMP, key:h, purpose:purpose, rid:rid}).then(function(){ return stRef.set('approved'); }, fail);
+        });
+      };
+    }
+  }
+
+  /* ── 전체초기화 앞에 승인 단계 끼우기 ── */
+  function _gate(run){
+    var c=_ctx();
+    if(!c.url || !c.code || typeof firebase==='undefined'){ run(); return; } /* Firebase 미연결: 이 기기만 초기화(서버 데이터 삭제 없음) */
+    _readAdmin(c).then(function(mode){
+      if(!mode){ _setupForm(c,false,function(){ _gate(run); }); return; }
+      _approve(c, mode, 'wipe', run);
+    }).catch(function(){ try{ showAlert('⚠️ 관리자 승인 정보를 확인하지 못했습니다 — 인터넷 연결을 확인해 주세요'); setTimeout(hideAlert,5000); }catch(e){} });
+  }
+  window.pbAdminSetup=function(){
+    var c=_ctx(); if(!c.url || !c.code){ try{ showAlert('⚠️ Firebase에 연결된 뒤에 설정할 수 있습니다'); setTimeout(hideAlert,4000); }catch(e){} return; }
+    _readAdmin(c).then(function(mode){
+      if(!mode){ _setupForm(c,false); return; }
+      _approve(c, mode, 'admin', function(){ _setupForm(c,true); });
+    }).catch(function(){});
+  };
+  function _wrap(){
+    var orig=window.confirmClearAll; if(typeof orig!=='function' || orig._pbAdm) return;
+    var nf=function(){ var a=arguments, self=this; var rc=document.getElementById('resetConfirmOv'); if(rc) rc.classList.remove('show');
+      var c0=_ctx();
+      _gate(function(){ orig.apply(self,a);
+        /* 사용한 승인 증표는 잠시 뒤 지움(같은 증표로 다시 지우지 못하게) */
+        if(c0.url && c0.code){ setTimeout(function(){ try{ _db(c0.url).ref('kd_wipe_grant/'+c0.code).remove().catch(function(){}); }catch(e){} },20000); }
+      }); };
+    nf._pbAdm=1; window.confirmClearAll=nf;
+    /* 비밀번호 확인 창에 「관리자 승인 설정」 링크 */
+    var card=document.querySelector('#resetPwOv .reset-pw-card');
+    if(card && !document.getElementById('pbAdmLink')){ var l=document.createElement('div'); l.id='pbAdmLink'; l.className='reset-pw-change-link'; l.textContent='🛡️ 관리자 승인 설정 (QR 승인)'; l.onclick=function(){ try{ closeResetPw(); }catch(e){} window.pbAdminSetup(); }; card.appendChild(l); }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_wrap); else setTimeout(_wrap,0);
 })();
 function _applyPromoLogo(){
   var src=_promoLogoGet();
