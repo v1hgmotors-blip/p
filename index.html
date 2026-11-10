@@ -2067,6 +2067,10 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
   font-family:inherit; text-align:left; touch-action:manipulation;
 }
 .owner-fold-btn:active { background:#FCD34D; }
+/* ★ (2026-11-10) 차주 입력칸은 접기/펴기 없이 항상 표시 → 「👤 차주/닫기」 버튼과 빈 차주 패널 숨김
+   (차주 목록은 「👥 등록된 차주」 버튼으로 여는 큰 창에서 보임 — 목록·추가·수정·삭제 기능 그대로) */
+#ownerPanelBtn{display:none !important;}
+#ownerPanel{display:none !important;}
 .owner-chip-default {
   border: 1.5px solid #A5B4FC !important;
   background: #EEF2FF !important;
@@ -3260,7 +3264,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
       </div>
       <div style="height:6px;"></div>
       <div id="docsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
-      <input type="file" id="docFileInput" accept="image/*,application/pdf" multiple
+      <input type="file" id="docFileInput" accept="image/*,.heic,.heif,application/pdf" multiple
              style="display:none" onchange="handleDocFiles(this.files)">
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button type="button" onclick="pickDocCat('reg')"
@@ -3270,7 +3274,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
         <button type="button" onclick="_pbAllDocsOpen()" title="이 칸에 저장된 서류 전부 — 공유·미리보기·다운로드·인쇄"
                 style="flex:1;min-width:96px;padding:9px 6px;border:2px solid #0F172A;border-radius:10px;background:#1E293B;color:#fff;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">📂 모든서류보기</button>
       </div>
-      <input type="file" id="docBundleInput" accept="application/pdf,image/*" multiple style="display:none" onchange="handleBundlePdf(this.files)">
+      <input type="file" id="docBundleInput" accept="application/pdf,image/*,.heic,.heif" multiple style="display:none" onchange="handleBundlePdf(this.files)">
       <div style="display:flex;gap:6px;margin-top:6px;">
       <button type="button" onclick="pickBundlePdf()"
               style="flex:1;min-width:0;padding:9px;border:2px dashed #0D9488;border-radius:10px;background:#F0FDFA;color:#0F766E;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">📚 묶음 자동분리 (PDF·사진 모두 가능, 1장 등록증·나머지 점검표)</button>
@@ -3302,11 +3306,16 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
           <!-- ★ 차주 알림 토픽 -->
           <input id="mTopicInput" type="text" autocomplete="off" placeholder="📲 차주 알림 토픽 (선택)" maxlength="60" style="flex:1;min-width:156px;border:2px solid var(--border);border-radius:8px;padding:4px 8px;font-size:12px;font-weight:800;color:var(--kakao-deep);background:#EDE9FE;font-family:inherit;outline:none;box-sizing:border-box;" />
         </div>
-        <div class="m-memo-fs-ctrl">
-          <span style="font-size:11px;font-weight:700;color:var(--text-sub);">글씨크기</span>
-          <button class="m-memo-fs-btn" onclick="changeMemoFs(-1)">－</button>
-          <span class="m-memo-fs-val" id="memoFsVal">18</span>
-          <button class="m-memo-fs-btn" onclick="changeMemoFs(1)">＋</button>
+        <!-- ★ (2026-11-10) 오른쪽 칸: 「👥 등록된 차주」 버튼(차주이름 칸과 같은 줄, 항상 표시) + 글씨크기 -->
+        <div class="m-memo-right" style="display:flex;flex-direction:column;align-items:stretch;gap:6px;flex-shrink:0;align-self:flex-start;">
+          <button type="button" class="owner-fold-btn" id="ownerFoldBtn" onclick="toggleOwnerListFold()"
+                  style="width:auto;margin:0;padding:5px 10px;white-space:nowrap;text-align:center;">👥 등록된 차주 ▼</button>
+          <div class="m-memo-fs-ctrl">
+            <span style="font-size:11px;font-weight:700;color:var(--text-sub);">글씨크기</span>
+            <button class="m-memo-fs-btn" onclick="changeMemoFs(-1)">－</button>
+            <span class="m-memo-fs-val" id="memoFsVal">18</span>
+            <button class="m-memo-fs-btn" onclick="changeMemoFs(1)">＋</button>
+          </div>
         </div>
       </div>
 
@@ -3317,8 +3326,6 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
                펼치면 칩 목록 + 직접등록칸(이름·전화번호·토픽·＋추가·수정·삭제)이 함께 나온다.
                슬롯에 차주를 입력해 저장하면 목록에 자동 등록되므로, 직접등록칸은
                "차를 받기 전에 미리 넣어둘 때"만 쓰는 보조 수단이라 안쪽으로 넣었다. -->
-          <button type="button" class="owner-fold-btn" id="ownerFoldBtn"
-                  onclick="toggleOwnerListFold()">👥 등록된 차주 ▼</button>
           <div id="ownerListWrap" style="display:none;">
             <div class="owner-list" id="ownerList"></div>
             <div class="owner-del-bar" id="ownerDelBar">
@@ -6939,6 +6946,19 @@ function _pbLogoColLayout(){
     try{ new MutationObserver(f).observe(m,{attributes:true,attributeFilter:['class']}); }catch(e){} f(); }
   /* ② 차주 목록 바깥 창 */
   var ph=null;
+  /* ★ (2026-11-09) 차주 창을 차량 모달 폭·위치에 맞춰 「모달 위 ~ 등록된 차주 버튼 바로 위」까지 펼침 */
+  function _place(o){
+    var card=o&&o.querySelector('.pbo-card'); if(!card) return;
+    card.style.position=''; card.style.left=''; card.style.top=''; card.style.width=''; card.style.maxHeight='';
+    var m=document.querySelector('#modalOv .modal'), fb=document.getElementById('ownerFoldBtn');
+    if(!m||!fb) return;
+    var r=m.getBoundingClientRect(), b=fb.getBoundingClientRect();
+    var top=Math.max(r.top,6), h=b.top-top-6;
+    if(r.width<240 || h<200) return; /* 공간이 너무 좁으면 기본(화면 위쪽) 배치 */
+    card.style.position='fixed'; card.style.left=Math.round(r.left)+'px'; card.style.top=Math.round(top)+'px';
+    card.style.width=Math.round(r.width)+'px'; card.style.maxHeight=Math.round(h)+'px';
+  }
+  window.addEventListener('resize',function(){ var o=document.getElementById('pbOwnerOv'); if(o&&o.classList.contains('show')) _place(o); });
   function _ov(){ var o=document.getElementById('pbOwnerOv'); if(o) return o;
     o=document.createElement('div'); o.id='pbOwnerOv';
     o.innerHTML='<div class="pbo-card"><div class="pbo-head"><span class="pbo-title" id="pbOwnerOvTitle">👥 등록된 차주</span><button type="button" class="pbo-x">▲ 접기</button></div><div class="pbo-body"></div></div>';
@@ -6954,7 +6974,7 @@ function _pbLogoColLayout(){
       if(open){ _st(); var o=_ov(); if(!ph){ ph=document.createComment('ownerListWrap'); wrap.parentNode.insertBefore(ph,wrap); }
         o.querySelector('.pbo-body').appendChild(wrap);
         var b=document.getElementById('ownerFoldBtn'); document.getElementById('pbOwnerOvTitle').textContent=b?b.textContent.replace(/[▲▼]/g,'').trim():'👥 등록된 차주';
-        o.classList.add('show'); }
+        o.classList.add('show'); _place(o); }
       else { if(ph && ph.parentNode && wrap.parentNode!==ph.parentNode) ph.parentNode.insertBefore(wrap,ph);
         var o2=document.getElementById('pbOwnerOv'); if(o2) o2.classList.remove('show'); }
     };
@@ -18564,7 +18584,7 @@ function openBizInfoEdit(){
           '<div style="font-size:11px;font-weight:700;color:#78716C;margin-bottom:8px;line-height:1.6;">모든 차량의 약도 페이지 「판매확인서 다운」 버튼에 공통으로 표시됩니다. (PDF·이미지)</div>' +
           '<label style="display:inline-flex;align-items:center;gap:6px;background:#0F766E;color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">' +
             '＋ 공통서류 첨부' +
-            '<input type="file" id="commonDocInput" accept="application/pdf,image/*" multiple onchange="onCommonDocAttach(this.files)" style="display:none;">' +
+            '<input type="file" id="commonDocInput" accept="application/pdf,image/*,.heic,.heif" multiple onchange="onCommonDocAttach(this.files)" style="display:none;">' +
           '</label>' +
           '<div id="commonDocList" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>' +
         '</div>' +
@@ -27995,6 +28015,158 @@ function _pbSaleDocOpen(){
   }).catch(function(){ if(done) return; done=true; clearTimeout(to); hideAlert(); _pbAllMsg('⚠️ 판매확인서 목록을 불러오지 못했습니다'); }); };
   if(typeof _migrateCommonDocsIfNeeded==='function') _migrateCommonDocsIfNeeded(go); else go();
 }
+
+window._kdHeicReadOnly=true;
+/* ═══ ★(2026-11-10) HEIC(갤럭시·아이폰 「고효율 사진」) → JPG 자동 변환 ═══
+   · 첨부할 때: .heic/.heif 사진은 JPG로 바꾼 뒤 저장 (안드로이드 크롬은 HEIC를 못 보여줌)
+   · 이미 저장된 HEIC 서류: 미리보기·인쇄·공유·다운로드 때 JPG로 바꿔 보여주고, 서버에도 JPG로 고쳐 저장(1회) */
+(function(){
+  if(window._kdHeicOn) return; window._kdHeicOn=true;
+  var st=0, wq=[];
+  function loadLib(cb){
+    if(window.heic2any){ cb(true); return; }
+    wq.push(cb); if(st===1) return; st=1;
+    var urls=['https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js','https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'], i=0;
+    function fin(ok){ st=ok?2:0; var q=wq; wq=[]; q.forEach(function(f){ try{ f(ok); }catch(e){} }); }
+    (function tryNext(){
+      if(i>=urls.length){ fin(false); return; }
+      var s=document.createElement('script'); s.src=urls[i++]; s.async=true;
+      s.onload=function(){ if(window.heic2any) fin(true); else tryNext(); };
+      s.onerror=function(){ try{ s.remove(); }catch(e){} tryNext(); };
+      document.head.appendChild(s);
+    })();
+  }
+  var BR=/^(heic|heix|hevc|hevx|heim|heis|hevm|hevs|mif1|msf1)$/;
+  function isHeicFile(f){ var nm=String((f&&f.name)||''), ty=String((f&&f.type)||'').toLowerCase(); return /heic|heif/.test(ty) || /\.(heic|heif)$/i.test(nm); }
+  function isHeicData(s){
+    s=String(s||''); if(s.indexOf('data:')!==0) return false;
+    var ci=s.indexOf(','), head=s.slice(0,ci).toLowerCase();
+    if(/image\/(heic|heif)/.test(head)) return true;
+    if(/image\/(jpe?g|png|webp|gif|bmp)|application\/pdf/.test(head)) return false;
+    try{ var b=atob(s.slice(ci+1, ci+1+32)); return b.slice(4,8)==='ftyp' && BR.test(b.slice(8,12)); }catch(e){ return false; }
+  }
+  function blobOfData(s){ var ci=s.indexOf(','), bin=atob(s.slice(ci+1)), u8=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:'image/heic'}); }
+  function toJpegBlob(blob, cb){
+    loadLib(function(ok){
+      if(!ok){ cb(null); return; }
+      try{
+        window.heic2any({ blob:blob, toType:'image/jpeg', quality:0.92 }).then(function(out){ cb(Array.isArray(out)?out[0]:out); }).catch(function(){ cb(null); });
+      }catch(e){ cb(null); }
+    });
+  }
+  function reenc(blob, cb){   /* JPG로 바뀐 사진을 서류앱 기준(가로 1280·화질 0.8)으로 다시 저장 */
+    try{
+      var u=URL.createObjectURL(blob), im=new Image();
+      im.onload=function(){ try{ var sc=Math.min(1, 1280/(im.naturalWidth||1)), w=Math.max(1,Math.round(im.naturalWidth*sc)), h=Math.max(1,Math.round(im.naturalHeight*sc));
+        var c=document.createElement('canvas'); c.width=w; c.height=h; var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(im,0,0,w,h);
+        var d=c.toDataURL('image/jpeg',0.8); URL.revokeObjectURL(u); cb(d, Math.round(d.length*0.75)); }catch(e){ cb(null); } };
+      im.onerror=function(){ URL.revokeObjectURL(u); cb(null); };
+      im.src=u;
+    }catch(e){ cb(null); }
+  }
+  function say(m,t){ try{ if(typeof toast==='function') toast(m,t); else if(/^⚠️/.test(m) && typeof showAlert==='function') showAlert(m); }catch(e){} }
+  function jpgName(n){ n=String(n||'사진'); return /\.(heic|heif)$/i.test(n) ? n.replace(/\.(heic|heif)$/i,'.jpg') : n; }
+  function nativeOk(f, cb){ try{ var u=URL.createObjectURL(f), im=new Image(); im.onload=function(){ URL.revokeObjectURL(u); cb(im.naturalWidth>0); }; im.onerror=function(){ URL.revokeObjectURL(u); cb(false); }; im.src=u; }catch(e){ cb(false); } }
+  function prep(files, cb){
+    var arr=Array.prototype.slice.call(files||[]), out=[], i=0, bad=0;
+    if(!arr.some(isHeicFile)){ cb(files, 0); return; }
+    say('⏳ HEIC 사진을 JPG로 바꾸는 중... (처음 한 번은 조금 걸립니다)', 60000);
+    (function nx(){
+      if(i>=arr.length){ cb(out, bad); return; }
+      var f=arr[i++];
+      if(!isHeicFile(f)){ out.push(f); nx(); return; }
+      toJpegBlob(f, function(b){
+        if(b){ try{ out.push(new File([b], jpgName(f.name), {type:'image/jpeg'})); }catch(e){ b.name=jpgName(f.name); out.push(b); } nx(); return; }
+        nativeOk(f, function(ok){ if(ok) out.push(f); else bad++; nx(); });   /* 아이폰 사파리는 HEIC를 직접 읽을 수 있음 */
+      });
+    })();
+  }
+  window._kdHeicPrep=prep; window._kdIsHeicData=isHeicData;
+  ['uploadDoc','uploadBundle','uploadCommon','handleDocFiles','handleBundlePdf','onCommonDocAttach'].forEach(   /* 서류앱 + 주차현황판 첨부 */function(fn){
+    var orig=window[fn]; if(typeof orig!=='function') return;
+    window[fn]=function(files){
+      var self=this, args=Array.prototype.slice.call(arguments);
+      prep(files, function(fs, bad){
+        if(bad) say('⚠️ HEIC 사진 '+bad+'장을 바꾸지 못했습니다 — 인터넷 연결을 확인하거나 JPG로 다시 찍어 주세요', 7000);
+        if(!fs || !fs.length) return;
+        args[0]=fs; return orig.apply(self, args);
+      });
+    };
+  });
+  /* 이미 저장된 HEIC 서류 — 서류 데이터를 읽는 순간 JPG로 바꿔서 넘겨주고, 서버에도 고쳐 저장 */
+  function fakeSnap(sn, v){
+    var o=Object.create(sn);
+    o.val=function(){ return v==null?null:(typeof v==='object'?JSON.parse(JSON.stringify(v)):v); }; o.exportVal=o.val; o.exists=function(){ return v!=null; };
+    o.child=function(c){ var cv=(v&&typeof v==='object')?v[c]:null; if(cv===undefined) cv=null; var cs=sn.child?sn.child(c):{}; return fakeSnap(cs, cv); };
+    o.forEach=function(fn){ if(v&&typeof v==='object'){ var ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(fn(o.child(ks[i]))===true) return true; } } return false; };
+    o.numChildren=function(){ return (v&&typeof v==='object')?Object.keys(v).length:0; };
+    o.hasChild=function(c){ return !!(v&&typeof v==='object'&&v[c]!=null); };
+    return o;
+  }
+  /* HEIC dataURL 하나 → JPG dataURL (실패하면 null) */
+  function convData(s, cb){ var bl; try{ bl=blobOfData(s); }catch(e){ cb(null); return; } toJpegBlob(bl, function(b){ if(!b){ cb(null); return; } reenc(b, function(u,sz){ cb(u && u.indexOf('data:image/jpeg')===0 ? u : null, sz); }); }); }
+  function fixMeta(ref, path, size){
+    var m=path.match(/^(kd_rooms\/[^\/]+)\/kd_docs_data\/([^\/]+)\/([^\/]+)$/), c=path.match(/^(kd_rooms\/[^\/]+)\/kd_common_data\/([^\/]+)$/), mp, loc;
+    if(m){ mp=m[1]+'/kd_docs/'+m[2]+'/'+m[3]; try{ loc=window._docsMeta && _docsMeta[m[2]] && _docsMeta[m[2]][m[3]]; }catch(e){} }
+    else if(c){ mp=c[1]+'/kd_common_meta/'+c[2]; try{ loc=window._commonDocs && _commonDocs[c[2]]; }catch(e){} }
+    if(!mp) return;
+    var root=ref.root;
+    root.child(mp+'/name').once('value').then(function(s){
+      var u={}; u['size']=size; u['type']='image';
+      var n=s.val(); if(n && /\.(heic|heif)$/i.test(n)) u['name']=jpgName(n);
+      if(loc){ for(var k in u) loc[k]=u[k]; }
+      return root.child(mp).update(u);
+    }).catch(function(){});
+  }
+  function patch(){
+    var D=window.firebase && firebase.database, Q=D && (D.Query||D.Reference);
+    if(!Q || !Q.prototype || Q.prototype._kdHeicOnce) return !!(Q && Q.prototype && Q.prototype._kdHeicOnce);
+    var orig=Q.prototype.once;
+    Q.prototype._kdHeicOnce=true;
+    Q.prototype.once=function(ev, a){
+      var p=orig.apply(this, arguments), ref=this;
+      if(ev!=='value' || typeof a==='function' || !p || typeof p.then!=='function') return p;
+      var path=''; try{ path=decodeURIComponent(ref.toString().replace(ref.root.toString(),'')).replace(/^\/+/,''); }catch(e){}
+      if(!/\/kd_(docs|common)_data\//.test('/'+path)) return p;
+      return p.then(function(sn){
+        var v; try{ v=sn.val(); }catch(e){ return sn; }
+        var single=(typeof v==='string'), ids;
+        if(single) ids=isHeicData(v)?['']:[];
+        else if(v && typeof v==='object') ids=Object.keys(v).filter(function(k){ return typeof v[k]==='string' && isHeicData(v[k]); });
+        else ids=[];
+        if(!ids.length) return sn;
+        say('⏳ HEIC 사진을 JPG로 바꾸는 중...', 60000);
+        return new Promise(function(res){
+          var i=0, ok=0;
+          (function nx(){
+            if(i>=ids.length){
+              say(ok ? '✅ HEIC 사진을 JPG로 바꿨습니다' : '⚠️ HEIC 사진을 바꾸지 못했습니다 — 인터넷 연결 확인 후 다시 열어 주세요', ok?2000:6000);
+              res(ok ? fakeSnap(sn, v) : sn); return;
+            }
+            var id=ids[i++], src=single?v:v[id];
+            convData(src, function(u, size){
+              if(u){
+                ok++;
+                var r2=single?ref:ref.child(id), p2=single?path:(path+'/'+id);
+                if(single) v=u; else v[id]=u;
+                try{ r2.set(u).then(function(){ fixMeta(r2, p2, size); }).catch(function(){}); }catch(e){}
+              }
+              nx();
+            });
+          })();
+        });
+      });
+    };
+    return true;
+  }
+  if(!patch()){ var t=0, iv=setInterval(function(){ if(patch() || ++t>1200) clearInterval(iv); }, 500); }
+  /* 파일 이름(.heic)도 .jpg로 — 다운로드·공유 파일명 */
+  if(!window._kdHeicReadOnly) ['previewDoc','printDoc','shareDoc','downloadDoc'].forEach(function(fn){
+    var orig=window[fn]; if(typeof orig!=='function') return;
+    window[fn]=function(carKey, docId, fileName){ var a=Array.prototype.slice.call(arguments); if(typeof a[2]==='string') a[2]=jpgName(a[2]); return orig.apply(this, a); };
+  });
+})();
+
 </script>
 </body>
 </html>
