@@ -2228,6 +2228,158 @@ html{touch-action:manipulation;}
   document.addEventListener('dragstart', release, o);
   window.addEventListener('blur', release);
 })();
+
+window._kdHeicReadOnly=true;
+/* ═══ ★(2026-11-10) HEIC(갤럭시·아이폰 「고효율 사진」) → JPG 자동 변환 ═══
+   · 첨부할 때: .heic/.heif 사진은 JPG로 바꾼 뒤 저장 (안드로이드 크롬은 HEIC를 못 보여줌)
+   · 이미 저장된 HEIC 서류: 미리보기·인쇄·공유·다운로드 때 JPG로 바꿔 보여주고, 서버에도 JPG로 고쳐 저장(1회) */
+(function(){
+  if(window._kdHeicOn) return; window._kdHeicOn=true;
+  var st=0, wq=[];
+  function loadLib(cb){
+    if(window.heic2any){ cb(true); return; }
+    wq.push(cb); if(st===1) return; st=1;
+    var urls=['https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js','https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'], i=0;
+    function fin(ok){ st=ok?2:0; var q=wq; wq=[]; q.forEach(function(f){ try{ f(ok); }catch(e){} }); }
+    (function tryNext(){
+      if(i>=urls.length){ fin(false); return; }
+      var s=document.createElement('script'); s.src=urls[i++]; s.async=true;
+      s.onload=function(){ if(window.heic2any) fin(true); else tryNext(); };
+      s.onerror=function(){ try{ s.remove(); }catch(e){} tryNext(); };
+      document.head.appendChild(s);
+    })();
+  }
+  var BR=/^(heic|heix|hevc|hevx|heim|heis|hevm|hevs|mif1|msf1)$/;
+  function isHeicFile(f){ var nm=String((f&&f.name)||''), ty=String((f&&f.type)||'').toLowerCase(); return /heic|heif/.test(ty) || /\.(heic|heif)$/i.test(nm); }
+  function isHeicData(s){
+    s=String(s||''); if(s.indexOf('data:')!==0) return false;
+    var ci=s.indexOf(','), head=s.slice(0,ci).toLowerCase();
+    if(/image\/(heic|heif)/.test(head)) return true;
+    if(/image\/(jpe?g|png|webp|gif|bmp)|application\/pdf/.test(head)) return false;
+    try{ var b=atob(s.slice(ci+1, ci+1+32)); return b.slice(4,8)==='ftyp' && BR.test(b.slice(8,12)); }catch(e){ return false; }
+  }
+  function blobOfData(s){ var ci=s.indexOf(','), bin=atob(s.slice(ci+1)), u8=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); return new Blob([u8],{type:'image/heic'}); }
+  function toJpegBlob(blob, cb){
+    loadLib(function(ok){
+      if(!ok){ cb(null); return; }
+      try{
+        window.heic2any({ blob:blob, toType:'image/jpeg', quality:0.92 }).then(function(out){ cb(Array.isArray(out)?out[0]:out); }).catch(function(){ cb(null); });
+      }catch(e){ cb(null); }
+    });
+  }
+  function reenc(blob, cb){   /* JPG로 바뀐 사진을 서류 기준(가로 1600·화질 0.8)으로 다시 저장 */
+    try{
+      var u=URL.createObjectURL(blob), im=new Image();
+      im.onload=function(){ try{ var sc=Math.min(1, 1600/(im.naturalWidth||1)), w=Math.max(1,Math.round(im.naturalWidth*sc)), h=Math.max(1,Math.round(im.naturalHeight*sc));
+        var c=document.createElement('canvas'); c.width=w; c.height=h; var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(im,0,0,w,h);
+        var d=c.toDataURL('image/jpeg',0.8); URL.revokeObjectURL(u); cb(d, Math.round(d.length*0.75)); }catch(e){ cb(null); } };
+      im.onerror=function(){ URL.revokeObjectURL(u); cb(null); };
+      im.src=u;
+    }catch(e){ cb(null); }
+  }
+  function say(m,t){ try{ if(typeof toast==='function') toast(m,t); else if(/^⚠️/.test(m) && typeof showAlert==='function') showAlert(m); }catch(e){} }
+  function jpgName(n){ n=String(n||'사진'); return /\.(heic|heif)$/i.test(n) ? n.replace(/\.(heic|heif)$/i,'.jpg') : n; }
+  function nativeOk(f, cb){ try{ var u=URL.createObjectURL(f), im=new Image(); im.onload=function(){ URL.revokeObjectURL(u); cb(im.naturalWidth>0); }; im.onerror=function(){ URL.revokeObjectURL(u); cb(false); }; im.src=u; }catch(e){ cb(false); } }
+  function prep(files, cb){
+    var arr=Array.prototype.slice.call(files||[]), out=[], i=0, bad=0;
+    if(!arr.some(isHeicFile)){ cb(files, 0); return; }
+    say('⏳ HEIC 사진을 JPG로 바꾸는 중... (처음 한 번은 조금 걸립니다)', 60000);
+    (function nx(){
+      if(i>=arr.length){ cb(out, bad); return; }
+      var f=arr[i++];
+      if(!isHeicFile(f)){ out.push(f); nx(); return; }
+      toJpegBlob(f, function(b){
+        if(b){ try{ out.push(new File([b], jpgName(f.name), {type:'image/jpeg'})); }catch(e){ b.name=jpgName(f.name); out.push(b); } nx(); return; }
+        nativeOk(f, function(ok){ if(ok) out.push(f); else bad++; nx(); });   /* 아이폰 사파리는 HEIC를 직접 읽을 수 있음 */
+      });
+    })();
+  }
+  window._kdHeicPrep=prep; window._kdIsHeicData=isHeicData;
+  ['uploadDoc','uploadBundle','uploadCommon','handleDocFiles','handleBundlePdf','onCommonDocAttach'].forEach(   /* 서류앱 + 주차현황판 첨부 */function(fn){
+    var orig=window[fn]; if(typeof orig!=='function') return;
+    window[fn]=function(files){
+      var self=this, args=Array.prototype.slice.call(arguments);
+      prep(files, function(fs, bad){
+        if(bad) say('⚠️ HEIC 사진 '+bad+'장을 바꾸지 못했습니다 — 인터넷 연결을 확인하거나 JPG로 다시 찍어 주세요', 7000);
+        if(!fs || !fs.length) return;
+        args[0]=fs; return orig.apply(self, args);
+      });
+    };
+  });
+  /* 이미 저장된 HEIC 서류 — 서류 데이터를 읽는 순간 JPG로 바꿔서 넘겨주고, 서버에도 고쳐 저장 */
+  function fakeSnap(sn, v){
+    var o=Object.create(sn);
+    o.val=function(){ return v==null?null:(typeof v==='object'?JSON.parse(JSON.stringify(v)):v); }; o.exportVal=o.val; o.exists=function(){ return v!=null; };
+    o.child=function(c){ var cv=(v&&typeof v==='object')?v[c]:null; if(cv===undefined) cv=null; var cs=sn.child?sn.child(c):{}; return fakeSnap(cs, cv); };
+    o.forEach=function(fn){ if(v&&typeof v==='object'){ var ks=Object.keys(v); for(var i=0;i<ks.length;i++){ if(fn(o.child(ks[i]))===true) return true; } } return false; };
+    o.numChildren=function(){ return (v&&typeof v==='object')?Object.keys(v).length:0; };
+    o.hasChild=function(c){ return !!(v&&typeof v==='object'&&v[c]!=null); };
+    return o;
+  }
+  /* HEIC dataURL 하나 → JPG dataURL (실패하면 null) */
+  function convData(s, cb){ var bl; try{ bl=blobOfData(s); }catch(e){ cb(null); return; } toJpegBlob(bl, function(b){ if(!b){ cb(null); return; } reenc(b, function(u,sz){ cb(u && u.indexOf('data:image/jpeg')===0 ? u : null, sz); }); }); }
+  function fixMeta(ref, path, size){
+    var m=path.match(/^(kd_rooms\/[^\/]+)\/kd_docs_data\/([^\/]+)\/([^\/]+)$/), c=path.match(/^(kd_rooms\/[^\/]+)\/kd_common_data\/([^\/]+)$/), mp, loc;
+    if(m){ mp=m[1]+'/kd_docs/'+m[2]+'/'+m[3]; try{ loc=window._docsMeta && _docsMeta[m[2]] && _docsMeta[m[2]][m[3]]; }catch(e){} }
+    else if(c){ mp=c[1]+'/kd_common_meta/'+c[2]; try{ loc=window._commonDocs && _commonDocs[c[2]]; }catch(e){} }
+    if(!mp) return;
+    var root=ref.root;
+    root.child(mp+'/name').once('value').then(function(s){
+      var u={}; u['size']=size; u['type']='image';
+      var n=s.val(); if(n && /\.(heic|heif)$/i.test(n)) u['name']=jpgName(n);
+      if(loc){ for(var k in u) loc[k]=u[k]; }
+      return root.child(mp).update(u);
+    }).catch(function(){});
+  }
+  function patch(){
+    var D=window.firebase && firebase.database, Q=D && (D.Query||D.Reference);
+    if(!Q || !Q.prototype || Q.prototype._kdHeicOnce) return !!(Q && Q.prototype && Q.prototype._kdHeicOnce);
+    var orig=Q.prototype.once;
+    Q.prototype._kdHeicOnce=true;
+    Q.prototype.once=function(ev, a){
+      var p=orig.apply(this, arguments), ref=this;
+      if(ev!=='value' || typeof a==='function' || !p || typeof p.then!=='function') return p;
+      var path=''; try{ path=decodeURIComponent(ref.toString().replace(ref.root.toString(),'')).replace(/^\/+/,''); }catch(e){}
+      if(!/\/kd_(docs|common)_data\//.test('/'+path)) return p;
+      return p.then(function(sn){
+        var v; try{ v=sn.val(); }catch(e){ return sn; }
+        var single=(typeof v==='string'), ids;
+        if(single) ids=isHeicData(v)?['']:[];
+        else if(v && typeof v==='object') ids=Object.keys(v).filter(function(k){ return typeof v[k]==='string' && isHeicData(v[k]); });
+        else ids=[];
+        if(!ids.length) return sn;
+        say('⏳ HEIC 사진을 JPG로 바꾸는 중...', 60000);
+        return new Promise(function(res){
+          var i=0, ok=0;
+          (function nx(){
+            if(i>=ids.length){
+              say(ok ? '✅ HEIC 사진을 JPG로 바꿨습니다' : '⚠️ HEIC 사진을 바꾸지 못했습니다 — 인터넷 연결 확인 후 다시 열어 주세요', ok?2000:6000);
+              res(ok ? fakeSnap(sn, v) : sn); return;
+            }
+            var id=ids[i++], src=single?v:v[id];
+            convData(src, function(u, size){
+              if(u){
+                ok++;
+                var r2=single?ref:ref.child(id), p2=single?path:(path+'/'+id);
+                if(single) v=u; else v[id]=u;
+                try{ r2.set(u).then(function(){ fixMeta(r2, p2, size); }).catch(function(){}); }catch(e){}
+              }
+              nx();
+            });
+          })();
+        });
+      });
+    };
+    return true;
+  }
+  if(!patch()){ var t=0, iv=setInterval(function(){ if(patch() || ++t>1200) clearInterval(iv); }, 500); }
+  /* 파일 이름(.heic)도 .jpg로 — 다운로드·공유 파일명 */
+  if(!window._kdHeicReadOnly) ['previewDoc','printDoc','shareDoc','downloadDoc'].forEach(function(fn){
+    var orig=window[fn]; if(typeof orig!=='function') return;
+    window[fn]=function(carKey, docId, fileName){ var a=Array.prototype.slice.call(arguments); if(typeof a[2]==='string') a[2]=jpgName(a[2]); return orig.apply(this, a); };
+  });
+})();
+
 </script>
 </body>
 </html>
