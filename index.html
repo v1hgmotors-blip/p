@@ -6680,8 +6680,11 @@ function _pbLogoColLayout(){
       if(img.parentNode!==col) col.appendChild(img);
       html.classList.add('pb-logocol');
       var bottom=hr.bottom;
-      var sb=document.querySelector('.search-bar'); if(sb && sb.offsetHeight) bottom=Math.max(bottom, sb.getBoundingClientRect().bottom);
-      if(row && row.offsetHeight) bottom=Math.max(bottom, row.getBoundingClientRect().bottom);
+      /* ★(2026-11-11) 상단 버튼줄(전체초기화·비밀번호변경 등)을 펼쳐도 로고 크기가 변하지 않게 그 줄 높이는 빼고 계산 */
+      var _cw=document.getElementById('ctrlRowWrap'), _ex=0;
+      if(_cw && _cw.offsetHeight){ var _cs=getComputedStyle(_cw); _ex=_cw.offsetHeight+(parseFloat(_cs.marginTop)||0)+(parseFloat(_cs.marginBottom)||0); }
+      var sb=document.querySelector('.search-bar'); if(sb && sb.offsetHeight) bottom=Math.max(bottom, sb.getBoundingClientRect().bottom-_ex);
+      if(row && row.offsetHeight) bottom=Math.max(bottom, row.getBoundingClientRect().bottom-_ex);
       /* 휴대폰: 맨 위 남색 이름 바 아래에서부터 로고 칸 시작 */
       var topOff=0;
       if(!wide){ var _ca=hdr.querySelector('.h-row1 > .h-center-abs'); if(_ca && _ca.offsetHeight) topOff=Math.max(0, Math.round(_ca.getBoundingClientRect().bottom-hr.top)+3); }
@@ -6689,7 +6692,7 @@ function _pbLogoColLayout(){
       var H=Math.max(60, Math.round(bottom-hr.top-topOff));
       /* ★ 판을 스크롤하면 Firebase 설정 줄은 위로 올라가므로, 로고 칸 높이도 그 줄을 따라 줄어듦(판을 가리지 않게).
          로고 칸 '폭'은 스크롤과 관계없이 전체 높이 기준으로 고정 → 화면이 흔들리지 않음 */
-      var Hfull=hdr.offsetHeight + (sb?sb.offsetHeight:0) + ((row && row.offsetHeight)?row.offsetHeight:0);
+      var Hfull=hdr.offsetHeight + (sb?sb.offsetHeight-_ex:0) + ((row && row.offsetHeight)?row.offsetHeight:0);
       var W=Math.round(Math.min(260, Math.max(150, (Math.max(H,Hfull)-16)*1.9+20)));
       if(window.innerWidth<=1100) W=Math.round(Math.max(130, Math.min(W, window.innerWidth*0.2)));
       if(!wide) W=Math.round(Math.max(88, Math.min(window.innerWidth*0.28, 150)));
@@ -18404,19 +18407,17 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
     if(_fitLayoutTimer) clearTimeout(_fitLayoutTimer);
     _fitLayoutTimer = setTimeout(function(){
       _fitLayoutTimer = null;
+      /* ★(2026-11-11) 회전 깜빡임 FIX: 칸 크기 계산 → 열 간격(기둥·계단) → 열 접기를 한 번에(같은 순간) 처리.
+         예전엔 fitLayout(120ms)·열접기(180ms)·회전(300ms+)이 따로 돌아서, 그 사이 화면에
+         간격 기둥이 사라졌다 나타났다 하며 2~3번 깜빡였음 */
       fitLayout();
+      try{ if(typeof _applyAllColGaps==='function') _applyAllColGaps(); }catch(e){}
+      try{ _cleanColArrows(); if(typeof _applyAllColFolds==='function') _applyAllColFolds(); }catch(e){}
       _setPcScrollPadding();
     }, 120);
   }
   window.addEventListener('resize', _debouncedFitLayout);
-  /* ★ 리사이즈 시 열 스크롤 뷰포트도 재계산 */
-  window.addEventListener('resize', function(){
-    if(window._editingSlotNum || _isTypingFocused()) return;  /* ★ 편집/입력 중 스킵 */
-    setTimeout(function(){
-      _cleanColArrows();
-      if(typeof _applyAllColFolds==='function') _applyAllColFolds();
-    }, 180);
-  });
+  /* ★ 리사이즈 시 열 스크롤 뷰포트 재계산 → 위 _debouncedFitLayout 안으로 합침(깜빡임 방지) */
   window.addEventListener('orientationchange', function(){
     /* 회전 후 브라우저가 새 크기를 확정할 때까지 대기 후 재계산 */
     setTimeout(_debouncedFitLayout, 300);
@@ -28551,6 +28552,24 @@ function _pbKeyChoose(car, cur, doc, cb){
     }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(init,0); }); else setTimeout(init,0);
+})();
+</script>
+<script>
+/* ★(2026-11-11) 화면 회전·창 크기 변경 깜빡임 FIX
+   fitLayout()은 칸 크기를 다시 계산하면서 열 템플릿을 「간격 없는 기본형」으로 되돌림.
+   메모란 크기 감시 등 다른 경로에서 fitLayout()만 따로 불리면, 다음 간격 재적용까지
+   한 순간 기둥·계단 간격이 사라졌다가 다시 나타나 화면이 깜빡였음
+   → fitLayout() 끝에서 항상 같은 순간에 열 간격을 다시 입힘(화면에 중간 상태가 안 보임) */
+(function(){
+  var f=window.fitLayout;
+  if(typeof f!=='function' || f._kdGapKeep) return;
+  var w=function(){
+    var r=f.apply(this,arguments);
+    try{ if(typeof _applyAllColGaps==='function') _applyAllColGaps(); }catch(e){}
+    return r;
+  };
+  w._kdGapKeep=1;
+  window.fitLayout=fitLayout=w;
 })();
 </script>
 </body>
