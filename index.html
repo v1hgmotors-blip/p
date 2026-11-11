@@ -3243,7 +3243,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
 
     <!-- ★ 성능검사 만료 알림 -->
     <div class="m-section" id="inspectSection">
-      <div class="m-label">🔍 성능검사 만료 알림</div>
+      <div class="m-label">🔍 성능 받은 날짜 <span style="font-size:11px;font-weight:800;color:#7C3AED;">(120일 후 만료 · 배지에 D-day 표시)</span></div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <input type="date" id="inspectDateInput"
                style="flex:1;min-width:130px;padding:7px 8px;border:2px solid #DDD;border-radius:10px;font-size:14px;font-weight:700;color:#1E293B;background:#F8FAFC;font-family:inherit;"
@@ -10991,6 +10991,14 @@ function _encarStartTimer(){
 }
 
 /* ══ 성능검사 만료 알림 ══ */
+/* ★(2026-11-11) 모달에는 「성능 받은 날짜」를 입력 → 만료일 = 받은 날짜 + 120일 로 저장(배지 D-day는 만료일 기준).
+   저장값 inspect.date 는 예전처럼 「만료일」 그대로(배지·깜박임·동기화 영향 없음), inspect.got 에 받은 날짜를 함께 기록 */
+var KD_INSP_DAYS=120;
+function _kdYmdParse(s){ var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||'')); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+function _kdYmdFmt(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function _kdInspExp(got){ var d=_kdYmdParse(got); if(!d) return ''; d.setDate(d.getDate()+KD_INSP_DAYS); return _kdYmdFmt(d); }
+function _kdInspGot(exp){ var d=_kdYmdParse(exp); if(!d) return ''; d.setDate(d.getDate()-KD_INSP_DAYS); return _kdYmdFmt(d); }
+function _kdInspExpTxt(exp){ var d=_kdYmdParse(exp); return d?(' (만료 '+(d.getMonth()+1)+'/'+d.getDate()+')'):''; }
 /* 슬롯 데이터에 inspect 필드 추가하여 저장/불러옴 */
 
 function _inspectDaysLeft(dateStr){
@@ -11034,7 +11042,7 @@ function _inspectUpdateModal(i){
   var doneBtn=document.getElementById('inspectDoneBtn');
   var msg=document.getElementById('inspectStatusMsg');
   if(!inp) return;
-  inp.value=ins.date||'';
+  inp.value=(ins.date && !ins.done) ? (ins.got||_kdInspGot(ins.date)) : '';
   if(ins.date && !ins.done){
     var days=_inspectDaysLeft(ins.date);
     doneBtn.style.display='inline-block';
@@ -11043,6 +11051,7 @@ function _inspectUpdateModal(i){
     else if(days===0){ msg.textContent='⚠️ 오늘 만료!'; msg.style.color='#EF4444'; }
     else if(days<=7){ msg.textContent='🌈 만료 '+days+'일 전 — 깜박 중'; msg.style.color='#7C3AED'; }
     else { msg.textContent='📅 만료까지 '+days+'일 남음'; msg.style.color='#3B82F6'; }
+    if(days!==null) msg.textContent+=_kdInspExpTxt(ins.date);
   } else if(ins.done){
     inp.value=''; doneBtn.style.display='none';
     msg.textContent='✅ 완료 처리됨'; msg.style.color='#10B981';
@@ -11053,13 +11062,14 @@ function _inspectUpdateModal(i){
 
 function onInspectDateInput(){
   if(activeSlot===null) return;
-  var val=document.getElementById('inspectDateInput').value;
+  var _got=document.getElementById('inspectDateInput').value;
+  var val=_kdInspExp(_got);   /* ★ 받은 날짜 + 120일 = 만료일 */
   var doneBtn=document.getElementById('inspectDoneBtn');
   var msg=document.getElementById('inspectStatusMsg');
   /* 입력 즉시 슬롯에 저장 후 배지 갱신 */
   var s=getSlots();
   if(!s[activeSlot]) s[activeSlot]={};
-  s[activeSlot].inspect={date:val, done:false};
+  s[activeSlot].inspect={date:val, done:false, got:_got};
   saveSlots(s);
   if(fbSlotsRef){var _u={};_u[activeSlot]=s[activeSlot];_fbV7Update(_u);}
   refreshSlot(activeSlot);
@@ -11072,6 +11082,7 @@ function onInspectDateInput(){
     else if(days===0){ msg.textContent='⚠️ 오늘 만료!'; msg.style.color='#EF4444'; }
     else if(days<=7){ msg.textContent='🌈 만료 '+days+'일 전 — 깜박 중'; msg.style.color='#7C3AED'; }
     else { msg.textContent='📅 만료까지 '+days+'일 남음'; msg.style.color='#3B82F6'; }
+    msg.textContent+=_kdInspExpTxt(val);
   } else {
     doneBtn.style.display='none'; msg.textContent='';
   }
@@ -15512,8 +15523,10 @@ function saveSlot(){
 
   /* ★ 성능검사 날짜 모달 입력값 읽기 */
   var _inspInp = document.getElementById('inspectDateInput');
-  var _inspDate = _inspInp ? (_inspInp.value||'') : (_prevInspect.date||'');
+  var _inspGot = _inspInp ? (_inspInp.value||'') : (_prevInspect.got||'');
+  var _inspDate = _inspInp ? _kdInspExp(_inspGot) : (_prevInspect.date||'');   /* ★ 받은 날짜 + 120일 = 만료일 */
   var _newInspect = {date: _inspDate, done: _inspDate ? false : (_prevInspect.done||false)};
+  if(_inspDate && _inspGot) _newInspect.got = _inspGot;
 
   /* ★ 판매완료·사용안함 선택 시 → 차량번호·메모 초기화 */
   var isClear = (selectedStatus === 'sale' || dis);
