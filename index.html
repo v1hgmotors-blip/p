@@ -2243,6 +2243,9 @@ body.dragging-slot .col-scroll-wrap { touch-action:none !important; }
 .fsb-bar{width:100px;height:3px;background:#334155;border-radius:4px;overflow:hidden;}
 .fsb-bar-fill{height:100%;background:#FEE500;border-radius:4px;
   width:0%;transition:width .4s ease;}
+
+/* ★(2026-11-11) 📨 메시지 발송 사용 안 함 → 알림톡·네이버 톡톡·서버문자 관련 칸/버튼 숨김 (약도 본인확인 버튼은 그대로) */
+html.kd-msg-off .kd-msg-only, html.kd-msg-off #kdChRow, html.kd-msg-off #sendMode_alimtalk, html.kd-msg-off #sendMode_sms, html.kd-msg-off #sendMode_qr, html.kd-msg-off #smsModeBtn{display:none !important;}
 </style>
 <style id="pbPremiumCss">
 /* ═══════════ ★ (2026-11-07) 화이트 프리미엄 디자인 ═══════════
@@ -2972,8 +2975,18 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
       <button class="btn" onclick="testPbTg()" style="background:#0F766E;color:#fff;font-size:11px;">🧪테스트</button>
       <span class="save-msg" id="pbTgMsg"></span>
     </div>
+    <!-- ★(2026-11-11) 📨 메시지 발송 사용 — 상사코드별 공통(kd_msg_enabled). 끄면 요금발생차단·발송방식·알림채널을 숨기고 발송 요청을 보내지 않음 -->
+    <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
+      <span class="storage-mode-label">📨 메시지발송</span>
+      <label class="storage-mode-switch" title="문자서버(sms-server)가 있는 업체만 켜세요. 끄면 알림톡·네이버 톡톡·문자 발송 기능을 숨기고 키불출 시 QR로 안내합니다.">
+        <input type="checkbox" id="kdMsgEnChk" onchange="kdSetMsgEnabled(this.checked)">
+        <span class="storage-mode-slider"></span>
+      </label>
+      <span class="storage-mode-badge both" id="kdMsgEnBadge" style="background:#475569;">발송 안 함 (QR 안내)</span>
+      <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;width:100%;">문자서버가 있는 업체만 켜세요 · 키불출앱과 같은 설정(모든 기기 공통) · 끄면 발송 기능을 숨기고 QR로 안내 · 다른 설정값은 그대로 보관</span>
+    </div>
     <!-- ★★ 요금발생차단 마스터 스위치 — OFF면 모든 발송(문자·알림톡·약도전송) 전면 차단 -->
-    <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;background:#7F1D1D;border-radius:10px;padding:6px 10px;">
+    <div class="storage-mode-row kd-msg-only" style="margin-top:4px;flex-wrap:wrap;background:#7F1D1D;border-radius:10px;padding:6px 10px;">
       <span class="storage-mode-label" style="color:#FECACA;">🚫 요금발생차단</span>
       <label class="storage-mode-switch" title="켜면 모든 발송(문자·알림톡·약도전송)이 차단되어 요금이 발생하지 않습니다. 팝업·QR·캡처는 그대로 사용 가능.">
         <input type="checkbox" id="feeBlockSwitch" onchange="onFeeBlockChange(this.checked)">
@@ -2984,14 +2997,14 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
     </div>
     <!-- ★ 키불출 발송 방식 3단계: 알림톡 / 문자 / QR만 -->
     <div class="storage-mode-row" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
-      <span class="storage-mode-label">📤 발송방식</span>
+      <span class="storage-mode-label kd-msg-only">📤 발송방식</span>
       <button type="button" id="sendMode_alimtalk" onclick="onSendModeChange('alimtalk')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">🗺️ 알림톡</button>
       <button type="button" id="sendMode_sms" onclick="onSendModeChange('sms')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">📲 문자</button>
       <button type="button" id="sendMode_qr" onclick="onSendModeChange('qr')" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">🔳 QR만</button>
       <button type="button" id="viewAuthBtn" onclick="onViewAuthToggle()" title="약도를 열 때 딜러 전화번호 뒤 4자리 확인" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#E5E7EB;color:#6B7280;">🔒 본인확인 꺼짐</button>
       <!-- ★ 문자 발송 시 방식: 🖼️ 이미지 MMS ↔ 🔗 링크 LMS -->
       <button type="button" id="smsModeBtn" onclick="toggleSmsMode()" style="padding:5px 10px;border:none;border-radius:8px;font-size:11px;font-weight:900;cursor:pointer;font-family:inherit;background:#1D4ED8;color:#fff;letter-spacing:-.3px;">🔗 링크 49.5원</button>
-      <span style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;width:100%;">🗺️알림톡=키불출 시 딜러에 알림톡(문자대체) · 📲문자=약도 문자 · 🔳QR만=자동발송 안 함, 팝업/수동전송만 (문자서버 연동 필요)</span>
+      <span class="kd-msg-only" style="font-size:10px;color:#94A3B8;font-weight:700;letter-spacing:-.3px;width:100%;">🗺️알림톡=키불출 시 딜러에 알림톡(문자대체) · 📲문자=약도 문자 · 🔳QR만=자동발송 안 함, 팝업/수동전송만 (문자서버 연동 필요)</span>
     </div>
     <!-- ★ 알림 채널 선택 (2026-10-15): 카카오 알림톡 / 네이버 톡톡 — 공유방 공통(kd_msg_channel) -->
     <div class="storage-mode-row" id="kdChRow" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
@@ -3572,7 +3585,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
       <button type="button" onclick="_saveSearchIssueInfo()" style="flex:1.4;background:#3B82F6;color:#fff;border:none;border-radius:10px;padding:11px 0;font-size:14px;font-weight:900;cursor:pointer;">저장</button>
     </div>
     <!-- ★ (2026-10-27) 저장 + 약도 전송: 카카오 알림톡 / 네이버 톡톡 중 골라서 딜러 번호로 전송 -->
-    <div style="display:flex;gap:8px;margin-top:8px;">
+    <div class="kd-msg-only" style="display:flex;gap:8px;margin-top:8px;">
       <button type="button" onclick="_saveSearchIssueInfo('kakao')" style="flex:1;background:#FAE100;color:#3C1E1E;border:none;border-radius:10px;padding:11px 0;font-size:13.5px;font-weight:900;cursor:pointer;">💛 저장+알림톡</button>
       <button type="button" onclick="_saveSearchIssueInfo('naver')" style="flex:1;background:#03C75A;color:#fff;border:none;border-radius:10px;padding:11px 0;font-size:13.5px;font-weight:900;cursor:pointer;">💚 저장+톡톡</button>
     </div>
@@ -14337,14 +14350,14 @@ function _compressDocImageMin(file, cb){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=1000;
+      var maxW=1600; /* ★(2026-11-10) 서류 사진 화질 올림: 가로 1600px·화질 80% (묶음분리 예전 1000px·60%·300KB — 작은 글씨가 흐렸음) */
       var scale=Math.min(1, maxW/img.width);
       var w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
       var canvas=document.createElement('canvas');
       canvas.width=w; canvas.height=h;
       canvas.getContext('2d').drawImage(img,0,0,w,h);
-      var q=0.6, dataUrl=canvas.toDataURL('image/jpeg',q);
-      while(dataUrl.length*0.75 > 300*1024 && q>0.35){
+      var q=0.8, dataUrl=canvas.toDataURL('image/jpeg',q);
+      while(dataUrl.length*0.75 > 600*1024 && q>0.5){
         q -= 0.1;
         dataUrl = canvas.toDataURL('image/jpeg', q);
       }
@@ -14542,13 +14555,13 @@ function _compressDocImage(file, cb){
   reader.onload=function(e){
     var img=new Image();
     img.onload=function(){
-      var maxW=1280;
+      var maxW=1600; /* ★(2026-11-10) 서류 사진 화질 올림: 가로 1600px·화질 80% (예전 1280px·72% — 작은 글씨가 흐렸음) */
       var scale=Math.min(1, maxW/img.width);
       var w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
       var canvas=document.createElement('canvas');
       canvas.width=w; canvas.height=h;
       canvas.getContext('2d').drawImage(img,0,0,w,h);
-      var dataUrl=canvas.toDataURL('image/jpeg',0.72);
+      var dataUrl=canvas.toDataURL('image/jpeg',0.80);
       var approxSize=Math.round(dataUrl.length*0.75);
       cb(dataUrl, approxSize);
     };
@@ -18641,7 +18654,7 @@ var _MIGRATE_ROOM_PATHS = ['pb_slots','pb_settings',
   /* ★(2026-11-03) 빠져 있던 경로 추가 — 서류 개수, 성능점검 등록일, 키불출앱 메모·반납위치·딜러명단, 각종 공유 설정 */
   'kd_doc_counts','kd_insp_date','returnAt','returnLocMap','memos','action',
   'dealerList','dealerByPhone','dealerListVer',
-  'kd_app_pin','kd_msg_channel','kd_ntfy_topic','kd_shop_name','kd_view_base_url',
+  'kd_app_pin','kd_msg_channel','kd_msg_enabled','kd_ntfy_topic','kd_shop_name','kd_view_base_url',
   'pb_media_ts','pb_view_log'];
 /* ★(2026-11-03) 발송 큐·인증·스캔 기록은 백업/복원/이전에서 항상 제외 (알림톡·텔레그램 재발송 사고 방지) */
 var _PB_ROOM_SKIP = ['dispatch_req','sms_queue','sms_sent','dispatch_scan','dispatch_auth',
@@ -25323,6 +25336,7 @@ window._drawQRCanvas = function(container, text, size){
   window._queueRouteDispatch = _queueRouteDispatch;   /* ★ (2026-10-27) 검색키불출 전송 버튼에서 사용 */
   window._autoSendRouteSms = function(partNo, entry, slotLabel, slotIdx){
     try{
+      if(window.kdMsgEnabled && !window.kdMsgEnabled()) return;       /* ★(2026-11-11) 메시지 발송 사용 안 함 → 요청 자체를 안 만듦 */
       if(window._isFeeBlocked && window._isFeeBlocked()) return;      /* ★ 요금발생차단 ON → 전면 차단 */
       var _mode = _getSendMode();
       if(_mode==='qr') return;                                        /* ★ QR만 = 자동발송 안 함 */
@@ -25420,6 +25434,10 @@ window._drawQRCanvas = function(container, text, size){
      onStatus: 'sent' | 'failed' | 'timeout' 콜백 (선택) */
   function _queueRouteSms(code, phone, car, text, jpeg, eid, from, onStatus){
     var notify = function(s){ try{ if(typeof onStatus==='function') onStatus(s); }catch(e){} };
+    if(window.kdMsgEnabled && !window.kdMsgEnabled()){   /* ★(2026-11-11) 메시지 발송 사용 안 함 */
+      if(typeof showAlert==='function') showAlert('📵 메시지 발송 사용이 꺼져 있어 보내지 않았습니다 (설정 → 📨 메시지발송)');
+      notify('failed'); return;
+    }
     try{
       var qRef = fbDb.ref('kd_rooms/'+code+'/sms_queue').push();
       qRef.set({
@@ -25474,6 +25492,10 @@ window._drawQRCanvas = function(container, text, size){
      onStatus: 'sent'|'failed'|'timeout' 콜백, via: 'alimtalk'|기타 */
   function _queueRouteDispatch(code, phone, car, name, eid, onStatus, ch){
     var notify = function(s, via){ try{ if(typeof onStatus==='function') onStatus(s, via); }catch(e){} };
+    if(window.kdMsgEnabled && !window.kdMsgEnabled()){   /* ★(2026-11-11) 메시지 발송 사용 안 함 */
+      if(typeof showAlert==='function') showAlert('📵 메시지 발송 사용이 꺼져 있어 보내지 않았습니다 (설정 → 📨 메시지발송)');
+      notify('failed'); return;
+    }
     try{
       if(typeof fbDb==='undefined' || !fbDb){ notify('failed'); return; }
       var reqRef = fbDb.ref('kd_rooms/'+code+'/dispatch_req').push();
@@ -25561,7 +25583,7 @@ window._drawQRCanvas = function(container, text, size){
 
     var code = localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||'';
     /* 문자서버를 못 쓰는 상황이면 → 문자앱으로 대체 (텍스트 자동입력) */
-    if(typeof fbDb==='undefined' || !fbDb || !code){
+    if(typeof fbDb==='undefined' || !fbDb || !code || (window.kdMsgEnabled && !window.kdMsgEnabled())){   /* ★(2026-11-11) 메시지 발송 사용 안 함 → 휴대폰 문자앱으로 */
       setBtn('📲 약도전송', '#B45309', false);
       window._smsPartPhoto();
       return;
@@ -27421,6 +27443,87 @@ html{touch-action:manipulation;}
 .memo-edit-ov,.memo-edit-ov.show,.promo-edit-ov,.promo-edit-ov.show,.key-return-popup-ov,.key-return-popup-ov.show,.dispatch-popup,.dispatch-popup.show{transition-duration:.12s !important;}
 </style>
 <script>
+/* ═══ ★(2026-11-11) 📨 메시지 발송 사용 (문자서버) — 상사코드별 공통 스위치 ═══
+   · kd_rooms/{code}/kd_msg_enabled = '1'(사용) | '0'(사용 안 함) — 값이 없으면 이 파일의 기본값(1)
+   · 키불출앱·주차현황판 어디서 바꿔도 같은 값 → 그 상사코드의 모든 기기에 바로 반영 (다른 상사코드는 영향 없음)
+   · 끄면: 알림톡·네이버 톡톡·서버문자 버튼과 설정을 숨기고, 발송 요청(dispatch_req·sms_queue)을 아예 만들지 않음
+           → 키불출 시 QR 팝업으로 안내 (휴대폰 자체 문자앱으로 보내는 📱문자전송은 그대로)
+   · 자동전송·발송방식·알림채널 같은 다른 설정값은 지우지 않음 → 다시 켜면 예전 값 그대로 동작 */
+var _KD_MSG_DEFAULT = '1';
+var _kdMsg = { ref:null, key:'', db:null, val:null };
+function _kdMsgCode(){
+  try{ var c=_kdChCtx(); if(c && c.code) return c.code; }catch(e){}
+  try{ if(typeof _getCode==='function'){ var g=_getCode(); if(g) return g; } }catch(e){}
+  try{ return localStorage.getItem(typeof LS_CODE!=='undefined'?LS_CODE:'pb_code')||localStorage.getItem('pb_code')||''; }catch(e){ return ''; }
+}
+function kdMsgEnabled(){
+  var v=_kdMsg.val;
+  if(v!=='1' && v!=='0'){ try{ var k=_kdMsgCode(); v = k ? localStorage.getItem('kd_msg_enabled:'+k) : null; }catch(e){ v=null; } }
+  if(v!=='1' && v!=='0') v=_KD_MSG_DEFAULT;
+  return v==='1';
+}
+function _kdMsgPaint(){
+  var on=kdMsgEnabled();
+  try{ document.documentElement.classList.toggle('kd-msg-off', !on); }catch(e){}
+  var chk=document.getElementById('kdMsgEnChk'); if(chk) chk.checked=on;
+  var lb=document.getElementById('kdMsgEnLabel');
+  if(lb) lb.textContent = on ? '🟢 사용 중 — 알림톡·네이버 톡톡·문자 발송' : '⏸️ 사용 안 함 — 키불출 시 QR로 안내';
+  var bd=document.getElementById('kdMsgEnBadge');
+  if(bd){ bd.textContent = on ? '발송 사용 중' : '발송 안 함 (QR 안내)'; bd.style.background = on ? '#166534' : '#475569'; }
+}
+function _kdMsgNotify(m, kind){
+  try{ if(typeof showToast==='function'){ showToast(m, kind||'info'); return; } }catch(e){}
+  try{ if(typeof _greenToast==='function' && kind==='success'){ _greenToast(m); return; } }catch(e){}
+  try{ if(typeof showAlert==='function'){ showAlert(m); return; } }catch(e){}
+  try{ alert(m); }catch(e){}
+}
+function _kdMsgAttach(){
+  var c=null; try{ c=_kdChCtx(); }catch(e){}
+  var k=c?c.code:'', d=c?c.db:null;
+  if(k===_kdMsg.key && d===_kdMsg.db) return;
+  if(_kdMsg.ref){ try{ _kdMsg.ref.off(); }catch(e){} _kdMsg.ref=null; }
+  _kdMsg.key=k; _kdMsg.db=d; _kdMsg.val=null;
+  _kdMsgPaint();
+  if(!c) return;
+  var r=d.ref('kd_rooms/'+k+'/kd_msg_enabled'); _kdMsg.ref=r;
+  r.on('value', function(s){
+    var v=s.val();
+    v = (v===true||v==='1'||v===1) ? '1' : ((v===false||v==='0'||v===0) ? '0' : null);
+    _kdMsg.val=v;
+    try{ if(v) localStorage.setItem('kd_msg_enabled:'+k, v); else localStorage.removeItem('kd_msg_enabled:'+k); }catch(e){}
+    _kdMsgPaint();
+  }, function(){});
+}
+function kdSetMsgEnabled(on){
+  on=!!on;
+  var c=null; try{ c=_kdChCtx(); }catch(e){}
+  if(!c){ _kdMsgNotify('⚠️ Firebase에 연결된 뒤에 바꿀 수 있습니다', 'error'); _kdMsgPaint(); return; }
+  if(on===kdMsgEnabled()){ _kdMsgPaint(); return; }
+  var ok=true;
+  try{
+    ok = confirm(on
+      ? '📨 메시지 발송을 켭니다.\n\n· 이 상사코드의 모든 기기(키불출앱·주차현황판)에 알림톡·네이버 톡톡·문자 기능이 나타납니다.\n· 문자서버(sms-server)가 설치되어 있어야 실제로 발송됩니다.\n· 예전에 골라 둔 자동전송·발송방식·알림채널 값으로 바로 동작합니다.\n\n켤까요?'
+      : '📵 메시지 발송을 끕니다.\n\n· 이 상사코드의 모든 기기에서 알림톡·네이버 톡톡·문자 기능이 숨겨지고, 발송 요청을 보내지 않습니다.\n· 키불출하면 QR 팝업으로 안내합니다.\n· 다른 설정값은 지우지 않으므로 다시 켜면 그대로 돌아옵니다.\n\n끌까요?');
+  }catch(e){ ok=true; }
+  if(!ok){ _kdMsgPaint(); return; }
+  var v=on?'1':'0', prev=_kdMsg.val;
+  _kdMsg.val=v; try{ localStorage.setItem('kd_msg_enabled:'+c.code, v); }catch(e){}
+  _kdMsgPaint();
+  c.db.ref('kd_rooms/'+c.code+'/kd_msg_enabled').set(v).then(function(){
+    _kdMsgNotify(on ? '📨 메시지 발송 사용 — 모든 기기에 적용됩니다' : '📵 메시지 발송 사용 안 함 — 모든 기기에 적용됩니다', 'success');
+  }).catch(function(){
+    _kdMsg.val=prev; try{ if(prev) localStorage.setItem('kd_msg_enabled:'+c.code, prev); else localStorage.removeItem('kd_msg_enabled:'+c.code); }catch(e){}
+    _kdMsgPaint();
+    _kdMsgNotify('❌ 저장하지 못했습니다 — 인터넷 연결을 확인하세요', 'error');
+  });
+}
+window.kdMsgEnabled=kdMsgEnabled; window.kdSetMsgEnabled=kdSetMsgEnabled;
+
+(function(){
+  function go(){ _kdMsgAttach(); _kdMsgPaint();  setInterval(function(){ _kdMsgAttach(); _kdMsgPaint(); }, 3000); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', go); else go();
+})();
+
 /* ═══ ★ 알림 채널 선택 (2026-10-15) — 💛 카카오 알림톡 / 💚 네이버 톡톡
    · 공유방 공통 설정: kd_rooms/{code}/kd_msg_channel = 'kakao' | 'naver' (없으면 카카오)
    · 문자서버가 발송할 때 이 값을 읽어 고른 채널로 먼저 보냄
@@ -28054,10 +28157,10 @@ window._kdHeicReadOnly=true;
       }catch(e){ cb(null); }
     });
   }
-  function reenc(blob, cb){   /* JPG로 바뀐 사진을 서류앱 기준(가로 1280·화질 0.8)으로 다시 저장 */
+  function reenc(blob, cb){   /* JPG로 바뀐 사진을 서류 기준(가로 1600·화질 0.8)으로 다시 저장 */
     try{
       var u=URL.createObjectURL(blob), im=new Image();
-      im.onload=function(){ try{ var sc=Math.min(1, 1280/(im.naturalWidth||1)), w=Math.max(1,Math.round(im.naturalWidth*sc)), h=Math.max(1,Math.round(im.naturalHeight*sc));
+      im.onload=function(){ try{ var sc=Math.min(1, 1600/(im.naturalWidth||1)), w=Math.max(1,Math.round(im.naturalWidth*sc)), h=Math.max(1,Math.round(im.naturalHeight*sc));
         var c=document.createElement('canvas'); c.width=w; c.height=h; var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(im,0,0,w,h);
         var d=c.toDataURL('image/jpeg',0.8); URL.revokeObjectURL(u); cb(d, Math.round(d.length*0.75)); }catch(e){ cb(null); } };
       im.onerror=function(){ URL.revokeObjectURL(u); cb(null); };
@@ -28167,6 +28270,84 @@ window._kdHeicReadOnly=true;
   });
 })();
 
+
+/* ═══ ★(2026-11-11) 서류앱 직접등록 키번호 → 주차현황판 연동 ═══
+   · 서류앱 「차량번호로 직접 등록」에서 넣은 키번호는 pb_slots/D_{차량키}.num 에 있음
+   · 이 모달에서 그 차량번호를 새로 넣고 「저장」하면:
+       - 현황판 키번호가 비어 있으면 → 서류앱 키번호를 자동으로 넣음
+       - 둘이 다르면 → 고르는 창(서류앱 키번호 적용 / 현황판 키번호 유지), 고른 값으로 두 앱 모두 맞춤
+       - 같거나 서류앱 키번호가 없으면 → 예전과 똑같이 저장
+   · 확인은 최대 2.5초 — 인터넷이 느리면 기다리지 않고 예전처럼 저장 */
+function _pbKeyChoose(car, cur, doc, cb){
+  try{
+    var old=document.getElementById('_pbKeyChooseOv'); if(old) old.remove();
+    var ov=document.createElement('div'); ov.id='_pbKeyChooseOv';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var bs='flex:1;padding:12px 8px;border:none;border-radius:11px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;';
+    function e(t){ return String(t).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:360px;width:100%;padding:18px 16px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit;">'
+      +'<div style="font-size:17px;font-weight:900;color:#0F172A;margin-bottom:6px;">🔑 키번호가 다릅니다</div>'
+      +'<div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:12px;">차량 <b style="color:#0F172A;">'+e(car)+'</b> — 어느 키번호를 쓸까요?</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:10px;">'
+      +'<div style="flex:1;background:#EFF6FF;border:2px solid #93C5FD;border-radius:12px;padding:10px;text-align:center;"><div style="font-size:11px;font-weight:800;color:#1D4ED8;">📄 서류앱</div><div style="font-size:26px;font-weight:900;color:#1E3A8A;">'+e(doc)+'</div></div>'
+      +'<div style="flex:1;background:#F1F5F9;border:2px solid #CBD5E1;border-radius:12px;padding:10px;text-align:center;"><div style="font-size:11px;font-weight:800;color:#475569;">🅿️ 주차현황판</div><div style="font-size:26px;font-weight:900;color:#334155;">'+e(cur)+'</div></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;">'
+      +'<button type="button" id="_pbKcDoc" style="'+bs+'background:#1D4ED8;color:#fff;">서류앱 '+e(doc)+' 적용</button>'
+      +'<button type="button" id="_pbKcCur" style="'+bs+'background:#E2E8F0;color:#334155;">현황판 '+e(cur)+' 유지</button>'
+      +'</div>'
+      +'<div style="font-size:11px;font-weight:700;color:#94A3B8;margin-top:8px;">고른 키번호로 주차현황판·서류앱이 같이 맞춰집니다</div>'
+      +'</div>';
+    document.body.appendChild(ov);
+    var fin=function(p){ try{ ov.remove(); }catch(x){} cb(p); };
+    document.getElementById('_pbKcDoc').onclick=function(){ fin('doc'); };
+    document.getElementById('_pbKcCur').onclick=function(){ fin('cur'); };
+  }catch(err){ cb('cur'); }
+}
+(function(){
+  if(typeof saveSlot!=='function' || saveSlot._pbKeyLink) return;
+  var _o=saveSlot, busy=false;
+  function norm(s){ return String(s||'').replace(/\s/g,''); }
+  function clean(v){ v=String(v==null?'':v).replace(/[^0-9]/g,''); v=v?String(parseInt(v,10)||0):''; return v==='0'?'':v; }
+  saveSlot=function(){
+    var self=this, args=arguments;
+    if(busy) return;
+    try{
+      if(activeSlot===null || window._pbUploadLock) return _o.apply(self,args);
+      var car=String((document.getElementById('mCarInput')||{}).value||'').trim();
+      var d=getSlot(activeSlot)||{};
+      var code=_pbCode();
+      if(!car || norm(car)===norm(d.car) || typeof fbDb==='undefined' || !fbDb || !code) return _o.apply(self,args);
+      var dk=_docKeyFromCar(car); if(!dk) return _o.apply(self,args);
+      var ref=fbDb.ref('kd_rooms/'+code+'/pb_slots/D_'+dk+'/num');
+      busy=true;
+      var done=false, go=function(){ if(done) return; done=true; busy=false; _o.apply(self,args); };
+      var t=setTimeout(go, 2500);
+      ref.once('value').then(function(s){
+        if(done) return; clearTimeout(t);
+        var dn=clean(s.val());
+        var ni=document.getElementById('mNumInput');
+        var cur=clean(ni && ni.value); if(!cur) cur=clean(d.num);
+        if(!dn || dn===cur){ go(); return; }
+        if(!cur){
+          if(ni) ni.value=dn;
+          try{ showAlert('🔑 서류앱에 등록된 키번호 '+dn+' 을(를) 같이 넣었습니다'); setTimeout(function(){ try{ hideAlert(); }catch(x){} }, 2200); }catch(x){}
+          go(); return;
+        }
+        done=true;
+        _pbKeyChoose(car, cur, dn, function(pick){
+          busy=false;
+          var fin = (pick==='doc') ? dn : cur;
+          if(ni) ni.value=fin;
+          try{ ref.set(fin).catch(function(){}); }catch(x){}   /* 서류앱 키번호도 같은 값으로 */
+          _o.apply(self,args);
+        });
+      }).catch(function(){ clearTimeout(t); go(); });
+    }catch(e){ busy=false; return _o.apply(self,args); }
+  };
+  saveSlot._pbKeyLink=true;
+  window.saveSlot=saveSlot;
+})();
 </script>
 </body>
 </html>
