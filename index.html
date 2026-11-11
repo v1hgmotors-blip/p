@@ -28572,5 +28572,85 @@ function _pbKeyChoose(car, cur, doc, cb){
   window.fitLayout=fitLayout=w;
 })();
 </script>
+<script>
+/* ★(2026-11-11) 슬롯 상태배지(출고대기·상품화중·계약중·D-day 등)가 차량번호를 가리지 않게
+   칸이 작아 배지와 차량번호가 겹치면 → 차량번호 글자를 겹치지 않을 만큼만 줄임(최소 9px),
+   그래도 겹치면 위쪽 빈 공간으로 살짝 올림. 칸이 넉넉하면 아무것도 바꾸지 않음. (PC·태블릿, 배지 보이는 화면만) */
+(function(){
+  if(window._kdBadgeFitOn) return; window._kdBadgeFitOn=true;
+  function carRect(el){
+    var kids=el.querySelectorAll('.car-d1,.car-four-grid,.car-d2'), r=null;
+    for(var i=0;i<kids.length;i++){ var k=kids[i].getBoundingClientRect(); if(!k.height) continue;
+      r = r ? {top:Math.min(r.top,k.top), bottom:Math.max(r.bottom,k.bottom)} : {top:k.top,bottom:k.bottom}; }
+    if(!r){ var b=el.getBoundingClientRect(); r={top:b.top,bottom:b.bottom}; }
+    return r;
+  }
+  function badgeTop(slot){
+    var w=slot.querySelector('.slot-badge-wrap'); if(!w) return null;
+    if(parseFloat(getComputedStyle(w).opacity)===0) return null;
+    /* 배지가 바뀔 때 움직이는 효과(아래→위)와 상관없이 배지 묶음 칸 자체의 위치로 판단 */
+    if(w.offsetHeight>2){ var wr=w.getBoundingClientRect(); return wr.top+(parseFloat(getComputedStyle(w).paddingTop)||0); }
+    return null;
+  }
+  function fitOne(slot){
+    var car=slot.querySelector('.slot-car'); if(!car) return;
+    /* 이전에 줄였던 값 원래대로 → 다시 계산 */
+    car.style.transform='';
+    slot.style.removeProperty('--slot-badge-fs');
+    if(car.dataset.kdBf==='1'){ car.style.fontSize=car.dataset.kdFs0||''; car.dataset.kdBf=''; }
+    if(window.innerWidth<=600) return;
+    var bt=badgeTop(slot); if(bt===null) return;
+    var r=carRect(car); if(r.bottom <= bt-1) return;
+    var w=slot.querySelector('.slot-badge-wrap'), it=w && w.querySelector('.slot-status,.slot-inspect-badge,.slot-encar-badge');
+    var bfs=it?parseFloat(getComputedStyle(it).fontSize)||11:11;
+    car.dataset.kdFs0=car.style.fontSize||'';
+    var cfs=parseFloat(car.style.fontSize)||parseFloat(getComputedStyle(car).fontSize)||13, g=0;
+    /* 배지 글자와 차량번호를 함께 조금씩 줄임 — 배지는 차량번호의 60%까지(최소 8px), 차량번호는 최소 10px */
+    while(g<80){
+      g++;
+      if(bfs>8 && bfs>cfs*0.6){ bfs-=0.5; slot.style.setProperty('--slot-badge-fs', bfs+'px'); }
+      else if(cfs>10){ cfs-=0.5; car.style.fontSize=cfs+'px'; car.dataset.kdBf='1'; }
+      else break;
+      r=carRect(car); bt=badgeTop(slot); if(bt===null || r.bottom<=bt-1) break;
+    }
+    r=carRect(car); bt=badgeTop(slot);
+    if(bt!==null && r.bottom>bt-1){
+      var num=slot.querySelector('.slot-num'), floor=num?num.getBoundingClientRect().bottom+1:slot.getBoundingClientRect().top+2;
+      var up=Math.min(r.bottom-(bt-1), Math.max(0, r.top-floor));
+      if(up>0.5) car.style.transform='translateY(-'+Math.round(up)+'px)';
+    }
+  }
+  function runAll(root){
+    var list=(root||document).querySelectorAll ? (root||document).querySelectorAll('.slot.occupied') : [];
+    if(root && root.classList && root.classList.contains('slot')) list=[root];
+    for(var i=0;i<list.length;i++){ try{ fitOne(list[i]); }catch(e){} }
+  }
+  window._kdBadgeFitAll=runAll;
+  function install(){
+    var o=window._fitSlotCarTexts; if(typeof o!=='function' || o._kdBF) return;
+    var w=function(slotEl){
+      var r=o.apply(this,arguments);
+      requestAnimationFrame(function(){ requestAnimationFrame(function(){ runAll(slotEl||null); }); });
+      return r;
+    };
+    for(var k in o){ try{ w[k]=o[k]; }catch(e){} }
+    w._kdBF=1; window._fitSlotCarTexts=w;
+    /* 배지 묶음(슬라이더)이 만들어진 뒤에도 한 번 더 맞춤 */
+    var ib=window._initBadgeSlider;
+    if(typeof ib==='function' && !ib._kdBF){
+      var w2=function(slotEl){ var r=ib.apply(this,arguments); if(slotEl) requestAnimationFrame(function(){ try{ fitOne(slotEl); }catch(e){} }); return r; };
+      w2._kdBF=1; window._initBadgeSlider=w2;
+    }
+    var ia=window._initAllBadgeSliders;
+    if(typeof ia==='function' && !ia._kdBF){
+      var w3=function(){ var r=ia.apply(this,arguments); requestAnimationFrame(function(){ requestAnimationFrame(function(){ runAll(null); }); }); return r; };
+      w3._kdBF=1; window._initAllBadgeSliders=w3;
+    }
+  }
+  install();
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(install,0); });
+  setTimeout(function(){ install(); runAll(); }, 2500);
+})();
+</script>
 </body>
 </html>
