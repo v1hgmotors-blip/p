@@ -422,7 +422,7 @@ html.pb-logocol .header.pb-hdr1 .h-row1 .h-center-abs{left:calc(50vw - var(--pbL
 .h-promo-outer .h-promo-logo{aspect-ratio:23/10;object-fit:cover;object-position:center;border-radius:9px;border:1px solid #E2E8F0;background:#FFFFFF;box-shadow:0 1px 3px rgba(15,23,42,.12);box-sizing:border-box;}
 .h-promo-outer.has-logo .h-promo{line-height:1.15;text-align:center;}
 @media(max-width:600px){ .h-promo-logo{height:42px;max-width:130px;} }
-.h-promo{font-size:20px;font-weight:900;color:#CC0000;letter-spacing:.2px;animation:blinkPromo .9s ease-in-out infinite;cursor:pointer;}
+.h-promo{font-size:20px;font-weight:900;color:#CC0000;letter-spacing:.2px;animation:none;cursor:pointer;}   /* ★(2026-11-11) 깜빡임 없음 */
 @keyframes blinkPromo{0%,100%{opacity:1;}50%{opacity:0;}}
 /* 가운데 절대 위치 */
 .h-row1{display:flex;align-items:center;justify-content:space-between;width:100%;}
@@ -2644,7 +2644,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
     <div class="h-left">
       <div class="h-promo-outer" onclick="openPromoEdit()">
       <img id="hPromoLogo" class="h-promo-logo" alt="" style="display:none">
-      <div class="h-promo" id="hPromoText">🔴 제휴점:skv1모터스 타다할부 🔴</div>
+      <div class="h-promo" id="hPromoText">📍수원skv1모터스</div>
       </div>
     </div>
     <!-- ★ 키불출 중 알림 배너 — h-row1 중앙 -->
@@ -2725,7 +2725,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
 <!-- 제휴점 편집 모달 (비밀번호 123456) -->
 <div class="promo-edit-ov" id="promoEditOv">
   <div class="memo-edit-box">
-    <div class="memo-edit-title">🔴 제휴점 문구 수정</div>
+    <div class="memo-edit-title">🔴 제휴점 및 타이틀 문구수정</div>
     <div>
       <div class="memo-edit-label">🔒 비밀번호</div>
       <input class="memo-edit-input" id="promoEditPw" type="password" placeholder="비밀번호 입력" maxlength="20"
@@ -3326,7 +3326,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
           <div class="m-memo-fs-ctrl">
             <span style="font-size:11px;font-weight:700;color:var(--text-sub);">글씨크기</span>
             <button class="m-memo-fs-btn" onclick="changeMemoFs(-1)">－</button>
-            <span class="m-memo-fs-val" id="memoFsVal">18</span>
+            <span class="m-memo-fs-val" id="memoFsVal">11</span>
             <button class="m-memo-fs-btn" onclick="changeMemoFs(1)">＋</button>
           </div>
         </div>
@@ -6606,7 +6606,8 @@ function loadHeaderMemo(){
   var ht=document.getElementById('hTitle');
   if(ht){ht.style.fontSize=fs2+'px';ht.style.color=col2;}
   /* 제휴점 텍스트 */
-  var promo=localStorage.getItem(LS_PROMO_TEXT)||'🔴 제휴점:skv1모터스 타다할부 🔴';
+  var promo=localStorage.getItem(LS_PROMO_TEXT)||'📍수원skv1모터스';
+  if(promo==='🔴 제휴점:skv1모터스 타다할부 🔴') promo='📍수원skv1모터스';   /* ★(2026-11-11) 예전 기본문구는 새 기본문구로 표시 */
   var pe=document.getElementById('hPromoText');
   if(pe) pe.textContent=promo;
   try{ _applyPromoLogo(); }catch(e){}
@@ -7376,7 +7377,7 @@ function loadHeaderMemoStyle(){
 function openPromoEdit(){
   /* ★ (2026-11-08) 입력칸에는 사용자가 저장한 문구만 표시 (기본 문구는 칸에 미리 넣지 않음 — 비워 두고 저장하면 기본 문구가 헤더에 표시) */
   var cur=localStorage.getItem(LS_PROMO_TEXT)||'';
-  if(cur==='🔴 제휴점:skv1모터스 타다할부 🔴') cur='';
+  if(cur==='🔴 제휴점:skv1모터스 타다할부 🔴' || cur==='📍수원skv1모터스') cur='';
   /* ★ 상세 정보 프리필 */
   try{
     var _pd=document.getElementById('promoDetailText');
@@ -7421,7 +7422,7 @@ function savePromoEdit(){
     document.getElementById('promoEditPw').focus();
     return;
   }
-  var txt=document.getElementById('promoEditText').value.trim()||'🔴 제휴점:skv1모터스 타다할부 🔴';
+  var txt=document.getElementById('promoEditText').value.trim()||'📍수원skv1모터스';
   var fs=document.getElementById('promoFsSlider').value;
   var col=_promoEditColor||'#CC0000';
   localStorage.setItem(LS_PROMO_TEXT,txt);
@@ -8115,7 +8116,7 @@ function hideTooltip(){
 
 /* ── 메모 글씨크기 조절 ── */
 function loadMemoFs(){
-  var v=parseInt(localStorage.getItem(LS_MEMO_FS))||14;
+  var v=parseInt(localStorage.getItem(LS_MEMO_FS))||11;
   v=Math.min(Math.max(v,8),32);
   document.documentElement.style.setProperty('--memo-input-fs',v+'px');
   /* ★ PC: 슬롯 메모 표시 크기에도 반영 (모바일은 CSS에서 자동계산값 우선) */
@@ -8124,7 +8125,7 @@ function loadMemoFs(){
   if(el) el.textContent=v;
 }
 function changeMemoFs(delta){
-  var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||14;
+  var cur=parseInt(localStorage.getItem(LS_MEMO_FS))||11;
   var next=Math.min(Math.max(cur+delta,8),32);
   localStorage.setItem(LS_MEMO_FS, next);
   document.documentElement.style.setProperty('--memo-input-fs',next+'px');
@@ -16628,7 +16629,7 @@ function applyRemoteSettings(data){
     if(data.promoColor!==undefined) localStorage.setItem(LS_PROMO_COLOR,data.promoColor);
     var pe=document.getElementById('hPromoText');
     if(pe){
-      pe.textContent=data.promoText;
+      pe.textContent=(data.promoText==='🔴 제휴점:skv1모터스 타다할부 🔴' ? '📍수원skv1모터스' : data.promoText);
       if(data.promoFs) pe.style.fontSize=data.promoFs+'px';
       if(data.promoColor) pe.style.color=data.promoColor;
     }
@@ -28347,6 +28348,205 @@ function _pbKeyChoose(car, cur, doc, cb){
   };
   saveSlot._pbKeyLink=true;
   window.saveSlot=saveSlot;
+})();
+</script>
+<script>
+/* ★ 격자모드 슬롯 크기 통일 (2026-11-11, 기기별 설정 · 동기화 없음)
+   파트마다 열 수가 달라 격자모드에서 열이 많은 파트는 칸이 작고 적은 파트는 칸이 컸음.
+   → 각 격자 컬럼 폭을 그 컬럼의 최대 표시 열 수에 비례시키고, 열이 적은 파트는
+     셀 폭을 (열수/최대열수)로 줄여 모든 파트의 칸 폭을 같게 맞춤.
+     칸 높이·글꼴은 열이 가장 많은 파트 기준값으로 통일.
+   끄기: 상단 [⚖️ 칸맞춤] 버튼 (localStorage pb_grid_eq='0') */
+(function(){
+  var LS='pb_grid_eq';
+  function on(){ try{ return localStorage.getItem(LS)!=='0'; }catch(e){ return true; } }
+  function gm(){ try{ return isPartGridMode(); }catch(e){ return false; } }
+  function pOf(cell){ var pw=cell.querySelector('.part-wrap[id^="partWrap"]'); return pw?parseInt(pw.id.replace('partWrap',''),10):0; }
+  function vis(p){ try{ return _getVisibleCols(p); }catch(e){ return PART_COL_COUNTS[p-1]||COLS_PER_PART; } }
+  function isOpen(p){ try{ var cv=localStorage.getItem(LS_COLLAPSED[p-1]); return (cv==='0'||cv===null); }catch(e){ return true; } }
+  window._kdGridEqWidths=function(){
+    var wrap=document.getElementById('gridWrap'); if(!wrap) return;
+    var cols=wrap.querySelectorAll(':scope > .grid-col');
+    if(!gm()||!on()){
+      cols.forEach(function(c){ c.style.flexGrow=''; c.querySelectorAll(':scope > .part-cell').forEach(function(x){ x.style.width=''; }); });
+      return;
+    }
+    var gmax=1, info=[];
+    cols.forEach(function(c){
+      var cells=[].slice.call(c.querySelectorAll(':scope > .part-cell')), m=0;
+      cells.forEach(function(x){ var p=pOf(x); if(p&&isOpen(p)) m=Math.max(m,vis(p)); });
+      gmax=Math.max(gmax,m); info.push({c:c,cells:cells,m:m});
+    });
+    info.forEach(function(o){
+      var m=o.m||gmax; o.c.style.flexGrow=String(m);
+      o.cells.forEach(function(x){
+        var p=pOf(x);
+        if(!p||!isOpen(p)){ x.style.width=''; return; }
+        var v=vis(p); x.style.width=(v>=m?'':(Math.round(v/m*100000)/1000)+'%');
+      });
+    });
+  };
+  /* 높이·글꼴: 열이 가장 많은 열린 파트 값을 모든 파트에 복사 */
+  function eqHeights(){
+    if(!gm()||!on()) return;
+    var ref=0, rv=0;
+    for(var p=1;p<=NUM_PARTS;p++){ if(!document.getElementById('parkingGrid'+p)||!isOpen(p)) continue; var v=vis(p); if(v>rv){ rv=v; ref=p; } }
+    if(!ref) return;
+    var rpg=document.getElementById('parkingGrid'+ref), rpw=document.getElementById('partWrap'+ref);
+    var sh=rpg.style.getPropertyValue('--slot-h'); if(!sh) return;
+    var gv=['--slot-badge-fs','--slot-badge-show','--slot-car-h','--slot-memo-max-h-no-car','--slot-memo-max-h'];
+    var wv=['--slot-car-fs','--slot-memo-fs','--slot-num-sz','--slot-num-fs','--col-hc-fs'];
+    for(var q=1;q<=NUM_PARTS;q++){
+      if(q===ref) continue;
+      var pg=document.getElementById('parkingGrid'+q), pw=document.getElementById('partWrap'+q);
+      if(!pg) continue;
+      var rows=PART_ROW_COUNTS[q-1]||ROWS_PER_PART;
+      pg.style.gridTemplateRows='repeat('+rows+','+sh+')';
+      pg.style.setProperty('--slot-h',sh);
+      gv.forEach(function(k){ var v=rpg.style.getPropertyValue(k); if(v) pg.style.setProperty(k,v); });
+      if(pw&&rpw) wv.forEach(function(k){ var v=rpw.style.getPropertyValue(k); if(v) pw.style.setProperty(k,v); });
+    }
+    try{ if(typeof _applyCarFsAllParts==='function') _applyCarFsAllParts(); }catch(e){}
+    try{ if(typeof _fitSlotCarTexts==='function'){ _fitSlotCarTexts(); setTimeout(_fitSlotCarTexts,140); } }catch(e){}
+    try{ if(typeof _fitSlotBadgeFs==='function'){ _fitSlotBadgeFs(); setTimeout(_fitSlotBadgeFs,140); } }catch(e){}
+  }
+  var _inFold=false;
+  var _ab=window._appendGridCellsBalanced;
+  if(typeof _ab==='function') window._appendGridCellsBalanced=_appendGridCellsBalanced=function(wrap,cells){ var r=_ab.apply(this,arguments); try{ _kdGridEqWidths(); }catch(e){} return r; };
+  var _fl=window.fitLayout;
+  if(typeof _fl==='function') window.fitLayout=fitLayout=function(){
+    if(!_inFold){ try{ _kdGridEqWidths(); }catch(e){} }
+    var r=_fl.apply(this,arguments);
+    try{ eqHeights(); }catch(e){}
+    return r;
+  };
+  var _cf=window._applyColFoldLayout;
+  if(typeof _cf==='function') window._applyColFoldLayout=_applyColFoldLayout=function(){
+    try{ _kdGridEqWidths(); }catch(e){}
+    _inFold=true;
+    try{ return _cf.apply(this,arguments); } finally{ _inFold=false; }
+  };
+  function paint(){
+    var b=document.getElementById('kdGridEqBtn'); if(!b) return;
+    b.style.display=gm()?'':'none';
+    b.textContent=on()?'⚖️ 칸맞춤':'⚖️ 칸맞춤 끔';
+    b.style.opacity=on()?'1':'.55';
+  }
+  window._kdGridEqToggle=function(){
+    try{ localStorage.setItem(LS,on()?'0':'1'); }catch(e){}
+    try{
+      _cleanColArrows(); _rebuildGridDOM(); renderColHeaders(); buildGrid(); _applyPartViewMode(); fitLayout();
+      setTimeout(function(){ _applyAllColFolds(); }, 50);
+      setTimeout(function(){ try{ _initAllBadgeSliders(); }catch(e){} }, 200);
+    }catch(e){}
+    paint();
+  };
+  var _pv=window._applyPartViewMode;
+  if(typeof _pv==='function') window._applyPartViewMode=_applyPartViewMode=function(){ var r=_pv.apply(this,arguments); try{ paint(); }catch(e){} return r; };
+  function addBtn(){
+    var t=document.getElementById('partViewToggleBtn'); if(!t||document.getElementById('kdGridEqBtn')) return;
+    var b=document.createElement('button'); b.id='kdGridEqBtn'; b.className=t.className; b.type='button';
+    b.title='격자모드에서 모든 파트 칸 크기 맞춤 (이 기기에만 적용)';
+    b.onclick=function(){ _kdGridEqToggle(); };
+    t.parentNode.insertBefore(b,t.nextSibling); paint();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addBtn); else addBtn();
+})();
+</script>
+<script>
+/* ═══ ★(2026-11-11) 인앱 브라우저(카카오톡·네이버 등) 인쇄·공유 안내 + 「크롬으로 열기」 한 번에
+   · 카카오톡 안 브라우저는 인쇄(window.print)와 파일 공유를 지원하지 않음 → 아무 반응 없이 멈춘 것처럼 보였음
+   · 인앱에서 인쇄/공유를 누르면 바로 안내창 + 「🌐 크롬으로 열기」(카카오톡은 앱이 직접 외부 브라우저로 넘겨 줌) */
+(function(){
+  if(window._kdInAppOn) return; window._kdInAppOn=true;
+  var UA=String(navigator.userAgent||'');
+  var IOS=/iPhone|iPad|iPod/i.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1), AND=/Android/i.test(UA);
+  window._kdInAppName=function(){
+    if(/KAKAOTALK/i.test(UA)) return '카카오톡';
+    if(/NAVER\(inapp|NAVER/i.test(UA) && !/Whale/i.test(UA)) return '네이버';
+    if(/Instagram/i.test(UA)) return '인스타그램';
+    if(/FBAN|FBAV|FB_IAB/i.test(UA)) return '페이스북';
+    if(/\bLine\//i.test(UA)) return '라인';
+    if(/DaumApps|DaumDevice/i.test(UA)) return '다음';
+    if(/everytimeApp|BAND\//i.test(UA)) return '앱';
+    if(AND && /;\s*wv\)/.test(UA)) return '앱';
+    return '';
+  };
+  window._kdOpenExternal=function(){
+    var u=location.href;
+    if(/KAKAOTALK/i.test(UA)){ location.href='kakaotalk://web/openExternal?url='+encodeURIComponent(u); return true; }
+    if(/\bLine\//i.test(UA)){ location.href=u+(u.indexOf('?')<0?'?':'&')+'openExternalBrowser=1'; return true; }
+    if(AND){
+      var rest=u.replace(/^https?:\/\//i,'');
+      location.href='intent://'+rest+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(u)+';end';
+      return true;
+    }
+    return false;
+  };
+  function extLabel(){ return IOS ? '🧭 사파리로 열기' : '🌐 크롬으로 열기'; }
+  function extBtn(onDone){
+    var b=document.createElement('button'); b.type='button'; b.textContent=extLabel();
+    b.style.cssText='flex:1 1 100%;padding:12px;border:none;border-radius:10px;background:#16A34A;color:#fff;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;';
+    b.onclick=function(){
+      var ok=window._kdOpenExternal();
+      if(!ok){ try{ alert('오른쪽 아래(또는 위) ⋯ 메뉴 → 「'+(IOS?'Safari로 열기':'다른 브라우저로 열기')+'」를 눌러 주세요'); }catch(e){} }
+      if(onDone) onDone();
+    };
+    return b;
+  }
+  window._kdInAppDialog=function(what, retry){
+    var old=document.getElementById('_kdInAppDlg'); if(old) old.remove();
+    var name=window._kdInAppName()||'앱';
+    var ov=document.createElement('div'); ov.id='_kdInAppDlg';
+    ov.style.cssText='position:fixed;inset:0;z-index:100012;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    var box=document.createElement('div');
+    box.style.cssText='width:100%;max-width:360px;background:#fff;border-radius:16px;padding:16px;font-size:13.5px;font-weight:700;color:#1E293B;line-height:1.65;box-shadow:0 12px 40px rgba(0,0,0,.35);';
+    box.innerHTML='<div style="font-size:15px;font-weight:900;margin-bottom:8px;">'+(what==='print'?'🖨️ 인쇄':'📤 공유')+'는 '+name+' 안에서 안 됩니다</div>'
+      + name+' 안에서 열린 화면은 '+(what==='print'?'<b>인쇄 기능이 막혀</b> 있습니다.':'<b>파일 공유가 막혀</b> 있습니다.')+'<br>'
+      + '아래 <b>'+extLabel()+'</b>를 누르면 같은 화면이 '+(IOS?'사파리':'크롬')+'로 열리고, 거기서 '+(what==='print'?'인쇄':'공유')+'가 됩니다.'
+      + '<div style="color:#64748B;font-size:12px;margin-top:6px;">※ 자주 쓰시면 '+(IOS?'사파리':'크롬')+'에서 「홈 화면에 추가」 해 두면 다음부터 바로 열립니다.</div>';
+    var row=document.createElement('div'); row.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;';
+    row.appendChild(extBtn(function(){ ov.remove(); }));
+    if(retry){
+      var r=document.createElement('button'); r.type='button'; r.textContent=what==='print'?'그래도 인쇄 시도':'그래도 시도';
+      r.style.cssText='flex:1;padding:11px;border:none;border-radius:10px;background:#E0E7FF;color:#3730A3;font-size:13.5px;font-weight:900;cursor:pointer;font-family:inherit;';
+      r.onclick=function(){ ov.remove(); try{ retry(); }catch(e){} };
+      row.appendChild(r);
+    }
+    var c=document.createElement('button'); c.type='button'; c.textContent='닫기';
+    c.style.cssText='flex:1;padding:11px;border:none;border-radius:10px;background:#E2E8F0;color:#475569;font-size:13.5px;font-weight:900;cursor:pointer;font-family:inherit;';
+    c.onclick=function(){ ov.remove(); };
+    row.appendChild(c); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov);
+  };
+  function canShare(){ return !!(window.isSecureContext && navigator.share && navigator.canShare); }
+  function okFor(ms){ window._kdIAPrintOk=true; clearTimeout(window._kdIAPrintT); window._kdIAPrintT=setTimeout(function(){ window._kdIAPrintOk=false; }, ms||20000); }
+  function wrapPrint(fn){
+    var o=window[fn]; if(typeof o!=='function' || o._kdIA) return;
+    var w=function(){ var a=arguments, t=this;
+      if(window._kdInAppName() && !window._kdIAPrintOk){ window._kdInAppDialog('print', function(){ okFor(); o.apply(t,a); }); return; }
+      return o.apply(t,a); };
+    w._kdIA=1; window[fn]=w;
+  }
+  function wrapShare(fn){
+    var o=window[fn]; if(typeof o!=='function' || o._kdIA) return;
+    var w=function(){ if(window._kdInAppName() && !canShare()){ window._kdInAppDialog('share'); return; } return o.apply(this,arguments); };
+    w._kdIA=1; window[fn]=w;
+  }
+  function init(){
+    ['printDoc','printAllDocs','_kdPrintImages'].forEach(wrapPrint);
+    ['shareDoc','shareAllDocs'].forEach(wrapShare);
+    /* 공유 안내창에 「크롬으로 열기」 추가 */
+    var sh=window._kdShareHelp;
+    if(typeof sh==='function' && !sh._kdIA){
+      var w3=function(){ var r=sh.apply(this,arguments);
+        try{ if(window._kdInAppName()){ var ov=document.getElementById('_kdShareHelp'); var row=ov && ov.querySelector('button') && ov.querySelector('button').parentNode;
+          if(row && !row.querySelector('._kdExt')){ row.style.flexWrap='wrap'; var b=extBtn(function(){ ov.remove(); }); b.className='_kdExt'; row.insertBefore(b,row.firstChild); } } }catch(e){}
+        return r; };
+      w3._kdIA=1; window._kdShareHelp=w3;
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(init,0); }); else setTimeout(init,0);
 })();
 </script>
 </body>
