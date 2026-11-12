@@ -25457,6 +25457,10 @@ window._drawQRCanvas = function(container, text, size){
       if(typeof showAlert==='function') showAlert('📵 메시지 발송 사용이 꺼져 있어 보내지 않았습니다 (설정 → 📨 메시지발송)');
       notify('failed'); return;
     }
+    if(window._pbOfflineNoSend && window._pbOfflineNoSend()){   /* ★(2026-11-12) 오프라인 → 요청 안 만듦(다시 연결될 때 뒤늦게 발송되는 것 방지) */
+      if(typeof showAlert==='function') showAlert('📴 인터넷이 끊겨 있어 보내지 않았습니다 — QR로 안내해 주세요');
+      notify('failed'); return;
+    }
     try{
       var qRef = fbDb.ref('kd_rooms/'+code+'/sms_queue').push();
       qRef.set({
@@ -25513,6 +25517,10 @@ window._drawQRCanvas = function(container, text, size){
     var notify = function(s, via){ try{ if(typeof onStatus==='function') onStatus(s, via); }catch(e){} };
     if(window.kdMsgEnabled && !window.kdMsgEnabled()){   /* ★(2026-11-11) 메시지 발송 사용 안 함 */
       if(typeof showAlert==='function') showAlert('📵 메시지 발송 사용이 꺼져 있어 보내지 않았습니다 (설정 → 📨 메시지발송)');
+      notify('failed'); return;
+    }
+    if(window._pbOfflineNoSend && window._pbOfflineNoSend()){   /* ★(2026-11-12) 오프라인 → 요청 안 만듦(다시 연결될 때 뒤늦게 발송되는 것 방지) */
+      if(typeof showAlert==='function') showAlert('📴 인터넷이 끊겨 있어 보내지 않았습니다 — QR로 안내해 주세요');
       notify('failed'); return;
     }
     try{
@@ -28664,6 +28672,10 @@ function _pbKeyChoose(car, cur, doc, cb){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(install,0); });
   setTimeout(function(){ install(); runAll(); }, 2500);
 })();
+</script>
+<script>
+/* ★(2026-11-12) 지금 인터넷/Firebase가 끊겼는지 (발송 요청을 만들지 않기 위함) */
+window._pbOfflineNoSend=function(){ try{ if(navigator.onLine===false) return true; if(window._fbLiveConn===false) return true; }catch(e){} return false; };
 </script>
 </body>
 </html>
