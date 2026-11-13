@@ -3115,7 +3115,19 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
 <!-- ★ 엔카사진 예약 모달 -->
 <div id="encarModal">
   <div class="encar-box">
-    <h3>📸 엔카사진 예약</h3>
+    <style>
+      #encarSndSw{display:inline-flex;align-items:center;gap:3px;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:10px;padding:3px;flex-shrink:0;}
+      #encarSndSw span{font-size:13px;padding:0 3px;}
+      #encarSndSw button{min-width:30px;height:28px;border:none;border-radius:7px;background:transparent;color:#475569;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;padding:0 6px;}
+      #encarSndSw button.on{background:#DC2626;color:#fff;}
+      #encarSndSw button[data-l="0"].on{background:#64748B;}
+      #encarModal .encar-box h3{white-space:nowrap;}
+      #encarSndSw span{display:none;} #encarSndSw button{min-width:24px;padding:0 4px;height:26px;font-size:12px;}
+    </style>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+      <h3>📸 엔카사진 예약</h3>
+      <div id="encarSndSw" title="엔카 예약 알림 소리 「딩~동~ 딩~동~」 크기 (누르면 미리 들려줌 · 이 기기에만 저장)"><span>🔔</span><button type="button" data-l="1" onclick="_encarSetSnd(1)">1</button><button type="button" data-l="2" onclick="_encarSetSnd(2)">2</button><button type="button" data-l="3" onclick="_encarSetSnd(3)">3</button><button type="button" data-l="0" onclick="_encarSetSnd(0)" title="소리 끄기">🔕</button></div>
+    </div>
     <div class="encar-sub" id="encarSlotInfo">키번호 : -</div>
     <!-- 날짜 선택 -->
     <div class="encar-time-row" style="margin-bottom:8px;">
@@ -10721,35 +10733,48 @@ try{
    겹쳐 걸걸한 경적 특유의 음색을 내고, 0.35초씩 "빵" 2번 (총 약 0.9초).
    * 실제 볼륨은 스피커/미디어 볼륨에 따라 커지고 작아짐 — 여기서 설정하는 값은
      합성음 자체의 상대적 크기(게인)일 뿐, 기기 볼륨을 대체하지 않음 */
-function _encarPlayAlertBeep(){
+/* ★(2026-11-13) 엔카사진 예약 알림음 → 「딩~동~ 딩~동~」 (예전 경적/삐삐 소리 삭제)
+   소리 크기 1·2·3단계 + 끄기 — 엔카 예약창 오른쪽 위 버튼 (이 기기에만 저장, 다른 기기와 연동 안 됨) */
+var _KD_ENCAR_SND = 'kd_encar_snd';
+function _encarSndLv(){ var v=null; try{ v=localStorage.getItem(_KD_ENCAR_SND); }catch(e){} if(v===null) return 2; v=parseInt(v,10); return (v>=0 && v<=3) ? v : 2; }
+function _encarAC(){
   try{
-    var Ctx = window.AudioContext || window.webkitAudioContext;
-    if(!Ctx) return;
-    if(!_encarAudioCtx) _encarAudioCtx = new Ctx();
-    var ctx = _encarAudioCtx;
-    if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
-    var honkDur=0.35, gapMs=200, honkCount=2;
-    var freqs=[400, 500]; /* ★ 두 음을 겹쳐서(디소넌스) 경적 특유의 걸걸한 음색 표현 */
-    for(var hi=0; hi<honkCount; hi++){
-      (function(delayMs){
-        setTimeout(function(){
-          var t = ctx.currentTime;
-          freqs.forEach(function(freq){
-            var o = ctx.createOscillator(), g = ctx.createGain();
-            o.type = 'sawtooth';        /* 톱니파 — 경적 특유의 거친 질감 */
-            o.frequency.value = freq;
-            g.gain.setValueAtTime(0.0001, t);
-            g.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
-            g.gain.setValueAtTime(0.45, t + honkDur - 0.05);
-            g.gain.exponentialRampToValueAtTime(0.0001, t + honkDur);
-            o.connect(g); g.connect(ctx.destination);
-            o.start(t); o.stop(t + honkDur + 0.02);
-          });
-        }, delayMs);
-      })(hi*(honkDur*1000+gapMs));
-    }
-  }catch(e){ console.warn('[엔카알림음] 재생 실패', e); }
+    var C = window.AudioContext || window.webkitAudioContext; if(!C) return null;
+    if(!window._kdEncarAC) window._kdEncarAC = new C();
+    var c = window._kdEncarAC; if(c.state === 'suspended'){ try{ c.resume(); }catch(e){} }
+    return c;
+  }catch(e){ return null; }
 }
+try{ document.addEventListener('pointerdown', function(){ _encarAC(); }, {capture:true, passive:true}); }catch(e){}
+function _encarPlayAlertBeep(lv){
+  try{
+    lv = (lv==null) ? _encarSndLv() : lv;
+    var vol = [0, 0.22, 0.5, 0.95][lv] || 0; if(!vol) return;
+    var c = _encarAC(); if(!c) return;
+    var out = c.createGain(); out.gain.value = vol; out.connect(c.destination);
+    var t0 = c.currentTime + 0.03;
+    /* 딩(미)~ 동(도)~  딩(미)~ 동(도)~ */
+    [[659.25,0],[523.25,0.48],[659.25,1.3],[523.25,1.78]].forEach(function(n){
+      [[1,1],[2.01,0.28],[3.02,0.1]].forEach(function(p){
+        var o = c.createOscillator(), g = c.createGain(), st = t0 + n[1];
+        o.type = 'sine'; o.frequency.value = n[0]*p[0];
+        g.gain.setValueAtTime(0.0001, st);
+        g.gain.exponentialRampToValueAtTime(0.45*p[1], st + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0008, st + 1.4);
+        o.connect(g); g.connect(out); o.start(st); o.stop(st + 1.5);
+      });
+    });
+  }catch(e){ try{ console.warn('[엔카알림음] 재생 실패', e); }catch(x){} }
+}
+function _encarPaintSnd(){
+  try{ var lv=_encarSndLv(); var bs=document.querySelectorAll('#encarSndSw button'); for(var i=0;i<bs.length;i++) bs[i].classList.toggle('on', parseInt(bs[i].getAttribute('data-l'),10)===lv); }catch(e){}
+}
+window._encarSetSnd = function(lv){
+  lv = Math.max(0, Math.min(3, parseInt(lv,10)||0));
+  try{ localStorage.setItem(_KD_ENCAR_SND, String(lv)); }catch(e){}
+  _encarPaintSnd(); _encarPlayAlertBeep(lv);   /* 누르면 미리 들려줌 */
+};
+try{ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _encarPaintSnd); else setTimeout(_encarPaintSnd, 0); }catch(e){}
 function _encarApplyBlinks(){
   var s=getSlots();
   for(var i=0;i<TOTAL;i++){
