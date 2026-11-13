@@ -3264,12 +3264,12 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
       <div class="m-label">📌 차량 상태 / 칸 설정</div>
       <div class="status-btns">
         <button class="status-btn" id="sbNone"     onclick="selStatus('none')">🅿️ 일반</button>
-        <button class="status-btn" id="sbContract" onclick="selStatus('contract')">📝 계약중</button>
-        <button class="status-btn" id="sbProduct"  onclick="selStatus('product')">🔧 상품화중</button>
-        <button class="status-btn" id="sbSale"     onclick="confirmSale()">💰 판매완료</button>
-        <button class="status-btn" id="sbWaiting"  onclick="selStatus('waiting')">🚗 출고대기</button>
+        <button class="status-btn" id="sbContract" onclick="_pbSelStatusUser('contract')">📝 계약중</button>
+        <button class="status-btn" id="sbProduct"  onclick="_pbSelStatusUser('product')">🔧 상품화중</button>
+        <button class="status-btn" id="sbSale"     onclick="_pbConfirmSaleUser()">💰 판매완료</button>
+        <button class="status-btn" id="sbWaiting"  onclick="_pbSelStatusUser('waiting')">🚗 출고대기</button>
         <button class="status-btn" id="sbDisabled" onclick="selStatus('disabled')">✖ 사용안함</button>
-        <button class="status-btn" id="sbSafe6"    onclick="toggleSafe6()">🛡️ 세이프6</button>
+        <button class="status-btn" id="sbSafe6"    onclick="_pbToggleSafe6User()">🛡️ 세이프6</button>
       </div>
     </div>
 
@@ -12568,7 +12568,9 @@ function renderSlot(el,idx){
       + (sp.isFour ? '<div class="car-four-grid"><span class="f-top">'+esc(sp.d3)+'</span><span class="f-btm">'+esc(sp.d4)+'</span></div>' : '')
       + (sp.d2 ? '<span class="car-d2">'+esc(sp.d2)+'</span>' : '')
       + '</div>';
-    if(d.status==='contract') html+='<div class="slot-status contract">계약중</div>';
+    var _pbV = (typeof _pbIsVeh!=='function' || _pbIsVeh(d.car));   /* ★(2026-11-14) 차량번호가 아닌 칸은 상태 배지 숨김 */
+    if(!_pbV){}
+    else if(d.status==='contract') html+='<div class="slot-status contract">계약중</div>';
     else if(d.status==='product') html+='<div class="slot-status product">상품화중</div>';
     else if(d.status==='sale')    html+='<div class="slot-status sale"><span class="b-emo">💰</span>판매완료</div>';
     else if(d.status==='waiting') html+='<div class="slot-status waiting">출고대기</div>';
@@ -12623,7 +12625,7 @@ function renderSlot(el,idx){
     }
   }
   /* ★ 세이프6 아이콘 (개별 slot.safe6 또는 협력업체 모드) */
-  if(d.car && !d.safe6Off && (d.safe6 || (typeof _safe6Partner!=='undefined' && _safe6Partner))){   /* ★(2026-11-05) safe6Off = 제휴점 켬이어도 이 차량은 제외 */
+  if(d.car && (typeof _pbIsVeh!=='function' || _pbIsVeh(d.car)) && !d.safe6Off && (d.safe6 || (typeof _safe6Partner!=='undefined' && _safe6Partner))){   /* ★(2026-11-05) safe6Off = 제휴점 켬이어도 이 차량은 제외 */
     var _s6i=document.createElement('div');
     _s6i.className='slot-safe6-icon'; _s6i.textContent='🛡️';
     if(ec.done && typeof _cam!=='undefined' && _cam) _cam.classList.add('below-safe6');  /* ★ 세이프6 아래에 엔카 */
@@ -14093,6 +14095,19 @@ function hideAlert(){
 }
 
 /* ── 모달 ── */
+/* ═══ ★(2026-11-14) 차량번호가 아닌 칸(무지개임대·방화문 등 글자만 있는 칸)은
+   계약중·상품화중·판매완료·출고대기·세이프6 상태를 쓸 수 없음 (일반·사용안함만) ═══ */
+function _pbIsVeh(v){ return /\d{4}/.test(String(v==null?'':v).replace(/\s+/g,'')); }
+var _PB_VEH_MSG='⚠️ 차량번호가 아닌 칸은 상태를 바꿀 수 없습니다\n(계약중·상품화중·판매완료·출고대기·세이프6은 숫자 4자리가 있는 차량번호에만)';
+function _pbVehGuard(){
+  var c=''; try{ c=document.getElementById('mCarInput').value; }catch(e){}
+  if(_pbIsVeh(c)) return true;
+  try{ showAlert(_PB_VEH_MSG); setTimeout(hideAlert,3200); }catch(e){}
+  return false;
+}
+function _pbSelStatusUser(v){ if(v!=='none' && v!=='disabled' && !_pbVehGuard()) return; selStatus(v); }
+function _pbConfirmSaleUser(){ if(!_pbVehGuard()) return; confirmSale(); }
+function _pbToggleSafe6User(){ if(!_safe6Selected && !_pbVehGuard()) return; toggleSafe6(); }
 function selStatus(v){
   selectedStatus=v;
   ['sbNone','sbContract','sbProduct','sbSale','sbWaiting','sbDisabled'].forEach(function(id){
@@ -15554,6 +15569,8 @@ function saveSlot(){
   })();
   var memo=document.getElementById('mMemoInput').value.trim();
   var dis=(selectedStatus==='disabled');
+  /* ★(2026-11-14) 차량번호가 아닌 칸: 차량 상태·세이프6가 골라져 있으면 「일반」으로 바꿔 저장 */
+  if(!dis && car && !_pbIsVeh(car)){ if(['contract','product','waiting','sale'].indexOf(selectedStatus)>=0){ selStatus('none'); } if(_safe6Selected && !(typeof _safe6Partner!=='undefined' && _safe6Partner)){ toggleSafe6(); } }
 
   /* ★ 차량번호 없고 사용안함도 아니면 → memo/owner/status 저장 차단 */
   if(!car && !dis){
@@ -27523,6 +27540,8 @@ function _saveAllOnClose(){
            var _ni=document.getElementById('mNumInput');  if(_ni) _ni.value=(_qd.num && _qd.num!=='0')?_qd.num:'';
       }catch(e){}
     };
+    /* ★(2026-11-14) 차량번호가 아닌 칸은 차량 상태 불가 */
+    if(['contract','product','waiting','sale','safe6'].indexOf(v)>=0){ var _qv=(getSlots()||{})[idx]||{}; if(!_pbIsVeh(_qv.car)){ try{ showAlert(_PB_VEH_MSG); setTimeout(hideAlert,3200); }catch(e){} return; } }
     if(v === 'sale'){
       _qFill();
       if(typeof confirmSale === 'function'){ confirmSale(); }
