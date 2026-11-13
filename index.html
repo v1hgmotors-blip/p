@@ -3219,7 +3219,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
 <!-- 편집 모달 -->
 <div class="modal-ov" id="modalOv">
 <div id="modalAlertWrap" style="position:fixed;top:var(--header-h,60px);left:0;right:0;z-index:9998;display:flex;justify-content:center;pointer-events:none;">
-  <div id="modalAlertBar" style="display:none;background:#3A1D1D;color:#FEE500;font-size:13px;font-weight:900;padding:9px 18px;border-radius:0 0 12px 12px;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:nowrap;max-width:480px;width:100%;text-align:center;"></div>
+  <div id="modalAlertBar" style="display:none;background:#3A1D1D;color:#FEE500;font-size:13px;font-weight:900;padding:9px 18px;border-radius:0 0 12px 12px;box-shadow:0 4px 12px rgba(0,0,0,.3);white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere;line-height:1.45;box-sizing:border-box;max-width:min(480px,calc(100vw - 16px));width:100%;text-align:center;"></div>
 </div>
   <div class="modal">
     <button class="m-close-btn" onclick="closeModal()" title="닫기">✕</button>
@@ -10573,7 +10573,7 @@ function openEncarModal(){
   _encarSlot = activeSlot;
   var d = getSlot(_encarSlot);
   /* ★(2026-11-13) 차량번호가 없는 칸은 엔카예약 불가 (예약알림·토픽·소리가 엉뚱하게 나가던 문제) */
-  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return; }
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,6000); return; }
   try{ _encarLeadPaint((d.encar && d.encar.time && d.encar.lead!=null) ? d.encar.lead : _encarLeadDefault()); }catch(e){}
   try{ _encarPopPaint(); }catch(e){}
   try{ _encarRepPaint((d.encar && d.encar.time && d.encar.rep!=null) ? d.encar.rep : _encarRepDefault()); }catch(e){}
@@ -10620,7 +10620,7 @@ function closeEncarModal(){
 /* ── 엔카 예약 저장 ── */
 function saveEncarReserve(){
   if(_encarSlot===null) return;
-  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return; }   /* ★(2026-11-13) */
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,6000); return; }   /* ★(2026-11-13) */
   var y2 = document.getElementById('encarYear').value;
   /* ★ 년월일시분 유효성 검사 */
   if(!y2){ showAlert('⚠️ 년도를 선택해주세요'); setTimeout(hideAlert,2500); return; }
@@ -10636,7 +10636,7 @@ function saveEncarReserve(){
     showAlert('⚠️ 없는 날짜입니다 ('+parseInt(mo2,10)+'월 '+parseInt(d3,10)+'일) — 날짜를 다시 골라주세요'); setTimeout(hideAlert,3000); return;
   }
   if(_rt.getTime() < Date.now() - 60000){
-    showAlert('⚠️ 이미 지난 시간입니다 ('+dateStr+' '+timeStr+')\n지금 이후 시간으로 예약해주세요'); setTimeout(hideAlert,3200); return;
+    showAlert('⚠️ 이미 지난 시간입니다 ('+dateStr+' '+timeStr+')\n지금 이후 시간으로 예약해주세요'); setTimeout(hideAlert,6000); return;
   }
   var s = getSlots();
   if(!s[_encarSlot]) s[_encarSlot]={car:'',status:'none',memo:'',disabled:false,num:'0',encar:{date:'',time:'',done:false,doneDate:''}};
@@ -10658,7 +10658,7 @@ function doneEncarFromModal(){
   var s=getSlots();
   /* ★ 차량번호 없으면 엔카 완료 차단 */
   if(!s[activeSlot] || !_encarCarOf(activeSlot)){   /* ★(2026-11-13) 글자만 있는 칸(방화문 등)도 차단 */
-    showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return;
+    showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,6000); return;
   }
   var _dn2=new Date();
   var _dd2=_dn2.getFullYear()+'-'+String(_dn2.getMonth()+1).padStart(2,'0')+'-'+String(_dn2.getDate()).padStart(2,'0');
@@ -10708,7 +10708,7 @@ function doneEncarReserve(){
   if(_encarSlot===null) return;
   var s=getSlots();
   if(!s[_encarSlot]) return;
-  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return; }   /* ★(2026-11-13) */
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,6000); return; }   /* ★(2026-11-13) */
   var _dn=new Date();
   var _dd=_dn.getFullYear()+'-'+String(_dn.getMonth()+1).padStart(2,'0')+'-'+String(_dn.getDate()).padStart(2,'0');
   var _ec1=s[_encarSlot].encar||{};
@@ -14098,11 +14098,12 @@ function hideAlert(){
 /* ═══ ★(2026-11-14) 차량번호가 아닌 칸(무지개임대·방화문 등 글자만 있는 칸)은
    계약중·상품화중·판매완료·출고대기·세이프6 상태를 쓸 수 없음 (일반·사용안함만) ═══ */
 function _pbIsVeh(v){ return /\d{4}/.test(String(v==null?'':v).replace(/\s+/g,'')); }
-var _PB_VEH_MSG='⚠️ 차량번호가 아닌 칸은 상태를 바꿀 수 없습니다\n(계약중·상품화중·판매완료·출고대기·세이프6은 숫자 4자리가 있는 차량번호에만)';
+var _PB_VEH_MSG='⚠️ 차량번호가 아닌 칸은 상태를 바꿀 수 없습니다!';
 function _pbVehGuard(){
   var c=''; try{ c=document.getElementById('mCarInput').value; }catch(e){}
   if(_pbIsVeh(c)) return true;
-  try{ showAlert(_PB_VEH_MSG); setTimeout(hideAlert,3200); }catch(e){}
+  try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(e){}   /* 막힌 버튼에 검은 테두리(선택된 것처럼 보임)가 남지 않게 */
+  try{ showAlert(_PB_VEH_MSG); setTimeout(hideAlert,6000); }catch(e){}
   return false;
 }
 function _pbSelStatusUser(v){ if(v!=='none' && v!=='disabled' && !_pbVehGuard()) return; selStatus(v); }
@@ -27541,7 +27542,7 @@ function _saveAllOnClose(){
       }catch(e){}
     };
     /* ★(2026-11-14) 차량번호가 아닌 칸은 차량 상태 불가 */
-    if(['contract','product','waiting','sale','safe6'].indexOf(v)>=0){ var _qv=(getSlots()||{})[idx]||{}; if(!_pbIsVeh(_qv.car)){ try{ showAlert(_PB_VEH_MSG); setTimeout(hideAlert,3200); }catch(e){} return; } }
+    if(['contract','product','waiting','sale','safe6'].indexOf(v)>=0){ var _qv=(getSlots()||{})[idx]||{}; if(!_pbIsVeh(_qv.car)){ try{ showAlert(_PB_VEH_MSG); setTimeout(hideAlert,6000); }catch(e){} return; } }
     if(v === 'sale'){
       _qFill();
       if(typeof confirmSale === 'function'){ confirmSale(); }
