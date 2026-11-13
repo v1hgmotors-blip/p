@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head>
+<head><script>/* ★(2026-11-13) 텔레그램 봇 토큰 교체 — 이 기기에 예전 토큰이 저장돼 있으면 새 토큰으로 바꿈 (설정 복원 시에도) */(function(){try{var N='8268063677:AAEfY4SzF5iodLmJFkLZGffKJaLbGmL6zuI',K=['kd_token','kd_pbtg_token'],ls=window.localStorage;function fx(v){return (typeof v==='string'&&v.indexOf('AAFYlfibw1bRaL88')>=0)?N:v;}K.forEach(function(k){var v=ls.getItem(k);if(v&&fx(v)!==v)ls.setItem(k,N);});var o=Storage.prototype.setItem;if(!o._kdTg){var w=function(k,v){if(this===ls&&K.indexOf(String(k))>=0)v=fx(String(v));return o.call(this,k,v);};w._kdTg=1;Storage.prototype.setItem=w;}}catch(e){}})();</script>
 <script>
 /* ══════════════════════════════════════════════════════════════════
    ★ 앱별 저장공간 분리 (멀티-앱 격리)  ─ 반드시 다른 모든 코드보다 먼저 실행
@@ -27253,33 +27253,84 @@ function _saveAllOnClose(){
     {v:'safe6',    label:'🛡️ 세이프6 (켜기/끄기)'},
     {v:'sale',     label:'💰 판매완료'}
   ];
+  /* ★(2026-11-13) 우클릭 메뉴: 「📂 모든서류보기」 추가 + 끌어서 순서 바꾸기 (이 기기에만 저장 · 다른 기기와 연동 안 됨) */
+  var LS_QO = 'kd_qsmenu_order';   /* 기기별 설정 (상사코드 초기화에도 유지) */
+  var ALL = [{v:'keyissue', label:'🔑 키불출', kind:'key'}, {v:'alldocs', label:'📂 모든서류보기', kind:'docs'}].concat(ITEMS);
+  function _qoGet(){
+    var vs = ALL.map(function(i){ return i.v; }), o = [];
+    try{ o = JSON.parse(localStorage.getItem(LS_QO)||'[]') || []; }catch(e){ o = []; }
+    if(!Array.isArray(o)) o = [];
+    o = o.filter(function(v, i){ return vs.indexOf(v)>=0 && o.indexOf(v)===i; });
+    vs.forEach(function(v, di){ if(o.indexOf(v)<0) o.splice(Math.min(di, o.length), 0, v); });   /* 새로 생긴 항목은 기본 자리에 */
+    return o;
+  }
+  function _qoSave(list){
+    try{ localStorage.setItem(LS_QO, JSON.stringify([].slice.call(list.children).map(function(x){ return x.getAttribute('data-v'); }))); }catch(e){}
+  }
+  function _qoBtn(it){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-v', it.v);
+    b.textContent = it.label;
+    var base = 'display:block;width:100%;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;margin:0 0 3px;touch-action:none;';
+    if(it.kind === 'key'){
+      b.style.cssText = base+'text-align:center;padding:11px 12px;background:#FEE500;color:#1E293B;font-size:15px;font-weight:900;border-radius:9px;';
+      b.addEventListener('mouseenter', function(){ b.style.background='#FDD835'; });
+      b.addEventListener('mouseleave', function(){ b.style.background='#FEE500'; });
+    } else if(it.kind === 'docs'){
+      b.style.cssText = base+'text-align:center;padding:10px 12px;background:#1E293B;color:#fff;font-size:14px;font-weight:900;border-radius:9px;';
+      b.addEventListener('mouseenter', function(){ b.style.background='#0F172A'; });
+      b.addEventListener('mouseleave', function(){ b.style.background='#1E293B'; });
+    } else {
+      b.style.cssText = base+'text-align:left;padding:10px 12px;background:transparent;font-size:14px;font-weight:800;color:#1E293B;border-radius:8px;';
+      b.addEventListener('mouseenter', function(){ b.style.background='#F1F5F9'; });
+      b.addEventListener('mouseleave', function(){ b.style.background='transparent'; });
+    }
+    b.addEventListener('click', function(e){ e.stopPropagation(); if(b._qoDragged){ b._qoDragged=false; return; } apply(it.v); });
+    return b;
+  }
+  function _qoFill(list){
+    list.innerHTML = '';
+    _qoGet().forEach(function(v){ for(var i=0;i<ALL.length;i++){ if(ALL[i].v===v){ list.appendChild(_qoBtn(ALL[i])); break; } } });
+  }
+  function _qoDrag(list){
+    list.addEventListener('pointerdown', function(e){
+      if(e.button !== 0) return;
+      var b = e.target.closest ? e.target.closest('button[data-v]') : null;
+      if(!b || b.parentNode !== list) return;
+      var sy = e.clientY, drag = false;
+      function mv(ev){
+        if(!drag){ if(Math.abs(ev.clientY - sy) < 6) return; drag = true; b.style.opacity='.55'; b.style.outline='2px dashed #94A3B8'; document.body.style.userSelect='none'; }
+        ev.preventDefault();
+        var sibs = [].slice.call(list.children).filter(function(x){ return x !== b; }), ref = null;
+        for(var i=0;i<sibs.length;i++){ var r = sibs[i].getBoundingClientRect(); if(ev.clientY < r.top + r.height/2){ ref = sibs[i]; break; } }
+        if(b.nextSibling !== ref || (ref===null && list.lastChild!==b)) list.insertBefore(b, ref);
+      }
+      function up(){
+        document.removeEventListener('pointermove', mv, true); document.removeEventListener('pointerup', up, true); document.removeEventListener('pointercancel', up, true);
+        if(drag){ b.style.opacity=''; b.style.outline=''; document.body.style.userSelect=''; b._qoDragged = true; setTimeout(function(){ b._qoDragged=false; }, 350); _qoSave(list); }
+      }
+      document.addEventListener('pointermove', mv, true); document.addEventListener('pointerup', up, true); document.addEventListener('pointercancel', up, true);
+    });
+  }
   function build(){
     menu = document.createElement('div');
     menu.id = 'quickStatusMenu';
     menu.style.cssText = 'position:fixed;z-index:100000;display:none;background:#fff;border:2px solid #E2E8F0;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.20);padding:6px;min-width:170px;font-family:inherit;';
-    /* ★ 맨 위: 키불출 버튼 (검색 키불출과 동일 동작) */
-    var kiBtn = document.createElement('button');
-    kiBtn.type = 'button';
-    kiBtn.textContent = '🔑 키불출';
-    kiBtn.style.cssText = 'display:block;width:100%;text-align:center;padding:11px 12px;border:none;background:#FEE500;color:#1E293B;font-size:15px;font-weight:900;cursor:pointer;border-radius:9px;font-family:inherit;white-space:nowrap;margin-bottom:6px;';
-    kiBtn.addEventListener('mouseenter', function(){ kiBtn.style.background='#FDD835'; });
-    kiBtn.addEventListener('mouseleave', function(){ kiBtn.style.background='#FEE500'; });
-    kiBtn.addEventListener('click', function(e){ e.stopPropagation(); apply('keyissue'); });
-    menu.appendChild(kiBtn);
     var head = document.createElement('div');
-    head.textContent = '📌 차량상태 선택';
-    head.style.cssText = 'font-size:12px;font-weight:900;color:#64748B;padding:4px 10px 6px;border-bottom:1px solid #F1F5F9;margin-bottom:4px;';
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:900;color:#64748B;padding:2px 6px 6px 8px;border-bottom:1px solid #F1F5F9;margin-bottom:5px;white-space:nowrap;';
+    head.innerHTML = '<span>📌 빠른 메뉴 <span style="font-weight:700;color:#94A3B8;">· ↕ 끌어서 순서변경</span></span>';
+    var rs = document.createElement('button');
+    rs.type = 'button'; rs.textContent = '↺ 기본순서'; rs.title = '메뉴 순서를 처음 상태로 (이 기기만)';
+    rs.style.cssText = 'border:1px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:800;padding:3px 7px;border-radius:7px;cursor:pointer;font-family:inherit;';
+    rs.addEventListener('click', function(e){ e.stopPropagation(); try{ localStorage.removeItem(LS_QO); }catch(x){} _qoFill(list); });
+    head.appendChild(rs);
     menu.appendChild(head);
-    ITEMS.forEach(function(it){
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = it.label;
-      b.style.cssText = 'display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:transparent;font-size:14px;font-weight:800;color:#1E293B;cursor:pointer;border-radius:8px;font-family:inherit;white-space:nowrap;';
-      b.addEventListener('mouseenter', function(){ b.style.background='#F1F5F9'; });
-      b.addEventListener('mouseleave', function(){ b.style.background='transparent'; });
-      b.addEventListener('click', function(e){ e.stopPropagation(); apply(it.v); });
-      menu.appendChild(b);
-    });
+    var list = document.createElement('div');
+    list.id = 'quickStatusList';
+    menu.appendChild(list);
+    _qoFill(list);
+    _qoDrag(list);
     document.body.appendChild(menu);
   }
   function show(x, y, idx){
@@ -27299,6 +27350,23 @@ function _saveAllOnClose(){
     /* 키불출: 검색 키불출과 동일한 딜러정보 팝업 열기 */
     if(v === 'keyissue'){
       if(typeof _doSearchIssue === 'function'){ _doSearchIssue(idx); }
+      return;
+    }
+    /* ★(2026-11-13) 모든서류보기 — 편집창을 열지 않고 이 칸 차량의 서류 전부 (공유·미리보기·다운로드·인쇄) */
+    if(v === 'alldocs'){
+      var _ad = (getSlots()||{})[idx] || {}, _acar = String(_ad.car||'').trim();
+      var _amsg = function(x){ try{ _pbAllMsg(x); }catch(e){ try{ showAlert(x); }catch(e2){} } };
+      if(!_acar){ _amsg('📂 차량번호가 없는 칸입니다'); return; }
+      var _aref = (typeof _docsRoomRef === 'function') ? _docsRoomRef() : null;
+      var _akey = (typeof _docKeyFromCar === 'function') ? _docKeyFromCar(_acar) : '';
+      if(!_aref || !_akey){ _amsg('⚠️ Firebase 연결 후 사용할 수 있습니다'); return; }
+      var _aci = document.getElementById('mCarInput'); if(_aci) _aci.value = _acar;   /* 서류 원본을 이 차량 기준으로 불러오도록 */
+      try{ showAlert('⏳ 서류 불러오는 중...'); }catch(e){}
+      _aref.child(_akey).once('value').then(function(sn){
+        try{ hideAlert(); }catch(e){}
+        _curDocs = sn.val() || {};
+        if(typeof _pbAllDocsOpen === 'function') _pbAllDocsOpen();
+      }).catch(function(){ try{ hideAlert(); }catch(e){} _amsg('⚠️ 서류 목록을 불러오지 못했습니다'); });
       return;
     }
     /* ★(2026-11-04) 빠른메뉴 판매완료·사용안함 — 편집창(모달)과 똑같이 처리.
