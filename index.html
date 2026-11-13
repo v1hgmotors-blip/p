@@ -3129,6 +3129,18 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
       <div id="encarSndSw" title="엔카 예약 알림 소리 「딩~동~ 딩~동~」 크기 (누르면 미리 들려줌 · 이 기기에만 저장)"><span>🔔</span><button type="button" data-l="1" onclick="_encarSetSnd(1)">1</button><button type="button" data-l="2" onclick="_encarSetSnd(2)">2</button><button type="button" data-l="3" onclick="_encarSetSnd(3)">3</button><button type="button" data-l="0" onclick="_encarSetSnd(0)" title="소리 끄기">🔕</button></div>
     </div>
     <div class="encar-sub" id="encarSlotInfo">키번호 : -</div>
+    <div id="encarLeadRow" style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:6px 8px;margin:2px 0 10px;">
+      <span style="font-size:12px;font-weight:900;color:#9A3412;white-space:nowrap;">📨 토픽·팝업 시작</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;">
+        <button type="button" onclick="_encarLeadStep(-5)" style="width:30px;height:28px;border:none;border-radius:7px;background:#FED7AA;color:#9A3412;font-size:16px;font-weight:900;cursor:pointer;">−</button>
+        <b id="encarLeadVal" style="min-width:86px;text-align:center;font-size:13px;color:#7C2D12;">예약 60분 전</b>
+        <button type="button" onclick="_encarLeadStep(5)" style="width:30px;height:28px;border:none;border-radius:7px;background:#FED7AA;color:#9A3412;font-size:16px;font-weight:900;cursor:pointer;">+</button>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:6px 8px;margin:-4px 0 10px;">
+      <span style="font-size:12px;font-weight:900;color:#1E40AF;white-space:nowrap;">🪟 예약 알림 팝업 <span style="font-weight:700;color:#64748B;">(이 기기)</span></span>
+      <button type="button" id="encarPopBtn" onclick="_encarPopToggle()" style="min-width:64px;height:28px;border:none;border-radius:14px;background:#2563EB;color:#fff;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">켜짐</button>
+    </div>
     <!-- 날짜 선택 -->
     <div class="encar-time-row" style="margin-bottom:8px;">
       <select id="encarYear"  style="flex:1.2;"></select>
@@ -10552,6 +10564,10 @@ function initEncarSelects(){
 function openEncarModal(){
   _encarSlot = activeSlot;
   var d = getSlot(_encarSlot);
+  /* ★(2026-11-13) 차량번호가 없는 칸은 엔카예약 불가 (예약알림·토픽·소리가 엉뚱하게 나가던 문제) */
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(차량번호가 없는 칸은 엔카예약을 할 수 없습니다)'); setTimeout(hideAlert,2800); return; }
+  try{ _encarLeadPaint((d.encar && d.encar.time && d.encar.lead!=null) ? d.encar.lead : _encarLeadDefault()); }catch(e){}
+  try{ _encarPopPaint(); }catch(e){}
   var ec = d.encar || {date:'',time:'',done:false,doneDate:''};
   /* 슬롯 정보 표시 */
   var kn = d.num||String(_encarSlot+1);
@@ -10584,6 +10600,7 @@ function closeEncarModal(){
 /* ── 엔카 예약 저장 ── */
 function saveEncarReserve(){
   if(_encarSlot===null) return;
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요'); setTimeout(hideAlert,2500); return; }   /* ★(2026-11-13) */
   var y2 = document.getElementById('encarYear').value;
   /* ★ 년월일시분 유효성 검사 */
   if(!y2){ showAlert('⚠️ 년도를 선택해주세요'); setTimeout(hideAlert,2500); return; }
@@ -10595,7 +10612,7 @@ function saveEncarReserve(){
   var timeStr = h+':'+m;
   var s = getSlots();
   if(!s[_encarSlot]) s[_encarSlot]={car:'',status:'none',memo:'',disabled:false,num:'0',encar:{date:'',time:'',done:false,doneDate:''}};
-  s[_encarSlot].encar={date:dateStr, time:timeStr, done:false, doneDate:''};
+  s[_encarSlot].encar={date:dateStr, time:timeStr, done:false, doneDate:'', lead:_encarLeadCur};   /* ★ lead = 토픽·팝업 시작(예약 N분 전) */
   saveSlots(s);
   if(fbSlotsRef){var upd={};upd[_encarSlot]=s[_encarSlot];_fbV7Update(upd);}
   refreshSlot(_encarSlot);
@@ -10775,6 +10792,63 @@ window._encarSetSnd = function(lv){
   _encarPaintSnd(); _encarPlayAlertBeep(lv);   /* 누르면 미리 들려줌 */
 };
 try{ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _encarPaintSnd); else setTimeout(_encarPaintSnd, 0); }catch(e){}
+/* ═══ ★(2026-11-13) 엔카예약 보조 — 차량번호 확인 · 알림 시작 시간(분) · 예약 알림 팝업 ═══ */
+function _encarCarOf(idx){
+  try{
+    var c = String(((getSlots()||{})[idx]||{}).car||'').trim();
+    if(!c && typeof activeSlot!=='undefined' && activeSlot===idx){ var mi=document.getElementById('mCarInput'); var mc=document.getElementById('modal'); if(mi) c=String(mi.value||'').trim(); }
+    return c;
+  }catch(e){ return ''; }
+}
+var _KD_ENCAR_LEAD='kd_encar_lead';
+function _encarLeadDefault(){ var v=null; try{ v=localStorage.getItem(_KD_ENCAR_LEAD); }catch(e){} v=parseInt(v,10); return (v>=0 && v<=180) ? v : 60; }
+function _encarLeadOf(ec){ var v=ec && ec.lead!=null ? parseInt(ec.lead,10) : NaN; return (v>=0 && v<=180) ? v : 60; }
+var _encarLeadCur = 60;
+function _encarLeadPaint(v){ _encarLeadCur=Math.max(0,Math.min(180,parseInt(v,10)||0)); var el=document.getElementById('encarLeadVal'); if(el) el.textContent = _encarLeadCur===0 ? '예약 시각' : ('예약 '+_encarLeadCur+'분 전'); }
+window._encarLeadStep=function(d){ _encarLeadPaint(_encarLeadCur + d); try{ localStorage.setItem(_KD_ENCAR_LEAD, String(_encarLeadCur)); }catch(e){} };
+/* 예약 알림 팝업 — 토픽(ntfy) 보낼 때마다 함께 뜸 (주차현황판 화면) · 「사진완료」 누르면 끝 */
+function _encarDueList(){
+  var s=getSlots(), now=Date.now(), out=[];
+  for(var i=0;i<TOTAL;i++){
+    var d=s[i]||{}, ec=d.encar||{};
+    if(!ec.time || ec.done || !String(d.car||'').trim()) continue;
+    var ts=new Date(ec.date+'T'+ec.time+':00').getTime(); if(isNaN(ts)) continue;
+    var dm=(ts-now)/60000;
+    if(dm <= _encarLeadOf(ec) && dm > -60) out.push({i:i, car:d.car, num:d.num, owner:d.owner||'', when:ec.date+' '+ec.time, dm:dm});
+  }
+  return out;
+}
+function _encarPopupClose(){ var o=document.getElementById('encarDueOv'); if(o) o.remove(); }
+window._encarPopupClose=_encarPopupClose;
+window._encarPopupDone=function(idx){ try{ _encarSlot=idx; doneEncarReserve(); }catch(e){} var l=_encarDueList(); if(l.length) _encarPopup(); else _encarPopupClose(); };
+/* ★(2026-11-13) 예약 알림 팝업 켜기/끄기 — 이 기기에만 저장 (기본 켜짐) · 꺼도 토픽·소리·깜박임은 그대로 */
+var _KD_ENCAR_POP='kd_encar_popup';
+function _encarPopOn(){ try{ return localStorage.getItem(_KD_ENCAR_POP)!=='0'; }catch(e){ return true; } }
+function _encarPopPaint(){ var on=_encarPopOn(), b=document.getElementById('encarPopBtn'); if(b){ b.textContent = on ? '켜짐' : '꺼짐'; b.style.background = on ? '#2563EB' : '#94A3B8'; } }
+window._encarPopToggle=function(v){ var on = (v==null) ? !_encarPopOn() : !!v; try{ localStorage.setItem(_KD_ENCAR_POP, on?'1':'0'); }catch(e){} _encarPopPaint(); if(!on) _encarPopupClose(); try{ showAlert(on ? '🪟 엔카예약 알림 팝업: 켜짐' : '🪟 엔카예약 알림 팝업: 꺼짐 (토픽·소리·깜박임은 그대로)'); setTimeout(hideAlert,2200); }catch(e){} };
+try{ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _encarPopPaint); else setTimeout(_encarPopPaint,0); }catch(e){}
+function _encarPopup(){
+  if(!_encarPopOn()){ _encarPopupClose(); return; }
+  var list=_encarDueList(); if(!list.length){ _encarPopupClose(); return; }
+  var esc2=function(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var ov=document.getElementById('encarDueOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='encarDueOv'; ov.style.cssText='position:fixed;inset:0;z-index:100050;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;'; document.body.appendChild(ov); }
+  var rows=list.map(function(x){
+    var m=Math.round(x.dm), left = m>0 ? (m+'분 남음') : (m===0 ? '지금' : (-m+'분 지남'));
+    return '<div style="border:2px solid #FCA5A5;background:#FEF2F2;border-radius:14px;padding:12px;margin-bottom:10px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><div style="font-size:26px;font-weight:900;color:#1E293B;">'+esc2(x.car)+'</div><div style="font-size:13px;font-weight:900;color:'+(m<0?'#B91C1C':'#DC2626')+';white-space:nowrap;">⏰ '+left+'</div></div>'
+      +'<div style="font-size:13px;font-weight:800;color:#475569;margin-top:4px;">🔑 키번호 '+esc2(x.num||'-')+(x.owner?' · 👤 '+esc2(x.owner):'')+'</div>'
+      +'<div style="font-size:13px;font-weight:800;color:#475569;">📅 예약 '+esc2(x.when)+'</div>'
+      +'<button type="button" onclick="_encarPopupDone('+x.i+')" style="margin-top:8px;width:100%;padding:11px;border:none;border-radius:10px;background:#10B981;color:#fff;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">✅ 사진완료</button></div>';
+  }).join('');
+  ov.innerHTML='<div style="width:100%;max-width:400px;max-height:88vh;overflow:auto;background:#fff;border-radius:18px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.4);border-top:6px solid #DC2626;">'
+    +'<div style="font-size:19px;font-weight:900;color:#B91C1C;margin-bottom:8px;">📸 엔카사진 예약 알림 <span style="font-size:13px;color:#64748B;">'+list.length+'대</span></div>'
+    +'<div style="font-size:14px;font-weight:800;color:#065F46;background:#ECFDF5;border:1.5px solid #A7F3D0;border-radius:10px;padding:8px 10px;margin-bottom:10px;line-height:1.5;">📷 사진을 찍었으면 <b>「✅ 사진완료」</b> 버튼을 눌러주세요.<br><span style="font-size:12px;color:#047857;">누르기 전까지 알림이 계속 옵니다.</span></div>'
+    +rows
+    +'<button type="button" onclick="_encarPopupClose()" style="width:100%;padding:12px;border:none;border-radius:11px;background:#E2E8F0;color:#334155;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">닫기</button>'
+    +'<button type="button" onclick="_encarPopToggle(false)" style="width:100%;margin-top:6px;padding:8px;border:none;background:transparent;color:#94A3B8;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;text-decoration:underline;">🔕 이 기기에서 팝업 끄기 (예약창에서 다시 켤 수 있음)</button></div>';
+  ov.onclick=function(e){ if(e.target===ov) _encarPopupClose(); };
+}
 function _encarApplyBlinks(){
   var s=getSlots();
   for(var i=0;i<TOTAL;i++){
@@ -10782,7 +10856,7 @@ function _encarApplyBlinks(){
     if(!el) continue;
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
     /* ★ FIX: 예약 즉시 깜박임 시작 → 완료 확인 전까지 계속 (2시간 조건 제거) */
-    if(ec.time && !ec.done){
+    if(ec.time && !ec.done && String((s[i]&&s[i].car)||'').trim()){   /* ★ 차량번호 없는 칸은 깜박임 안 함 */
       el.classList.add('blink-encar');
     } else {
       el.classList.remove('blink-encar');
@@ -10799,11 +10873,12 @@ function _encarApplySounds(){
   for(var i=0;i<TOTAL;i++){
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
     if(!ec.time || ec.done) continue;
+    if(!String((s[i]&&s[i].car)||'').trim()) continue;   /* ★(2026-11-13) 차량번호 없는 칸은 알림 안 함 */
     /* ★ FIX: encar.date("YYYY-MM-DD") + encar.time("HH:MM")을 합쳐서 파싱 (time만으로는 무효한 날짜) */
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin <= 10 && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 */
+    if(diffMin <= Math.min(10, _encarLeadOf(ec)) && diffMin > -60){ anyDue = true; break; } /* ★ 예약 10분 전 ~ 예약시각 이후 1시간까지 */
   }
   if(anyDue){
     if(now - _encarSoundLastPlayed >= 2*60*1000){ /* ★ 2분 간격으로만 실제 재생 */
@@ -10960,7 +11035,7 @@ function _postEncarReserveNtfy(topic, car, timeStr, owner){
       + (owner ? '\uD83D\uDC64 \uCC28\uC8FC: ' + owner + '\n' : '')
       + '\u23F0 \uC608\uC57D\uC2DC\uAC01: ' + (timeStr||'') + '\n'
       + '\u2757 \uC0AC\uC9C4\uC644\uB8CC \uCC98\uB9AC \uC804\uAE4C\uC9C0 \uACC4\uC18D \uC804\uC1A1\uB429\uB2C8\uB2E4';
-    fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body });
+    fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body }).catch(function(e){ console.warn('[ntfy] 전송 실패', e); });
   } catch(e){ console.warn('[엔카예약 ntfy] 실패', e); }
 }
 var _encarNtfyLastSent = {}; /* ★ 슬롯별 마지막 전송 시각(ms) — 2분 간격 제어 */
@@ -10988,10 +11063,11 @@ function _encarApplyNtfy(){
   for(var i=0;i<TOTAL;i++){
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
     if(!ec.time || ec.done) continue;
+    if(!String((s[i]&&s[i].car)||'').trim()) continue;   /* ★(2026-11-13) 차량번호 없는 칸은 알림 안 함 */
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
-    if(diffMin > 60 || diffMin <= -60) continue; /* ★ 예약 1시간 전 ~ 예약시각 1시간 후까지만 */
+    if(diffMin > _encarLeadOf(ec) || diffMin <= -60) continue;   /* ★(2026-11-13) 예약창에서 정한 「예약 N분 전」부터 (기본 60분) */ /* ★ 예약 1시간 전 ~ 예약시각 1시간 후까지만 */
     var last = _encarNtfyLastSent[i] || 0;
     var intervalMs = (diffMin > 10) ? 10*60*1000 : 2*60*1000; /* ★ 1시간전~10분전: 10분 간격 / 10분전~1시간후: 2분 간격 */
     if(now - last < intervalMs) continue;
@@ -10999,8 +11075,11 @@ function _encarApplyNtfy(){
     var slotTopic = String((s[i]&&s[i].topic)||'').trim();
     var timeStr = (ec.date||'') + ' ' + (ec.time||'');
     _sendEncarReserveNtfy(i, s[i].car||'', timeStr, slotTopic, s[i].owner||'');
+    _encarPopupWant = true;   /* ★(2026-11-13) 토픽 보낼 때 예약 알림 팝업도 */
   }
 }
+var _encarPopupWant = false;
+(function(){ var _o=_encarApplyNtfy; _encarApplyNtfy=function(){ _encarPopupWant=false; var r=_o.apply(this,arguments); if(_encarPopupWant){ _encarPopupWant=false; try{ _encarPopup(); }catch(e){} } else { try{ if(document.getElementById('encarDueOv')) _encarPopup(); }catch(e){} } return r; }; })();
 var _encarNtfyTimer = null;
 function _encarStartNtfyTimer(){
   if(_encarNtfyTimer) clearInterval(_encarNtfyTimer);
@@ -13134,7 +13213,7 @@ function _postSearchNtfy(topic, car, owner, dealerName, dealerPhone, dealerPr){
       + '👤 알선딜러명: ' + (dealerName||'') + '\n'
       + '📲 전화번호: ' + (dealerPhone||'') + '\n'
       + '🕒 ' + t;
-    fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body });
+    fetch('https://ntfy.sh/' + topic, { method:'POST', headers:{'Priority':'high','Content-Type':'text/plain; charset=utf-8'}, body: body }).catch(function(e){ console.warn('[ntfy] 전송 실패', e); });
   } catch(e){ console.warn('[검색키불출 차주ntfy] 실패', e); }
 }
 function _sendSearchOwnerNtfy(slotIdx, dealerName, dealerPhone, dealerPr){
