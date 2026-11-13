@@ -10573,7 +10573,7 @@ function openEncarModal(){
   _encarSlot = activeSlot;
   var d = getSlot(_encarSlot);
   /* ★(2026-11-13) 차량번호가 없는 칸은 엔카예약 불가 (예약알림·토픽·소리가 엉뚱하게 나가던 문제) */
-  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(차량번호가 없는 칸은 엔카예약을 할 수 없습니다)'); setTimeout(hideAlert,2800); return; }
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return; }
   try{ _encarLeadPaint((d.encar && d.encar.time && d.encar.lead!=null) ? d.encar.lead : _encarLeadDefault()); }catch(e){}
   try{ _encarPopPaint(); }catch(e){}
   try{ _encarRepPaint((d.encar && d.encar.time && d.encar.rep!=null) ? d.encar.rep : _encarRepDefault()); }catch(e){}
@@ -10609,7 +10609,7 @@ function closeEncarModal(){
 /* ── 엔카 예약 저장 ── */
 function saveEncarReserve(){
   if(_encarSlot===null) return;
-  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요'); setTimeout(hideAlert,2500); return; }   /* ★(2026-11-13) */
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return; }   /* ★(2026-11-13) */
   var y2 = document.getElementById('encarYear').value;
   /* ★ 년월일시분 유효성 검사 */
   if(!y2){ showAlert('⚠️ 년도를 선택해주세요'); setTimeout(hideAlert,2500); return; }
@@ -10638,8 +10638,8 @@ function doneEncarFromModal(){
   if(activeSlot===null) return;
   var s=getSlots();
   /* ★ 차량번호 없으면 엔카 완료 차단 */
-  if(!s[activeSlot] || (!s[activeSlot].car && !s[activeSlot].disabled)){
-    showAlert('⚠️ 차량번호를 먼저 입력해주세요'); setTimeout(hideAlert,2500); return;
+  if(!s[activeSlot] || !_encarCarOf(activeSlot)){   /* ★(2026-11-13) 글자만 있는 칸(방화문 등)도 차단 */
+    showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return;
   }
   var _dn2=new Date();
   var _dd2=_dn2.getFullYear()+'-'+String(_dn2.getMonth()+1).padStart(2,'0')+'-'+String(_dn2.getDate()).padStart(2,'0');
@@ -10689,6 +10689,7 @@ function doneEncarReserve(){
   if(_encarSlot===null) return;
   var s=getSlots();
   if(!s[_encarSlot]) return;
+  if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(숫자 4자리가 있어야 합니다 — 방화문·기둥처럼 차량이 아닌 칸은 엔카예약·사진완료를 할 수 없습니다)'); setTimeout(hideAlert,3200); return; }   /* ★(2026-11-13) */
   var _dn=new Date();
   var _dd=_dn.getFullYear()+'-'+String(_dn.getMonth()+1).padStart(2,'0')+'-'+String(_dn.getDate()).padStart(2,'0');
   var _ec1=s[_encarSlot].encar||{};
@@ -10802,11 +10803,14 @@ window._encarSetSnd = function(lv){
 };
 try{ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _encarPaintSnd); else setTimeout(_encarPaintSnd, 0); }catch(e){}
 /* ═══ ★(2026-11-13) 엔카예약 보조 — 차량번호 확인 · 알림 시작 시간(분) · 예약 알림 팝업 ═══ */
+/* ★(2026-11-13) 차량번호 판별 — 숫자 4자리가 연속으로 있어야 차량번호 (예: 1234, 12가3456, 서울12가3456)
+   「방화문」「기둥」 같은 글자만 있는 칸은 엔카예약·사진완료·알림 대상 아님 */
+function _encarIsCar(v){ return /\d{4}/.test(String(v==null?'':v).replace(/\s+/g,'')); }
 function _encarCarOf(idx){
   try{
     var c = String(((getSlots()||{})[idx]||{}).car||'').trim();
     if(!c && typeof activeSlot!=='undefined' && activeSlot===idx){ var mi=document.getElementById('mCarInput'); var mc=document.getElementById('modal'); if(mi) c=String(mi.value||'').trim(); }
-    return c;
+    return _encarIsCar(c) ? c : '';
   }catch(e){ return ''; }
 }
 var _KD_ENCAR_LEAD='kd_encar_lead';
@@ -10827,7 +10831,7 @@ function _encarDueList(){
   var s=getSlots(), now=Date.now(), out=[];
   for(var i=0;i<TOTAL;i++){
     var d=s[i]||{}, ec=d.encar||{};
-    if(!ec.time || ec.done || !String(d.car||'').trim()) continue;
+    if(!ec.time || ec.done || !_encarIsCar(d.car)) continue;
     var ts=new Date(ec.date+'T'+ec.time+':00').getTime(); if(isNaN(ts)) continue;
     var dm=(ts-now)/60000;
     if(dm <= _encarLeadOf(ec) && dm > -60) out.push({i:i, car:d.car, num:d.num, owner:d.owner||'', when:ec.date+' '+ec.time, dm:dm});
@@ -10872,7 +10876,7 @@ function _encarApplyBlinks(){
     if(!el) continue;
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
     /* ★ FIX: 예약 즉시 깜박임 시작 → 완료 확인 전까지 계속 (2시간 조건 제거) */
-    if(ec.time && !ec.done && String((s[i]&&s[i].car)||'').trim()){   /* ★ 차량번호 없는 칸은 깜박임 안 함 */
+    if(ec.time && !ec.done && _encarIsCar((s[i]&&s[i].car)||'')){   /* ★ 차량번호 없는 칸은 깜박임 안 함 */
       el.classList.add('blink-encar');
     } else {
       el.classList.remove('blink-encar');
@@ -10889,7 +10893,7 @@ function _encarApplySounds(){
   for(var i=0;i<TOTAL;i++){
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
     if(!ec.time || ec.done) continue;
-    if(!String((s[i]&&s[i].car)||'').trim()) continue;   /* ★(2026-11-13) 차량번호 없는 칸은 알림 안 함 */
+    if(!_encarIsCar((s[i]&&s[i].car)||'')) continue;   /* ★(2026-11-13) 차량번호 없는 칸은 알림 안 함 */
     /* ★ FIX: encar.date("YYYY-MM-DD") + encar.time("HH:MM")을 합쳐서 파싱 (time만으로는 무효한 날짜) */
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
@@ -11079,7 +11083,7 @@ function _encarApplyNtfy(){
   for(var i=0;i<TOTAL;i++){
     var ec=(s[i]&&s[i].encar)||{time:'',done:false};
     if(!ec.time || ec.done) continue;
-    if(!String((s[i]&&s[i].car)||'').trim()) continue;   /* ★(2026-11-13) 차량번호 없는 칸은 알림 안 함 */
+    if(!_encarIsCar((s[i]&&s[i].car)||'')) continue;   /* ★(2026-11-13) 차량번호 없는 칸은 알림 안 함 */
     var resTs = new Date(ec.date + 'T' + ec.time + ':00').getTime();
     if(isNaN(resTs)) continue;
     var diffMin = (resTs - now) / 60000;
@@ -12575,7 +12579,7 @@ function renderSlot(el,idx){
   el.classList.toggle('no-badge', !_hasBadge);
   /* ── 엔카 아이콘/배지 추가 (1회만) ── */
   var ec=d.encar||{};
-  if(ec.done){
+  if(ec.done && (typeof _encarIsCar!=='function' || _encarIsCar(d.car))){
     /* 상단 카메라 아이콘 (빨간 점/아이콘) */
     var _cam=document.createElement('div');
     _cam.className='slot-cam-icon'; _cam.textContent='📷';
@@ -12585,7 +12589,7 @@ function renderSlot(el,idx){
     _badge.className='slot-encar-badge done'; _badge.innerHTML='<span class="b-emo">📸</span>완료';
     el.appendChild(_badge);
     el.classList.remove('blink-encar');
-  } else if(ec.time){
+  } else if(ec.time && (typeof _encarIsCar!=='function' || _encarIsCar(d.car))){   /* ★ 차량이 아닌 칸은 예약 배지 숨김 */
     var _badge2=document.createElement('div');
     _badge2.className='slot-encar-badge'; _badge2.innerHTML='<span class="b-emo">📸</span>'+esc(ec.time);
     el.appendChild(_badge2);
