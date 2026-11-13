@@ -10596,6 +10596,17 @@ function openEncarModal(){
     if(hSel) hSel.value = ec.time.slice(0,2);
     if(mSel) mSel.value = ec.time.slice(3,5);
   }
+  /* ★(2026-11-13) 새 예약(또는 완료된 예약)이면 날짜·시간을 「지금 + 10분 이후 첫 10분 단위」로 맞춤
+     (예전엔 마지막에 고른 값이 남아 지난 날짜가 보이던 문제) */
+  if(!ec.time || !ec.date || ec.done){
+    var _nx=new Date(Date.now()+10*60000); _nx.setSeconds(0,0);
+    var _mm=Math.ceil(_nx.getMinutes()/10)*10; if(_mm>=60){ _nx.setHours(_nx.getHours()+1); _mm=0; } _nx.setMinutes(_mm);
+    if(ySel)  ySel.value  = String(_nx.getFullYear());
+    if(moSel) moSel.value = String(_nx.getMonth()+1).padStart(2,'0');
+    if(dSel2) dSel2.value = String(_nx.getDate()).padStart(2,'0');
+    if(hSel)  hSel.value  = String(_nx.getHours()).padStart(2,'0');
+    if(mSel)  mSel.value  = String(_nx.getMinutes()).padStart(2,'0');
+  }
   /* 완료·취소 버튼 표시 여부 */
   var hasDoneBtn = !!(ec.time || ec.done);
   document.getElementById('encarModal').classList.add('open');
@@ -10619,6 +10630,14 @@ function saveEncarReserve(){
   var m  = document.getElementById('encarMin').value;
   var dateStr = y2+'-'+mo2+'-'+d3;
   var timeStr = h+':'+m;
+  /* ★(2026-11-13) 없는 날짜(2월 30일 등)·지난 시각은 예약 불가 */
+  var _rt = new Date(dateStr+'T'+timeStr+':00');
+  if(isNaN(_rt.getTime()) || _rt.getDate()!==parseInt(d3,10) || (_rt.getMonth()+1)!==parseInt(mo2,10)){
+    showAlert('⚠️ 없는 날짜입니다 ('+parseInt(mo2,10)+'월 '+parseInt(d3,10)+'일) — 날짜를 다시 골라주세요'); setTimeout(hideAlert,3000); return;
+  }
+  if(_rt.getTime() < Date.now() - 60000){
+    showAlert('⚠️ 이미 지난 시간입니다 ('+dateStr+' '+timeStr+')\n지금 이후 시간으로 예약해주세요'); setTimeout(hideAlert,3200); return;
+  }
   var s = getSlots();
   if(!s[_encarSlot]) s[_encarSlot]={car:'',status:'none',memo:'',disabled:false,num:'0',encar:{date:'',time:'',done:false,doneDate:''}};
   s[_encarSlot].encar={date:dateStr, time:timeStr, done:false, doneDate:'', lead:_encarLeadCur, rep:_encarRepCur};   /* ★ lead = 토픽·팝업 시작(예약 N분 전) */
