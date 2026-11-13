@@ -3137,6 +3137,14 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
         <button type="button" onclick="_encarLeadStep(5)" style="width:30px;height:28px;border:none;border-radius:7px;background:#FED7AA;color:#9A3412;font-size:16px;font-weight:900;cursor:pointer;">+</button>
       </span>
     </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:6px 8px;margin:-4px 0 10px;" title="토픽·팝업 시작부터 예약 10분 전까지 이 간격으로 보냅니다 (10분 전부터는 2분마다)">
+      <span style="font-size:12px;font-weight:900;color:#9A3412;white-space:nowrap;">🔁 반복 간격</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;">
+        <button type="button" onclick="_encarRepStep(-1)" style="width:30px;height:28px;border:none;border-radius:7px;background:#FED7AA;color:#9A3412;font-size:16px;font-weight:900;cursor:pointer;">−</button>
+        <b id="encarRepVal" style="min-width:86px;text-align:center;font-size:13px;color:#7C2D12;">10분마다</b>
+        <button type="button" onclick="_encarRepStep(1)" style="width:30px;height:28px;border:none;border-radius:7px;background:#FED7AA;color:#9A3412;font-size:16px;font-weight:900;cursor:pointer;">+</button>
+      </span>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:6px 8px;margin:-4px 0 10px;">
       <span style="font-size:12px;font-weight:900;color:#1E40AF;white-space:nowrap;">🪟 예약 알림 팝업 <span style="font-weight:700;color:#64748B;">(이 기기)</span></span>
       <button type="button" id="encarPopBtn" onclick="_encarPopToggle()" style="min-width:64px;height:28px;border:none;border-radius:14px;background:#2563EB;color:#fff;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">켜짐</button>
@@ -10568,6 +10576,7 @@ function openEncarModal(){
   if(!_encarCarOf(_encarSlot)){ showAlert('⚠️ 차량번호를 먼저 입력해주세요\n(차량번호가 없는 칸은 엔카예약을 할 수 없습니다)'); setTimeout(hideAlert,2800); return; }
   try{ _encarLeadPaint((d.encar && d.encar.time && d.encar.lead!=null) ? d.encar.lead : _encarLeadDefault()); }catch(e){}
   try{ _encarPopPaint(); }catch(e){}
+  try{ _encarRepPaint((d.encar && d.encar.time && d.encar.rep!=null) ? d.encar.rep : _encarRepDefault()); }catch(e){}
   var ec = d.encar || {date:'',time:'',done:false,doneDate:''};
   /* 슬롯 정보 표시 */
   var kn = d.num||String(_encarSlot+1);
@@ -10612,7 +10621,7 @@ function saveEncarReserve(){
   var timeStr = h+':'+m;
   var s = getSlots();
   if(!s[_encarSlot]) s[_encarSlot]={car:'',status:'none',memo:'',disabled:false,num:'0',encar:{date:'',time:'',done:false,doneDate:''}};
-  s[_encarSlot].encar={date:dateStr, time:timeStr, done:false, doneDate:'', lead:_encarLeadCur};   /* ★ lead = 토픽·팝업 시작(예약 N분 전) */
+  s[_encarSlot].encar={date:dateStr, time:timeStr, done:false, doneDate:'', lead:_encarLeadCur, rep:_encarRepCur};   /* ★ lead = 토픽·팝업 시작(예약 N분 전) */
   saveSlots(s);
   if(fbSlotsRef){var upd={};upd[_encarSlot]=s[_encarSlot];_fbV7Update(upd);}
   refreshSlot(_encarSlot);
@@ -10804,6 +10813,13 @@ var _KD_ENCAR_LEAD='kd_encar_lead';
 function _encarLeadDefault(){ var v=null; try{ v=localStorage.getItem(_KD_ENCAR_LEAD); }catch(e){} v=parseInt(v,10); return (v>=0 && v<=180) ? v : 60; }
 function _encarLeadOf(ec){ var v=ec && ec.lead!=null ? parseInt(ec.lead,10) : NaN; return (v>=0 && v<=180) ? v : 60; }
 var _encarLeadCur = 60;
+/* ★(2026-11-13) 반복 간격 — 「토픽·팝업 시작」 ~ 예약 10분 전 사이에 몇 분마다 보낼지 (기본 10분 · 10분 전부터는 2분마다 그대로) */
+var _KD_ENCAR_REP='kd_encar_rep', _ENCAR_REP_STEPS=[1,2,3,5,10,15,20,30,60];
+function _encarRepDefault(){ var v=null; try{ v=parseInt(localStorage.getItem(_KD_ENCAR_REP),10); }catch(e){} return _ENCAR_REP_STEPS.indexOf(v)>=0 ? v : 10; }
+function _encarRepOf(ec){ var v=ec && ec.rep!=null ? parseInt(ec.rep,10) : NaN; return (v>=1 && v<=60) ? v : 10; }
+var _encarRepCur = 10;
+function _encarRepPaint(v){ v=parseInt(v,10); if(_ENCAR_REP_STEPS.indexOf(v)<0) v=10; _encarRepCur=v; var el=document.getElementById('encarRepVal'); if(el) el.textContent=v+'분마다'; }
+window._encarRepStep=function(d){ var i=_ENCAR_REP_STEPS.indexOf(_encarRepCur); if(i<0) i=4; i=Math.max(0,Math.min(_ENCAR_REP_STEPS.length-1,i+d)); _encarRepPaint(_ENCAR_REP_STEPS[i]); try{ localStorage.setItem(_KD_ENCAR_REP, String(_encarRepCur)); }catch(e){} };
 function _encarLeadPaint(v){ _encarLeadCur=Math.max(0,Math.min(180,parseInt(v,10)||0)); var el=document.getElementById('encarLeadVal'); if(el) el.textContent = _encarLeadCur===0 ? '예약 시각' : ('예약 '+_encarLeadCur+'분 전'); }
 window._encarLeadStep=function(d){ _encarLeadPaint(_encarLeadCur + d); try{ localStorage.setItem(_KD_ENCAR_LEAD, String(_encarLeadCur)); }catch(e){} };
 /* 예약 알림 팝업 — 토픽(ntfy) 보낼 때마다 함께 뜸 (주차현황판 화면) · 「사진완료」 누르면 끝 */
@@ -11069,7 +11085,7 @@ function _encarApplyNtfy(){
     var diffMin = (resTs - now) / 60000;
     if(diffMin > _encarLeadOf(ec) || diffMin <= -60) continue;   /* ★(2026-11-13) 예약창에서 정한 「예약 N분 전」부터 (기본 60분) */ /* ★ 예약 1시간 전 ~ 예약시각 1시간 후까지만 */
     var last = _encarNtfyLastSent[i] || 0;
-    var intervalMs = (diffMin > 10) ? 10*60*1000 : 2*60*1000; /* ★ 1시간전~10분전: 10분 간격 / 10분전~1시간후: 2분 간격 */
+    var intervalMs = (diffMin > 10) ? _encarRepOf(ec)*60*1000 : 2*60*1000;   /* ★(2026-11-13) 10분 전까지: 예약창 「반복 간격」(기본 10분) · 10분 전부터: 2분마다 */ /* ★ 1시간전~10분전: 10분 간격 / 10분전~1시간후: 2분 간격 */
     if(now - last < intervalMs) continue;
     _encarNtfyLastSent[i] = now;
     var slotTopic = String((s[i]&&s[i].topic)||'').trim();
