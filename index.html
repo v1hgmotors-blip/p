@@ -29065,6 +29065,7 @@ html.pb-mon,html.pb-mon body{overflow:hidden !important;}
 html.pb-mon #pmbContainer,html.pb-mon #pmbAddBtn{display:none !important;}
 html.pb-mon .alert-bar,html.dpm-open .alert-bar{visibility:hidden !important;}
 html.pb-mon #pbMonExit{display:block;}
+#pbMonClose{background:#334155;color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:12px;padding:10px 18px;font-size:clamp(14px,1.8vw,20px);font-weight:900;cursor:pointer;font-family:inherit;}
 #pbMonShow .dpm-qr,#pbMonShow .dpm-qr canvas{width:clamp(90px,14vh,150px) !important;height:clamp(90px,14vh,150px) !important;}
 #pbMonShow .dpm-guide{font-size:clamp(12px,1.9vh,18px);}
 #pbMonShow .dpm-ttl b{font-size:24px;}
@@ -29072,7 +29073,7 @@ html.pb-mon #pbMonExit{display:block;}
 </style>
 <div id="pbMonOv">
   <div id="pbMonIdle"><div class="t">🔑 키불출 대기중</div><div class="s">키불출앱에서 키를 불출하면 이 화면에 실시간 약도가 표시됩니다</div><div class="k" id="pbMonClock"></div></div>
-  <div id="pbMonShow"><div id="pbMonBar"><div id="pbMonQr"></div><div id="pbMonHead"></div><div></div></div><div class="dpm-wrap" id="pbMonMap"></div></div>
+  <div id="pbMonShow"><div id="pbMonBar"><div id="pbMonQr"></div><div id="pbMonHead"></div><div style="justify-self:end;"><button type="button" id="pbMonClose" onclick="_pbMonClose()">✕ 닫기</button></div></div><div class="dpm-wrap" id="pbMonMap"></div></div>
 </div>
 <button id="pbMonExit" type="button" onclick="_pbMonExit()">✕ 모니터 종료</button>
 <script>
@@ -29164,7 +29165,12 @@ html.pb-mon #pbMonExit{display:block;}
       var z=Math.max(.35, Math.min(maxZ||1, maxW/w, maxH?maxH/hh:99));
       t.style.zoom=z.toFixed(3);
       /* ★ 좌우·위아래 꽉 차게: 칸을 늘려서 남는 공간을 채움 */
-      if(maxH>0){ t.classList.add('dpm-fill'); t.style.width=Math.floor(maxW/z)+'px'; t.style.height=Math.floor(maxH/z)+'px'; }
+      if(maxH>0){ t.classList.add('dpm-fill');
+        for(var k=0;k<4;k++){   /* 칸 글씨 때문에 넘치면 조금씩 줄여서 꽉 맞춤 */
+          t.style.zoom=z.toFixed(3); t.style.width=Math.floor(maxW/z)+'px'; t.style.height=Math.floor(maxH/z)+'px';
+          var rb=t.getBoundingClientRect(), ov=Math.max(rb.width/maxW, rb.height/maxH);
+          if(ov<=1.005) break; z=Math.max(.3, z/ov*0.99);
+        } }
     }catch(e){}
   }
   /* QR — 기존 약도 팝업과 같은 규칙(단축링크 우선, 실패/로컬모드면 긴 주소). 불출건당 1번만 생성 */
@@ -29339,7 +29345,9 @@ html.pb-mon #pbMonExit{display:block;}
     document.getElementById('pbMonIdle').style.display='';
     if(_monQ.length){ var nx=_monQ.shift(); setTimeout(function(){ monShow(nx); }, 300); }
   }
-  function monQueue(entry){ if(_monBusy){ if(_monQ.length<30) _monQ.push(entry); return; } monShow(entry); }
+  /* ★(2026-11-14) 모니터: 약도는 2분 표시 후 대기화면. 2분 안에 새 불출이 오면 최근 것으로 바로 바꾸고 2분 다시 시작. 「✕ 닫기」 = 바로 대기화면 */
+  var MON_SEC=120;
+  function monQueue(entry){ _monQ=[]; monShow(entry); }
   function monShow(entry){
     var car=carOf(entry), gi=findIdx(car), box=document.getElementById('pbMonMap');
     var kn=''; try{ if(gi>=0){ kn=String(getSlots()[gi].num==null?'':getSlots()[gi].num).trim(); if(kn==='0') kn=''; } }catch(e){}
@@ -29355,9 +29363,12 @@ html.pb-mon #pbMonExit{display:block;}
       drawQr(qb2, gi, entry);
       liveSet(box, car);
     } else liveSet(null,'');
-    if(_monTimer) clearTimeout(_monTimer);
-    _monTimer=setTimeout(monIdle, DPM_SEC*1000);
+    if(_monTimer){ clearTimeout(_monTimer); _monTimer=null; }
+    var at=(entry&&entry._monAt)||Date.now(), left=Math.max(1000, MON_SEC*1000-(Date.now()-at));
+    _monTimer=setTimeout(function(){ _monTimer=null; try{ localStorage.removeItem('pb_mon_last'); }catch(e){} monIdle(); }, left);
+    try{ localStorage.setItem('pb_mon_last', JSON.stringify({id:(entry&&entry.id)||'', car:car, at:at})); }catch(e){}
   }
+  window._pbMonClose = function(){ try{ localStorage.removeItem('pb_mon_last'); }catch(e){} if(_monTimer){ clearTimeout(_monTimer); _monTimer=null; } monIdle(); };
   window._pbMonExit = function(){
     try{ var u=new URL(location.href); u.searchParams.delete('monitor'); location.href=u.toString(); }catch(e){ location.reload(); }
   };
@@ -29367,7 +29378,12 @@ html.pb-mon #pbMonExit{display:block;}
   if(_isMon){
     document.documentElement.classList.add('pb-mon');
     monClock(); _clkTimer=setInterval(monClock, 10000);
-    var ov=document.getElementById('pbMonOv'); if(ov) ov.addEventListener('click', function(){ if(_monBusy){ if(_monTimer) clearTimeout(_monTimer); monIdle(); } });
+    /* 새로고침 시 마지막 약도 다시 표시 (현황판 데이터가 들어온 뒤) */
+    (function(){ var last=null; try{ last=JSON.parse(localStorage.getItem('pb_mon_last')||'null'); }catch(e){}
+      if(!last || !last.car || !last.at || Date.now()-last.at>=MON_SEC*1000) return; var tries=0;
+      last={id:last.id, car:last.car, _monAt:last.at};
+      var t=setInterval(function(){ tries++; if(_monBusy){ clearInterval(t); return; }
+        if(findIdx(last.car)>=0){ clearInterval(t); monShow(last); } else if(tries>=20) clearInterval(t); }, 1000); })();
   }
   window._pbDpmTest = { mapHtml:mapHtml, findIdx:findIdx, queue:function(){ return _q.length; } };
 })();
