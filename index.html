@@ -29375,7 +29375,28 @@ html.pb-mon #pbMonExit{display:block;}
   window._pbMonOpen = function(){
     try{ var u=new URL(location.href); u.searchParams.set('monitor','1'); window.open(u.toString(), '_blank'); }catch(e){}
   };
+  /* ★(2026-11-14) 약도 모니터 화면을 따로 「앱」으로 설치 (바로가기·홈화면 추가 → 주소창 없이 바로 모니터 화면으로 열림)
+     현황판 앱과 다른 이름·아이콘·시작주소(?monitor=1)를 쓰는 별도 앱 정보로 바꿔 줌 */
+  function monManifest(){
+    try{
+      var el=document.getElementById('pwaManifest') || document.querySelector('link[rel="manifest"]');
+      if(!el){ el=document.createElement('link'); el.rel='manifest'; el.id='pwaManifest'; document.head.appendChild(el); }
+      var pth=location.origin+location.pathname, dir=location.origin+location.pathname.replace(/[^\/]*$/,'');
+      var nm=''; try{ nm=(localStorage.getItem('pb_mon_app_name')||'').trim(); }catch(e){}
+      var m={ id:pth+'?monitor=1', name:nm||'약도 모니터', short_name:nm||'약도모니터', start_url:pth+'?monitor=1', scope:dir,
+              display:'fullscreen', display_override:['fullscreen','standalone'], orientation:'any', background_color:'#0F172A', theme_color:'#0F172A', icons:[] };
+      [192,512].forEach(function(sz){ try{ var c=document.createElement('canvas'); c.width=c.height=sz; var x=c.getContext('2d');
+        x.fillStyle='#0F172A'; x.fillRect(0,0,sz,sz); x.fillStyle='#FDE047'; var r=sz*0.1; x.fillRect(sz*0.12,sz*0.74,sz*0.76,sz*0.06);
+        x.textAlign='center'; x.textBaseline='middle'; x.font=Math.round(sz*0.5)+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.fillText('\uD83D\uDCCD', sz/2, sz*0.42);
+        var u=c.toDataURL('image/png'); m.icons.push({src:u,sizes:sz+'x'+sz,type:'image/png',purpose:'any'}); if(sz===512) m.icons.push({src:u,sizes:'512x512',type:'image/png',purpose:'maskable'}); }catch(e){} });
+      el.setAttribute('data-mon','1');
+      el.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}));
+      var tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.setAttribute('content','#0F172A');
+      document.title=m.name;
+    }catch(e){}
+  }
   if(_isMon){
+    monManifest(); window.addEventListener('load', function(){ setTimeout(monManifest, 300); }); setTimeout(monManifest, 3000);
     document.documentElement.classList.add('pb-mon');
     monClock(); _clkTimer=setInterval(monClock, 10000);
     /* 새로고침 시 마지막 약도 다시 표시 (현황판 데이터가 들어온 뒤) */
@@ -29396,6 +29417,7 @@ html.pb-mon #pbMonExit{display:block;}
   function nm(){ try{ return (localStorage.getItem(LS)||'').trim(); }catch(e){ return ''; } }
   function link(){ return document.querySelector('link[rel="manifest"]'); }
   function apply(){
+    try{ if(new URLSearchParams(location.search).get('monitor')==='1') return; }catch(e){}   /* 약도 모니터 화면은 자기 앱 정보 사용 */
     var el=link(); if(!el) return;
     if(!el.getAttribute('data-static')){ if(typeof window._kdPwaApply==='function') window._kdPwaApply(); return; }
     var base=el.getAttribute('data-src'); if(!base){ base=el.getAttribute('href'); el.setAttribute('data-src',base); }
