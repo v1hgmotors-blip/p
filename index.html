@@ -243,7 +243,7 @@ window._PB_NS_OK = null;         /* 격리 성공 여부(진단용): true/false/
   <meta name="apple-mobile-web-app-title" content="주차현황판">
   <meta name="application-name" content="주차현황판">
   <meta name="theme-color" content="#FEE500">
-  <link rel="manifest" id="pwaManifest">
+  <link rel="manifest" id="pwaManifest" href="park.webmanifest" data-static="1">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>🚗 주차위치 현황판</title>
 <style>
@@ -18655,7 +18655,7 @@ document.getElementById('resetConfirmOv').addEventListener('click',function(e){i
   var manifest={name:"주차현황판",short_name:"주차현황판",start_url:_startUrl,display:"fullscreen",background_color:(document.documentElement.classList.contains("pb-premium")?"#FFFFFF":"#FEE500"),theme_color:(document.documentElement.classList.contains("pb-premium")?"#1E3A8A":"#FEE500"),orientation:"any",icons:[{src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%23FEE500'/%3E%3Ctext x='256' y='340' text-anchor='middle' font-size='300'%3E%F0%9F%9A%97%3C/text%3E%3C/svg%3E",sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]};
   var blob=new Blob([JSON.stringify(manifest)],{type:"application/json"});
   var el=document.getElementById("pwaManifest");
-  if(el) el.href=URL.createObjectURL(blob);
+  if(el && !el.getAttribute('data-static')) el.href=URL.createObjectURL(blob); /* ★ 호스팅본: 실제 manifest 파일 사용 */
 })();
 
 /* ════════════════════════════════════════
@@ -29063,6 +29063,7 @@ html.pb-mon,html.pb-mon body{overflow:hidden !important;}
 #pbMonShow .dpm-wrap{margin:0;width:100%;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;}
 #pbMonExit{position:fixed;right:10px;bottom:10px;z-index:9701;background:rgba(255,255,255,.12);color:#CBD5E1;border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;display:none;}
 html.pb-mon #pmbContainer,html.pb-mon #pmbAddBtn{display:none !important;}
+html.pb-mon .alert-bar,html.dpm-open .alert-bar{visibility:hidden !important;}
 html.pb-mon #pbMonExit{display:block;}
 #pbMonShow .dpm-qr,#pbMonShow .dpm-qr canvas{width:clamp(90px,14vh,150px) !important;height:clamp(90px,14vh,150px) !important;}
 #pbMonShow .dpm-guide{font-size:clamp(12px,1.9vh,18px);}
@@ -29208,6 +29209,34 @@ html.pb-mon #pbMonExit{display:block;}
     });
   }
 
+  /* ── 실시간 갱신: 약도가 떠 있는 동안 현황판 데이터(이 기기에 이미 동기화된 것)가 바뀌면 약도를 다시 그림 — 추가 다운로드 없음 ── */
+  var _live={el:null, car:'', sig:''};
+  function sigOf(car){
+    try{
+      var gi=findIdx(car); if(gi<0) return 'none';
+      var m=info(gi); if(!m) return 'none';
+      var sl=getSlots(), a=[gi,m.cols,m.rows];
+      for(var i=0;i<m.cols*m.rows;i++){ var d=sl[m.off+i]||{}; a.push((d.disabled?'x':'')+String(d.car||'')); }
+      var g={}; try{ g=getColGaps()||{}; }catch(e){}
+      for(var c=1;c<=m.cols;c++){ var nm=''; try{ nm=getColName(m.part,c); }catch(e){} a.push(nm, JSON.stringify(g['p'+m.part+'c'+c]||'')); }
+      a.push(partLabel(m.part));
+      return a.join('|');
+    }catch(e){ return ''; }
+  }
+  function liveSet(el, car){ _live.el=el; _live.car=car; _live.sig=el?sigOf(car):''; }
+  setInterval(function(){
+    try{
+      var el=_live.el; if(!el) return;
+      if(!el.isConnected){ liveSet(null,''); return; }
+      var sg=sigOf(_live.car); if(!sg || sg===_live.sig) return;
+      var gi=findIdx(_live.car), html=gi>=0?mapHtml(gi,_live.car):''; if(!html) return;
+      var qb=null; for(var k=0;k<el.children.length;k++){ if(el.children[k].classList.contains('dpm-qrbox')){ qb=el.children[k]; break; } }
+      el.innerHTML=html; if(qb) el.insertBefore(qb, el.firstChild);
+      fit(el, window.innerWidth, -1, 4);
+      _live.sig=sg;
+    }catch(e){}
+  }, 2000);
+
   /* ── 현황판 팝업: 기존 팝업에 약도 추가 + 순서대로 표시 ── */
   var _origShow = window.showDispatchPopup, _origClose = window.closeDispatchPopup;
   if(typeof _origShow!=='function' || typeof _origClose!=='function') return;
@@ -29234,6 +29263,8 @@ html.pb-mon #pbMonExit{display:block;}
     else w.insertBefore(qb, w.firstChild);
     fit(w, window.innerWidth, -1, 4);
     drawQr(qb, gi, entry);
+    document.documentElement.classList.add('dpm-open');
+    liveSet(w, carOf(entry));
   }
   function restartTimer(){
     try{
@@ -29294,7 +29325,7 @@ html.pb-mon #pbMonExit{display:block;}
   },150); });
   window.closeDispatchPopup = function(){
     _origClose.apply(this, arguments);
-    setTimeout(function(){ try{ if(popupShown()) return; var c=document.querySelector('#dispatchPopup .dp-card'); if(c) c.classList.remove('dpm-on'); var p=document.getElementById('dispatchPopup'); if(p) p.classList.remove('dpm-full'); var w=document.getElementById('dpMapWrap'); if(w) w.remove(); var q=document.getElementById('dpQrBox'); if(q) q.remove(); if(c) c.classList.remove('dpm-wide'); }catch(e){} }, 260);
+    setTimeout(function(){ try{ if(popupShown()) return; document.documentElement.classList.remove('dpm-open'); if(_live.el && _live.el.id==='dpMapWrap') liveSet(null,''); var c=document.querySelector('#dispatchPopup .dp-card'); if(c) c.classList.remove('dpm-on'); var p=document.getElementById('dispatchPopup'); if(p) p.classList.remove('dpm-full'); var w=document.getElementById('dpMapWrap'); if(w) w.remove(); var q=document.getElementById('dpQrBox'); if(q) q.remove(); if(c) c.classList.remove('dpm-wide'); }catch(e){} }, 260);
     if(_q.length){ var nx=_q.shift(); setTimeout(function(){ window.showDispatchPopup(nx); }, 400); }
   };
   try{ showDispatchPopup = window.showDispatchPopup; closeDispatchPopup = window.closeDispatchPopup; }catch(e){}
@@ -29303,7 +29334,7 @@ html.pb-mon #pbMonExit{display:block;}
   var _monQ=[], _monBusy=false;
   function monClock(){ var el=document.getElementById('pbMonClock'); if(!el) return; var d=new Date(); el.textContent=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
   function monIdle(){
-    _monBusy=false;
+    _monBusy=false; liveSet(null,'');
     document.getElementById('pbMonShow').style.display='none';
     document.getElementById('pbMonIdle').style.display='';
     if(_monQ.length){ var nx=_monQ.shift(); setTimeout(function(){ monShow(nx); }, 300); }
@@ -29322,7 +29353,8 @@ html.pb-mon #pbMonExit{display:block;}
       var mq=document.getElementById('pbMonQr'); mq.innerHTML=''; var qb2=qrBox(); mq.appendChild(qb2);
       fit(box, window.innerWidth, -1, 4);
       drawQr(qb2, gi, entry);
-    }
+      liveSet(box, car);
+    } else liveSet(null,'');
     if(_monTimer) clearTimeout(_monTimer);
     _monTimer=setTimeout(monIdle, DPM_SEC*1000);
   }
@@ -29341,5 +29373,58 @@ html.pb-mon #pbMonExit{display:block;}
 })();
 </script>
 
+<!-- ★PWA-NAME(2026-11-14) 앱 이름(바탕화면 설치용) — 기기별 설정 -->
+<script>
+(function(){
+  var LS='kd_pwa_name';
+  function nm(){ try{ return (localStorage.getItem(LS)||'').trim(); }catch(e){ return ''; } }
+  function link(){ return document.querySelector('link[rel="manifest"]'); }
+  function apply(){
+    var el=link(); if(!el) return;
+    if(!el.getAttribute('data-static')){ if(typeof window._kdPwaApply==='function') window._kdPwaApply(); return; }
+    var base=el.getAttribute('data-src'); if(!base){ base=el.getAttribute('href'); el.setAttribute('data-src',base); }
+    var n=nm();
+    if(!n){ el.setAttribute('href',base); return; }
+    try{
+      fetch(base,{cache:'no-store'}).then(function(r){ return r.json(); }).then(function(m){
+        var abs=function(u){ return new URL(u||'./', location.href).href; };
+        m.name=n; m.short_name=n;
+        m.start_url=abs(m.start_url); m.scope=abs(m.scope); m.id=abs(m.id);
+        (m.icons||[]).forEach(function(i){ i.src=abs(i.src); });
+        var b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
+        el.setAttribute('href', URL.createObjectURL(b));
+      }).catch(function(){});
+    }catch(e){}
+  }
+  function defName(cb){ var el=link(); if(!el){ cb(''); return; } if(!el.getAttribute('data-static')){ cb(window._kdPwaDefName||''); return; } try{ fetch(el.getAttribute('data-src')||el.getAttribute('href')).then(function(r){return r.json();}).then(function(m){ cb(m.name||''); }).catch(function(){ cb(''); }); }catch(e){ cb(''); } }
+  window._kdPwaNameSave=function(){
+    var i=document.getElementById('kdPwaNameIn'), v=(i&&i.value||'').trim().slice(0,20);
+    try{ if(v) localStorage.setItem(LS,v); else localStorage.removeItem(LS); }catch(e){}
+    apply();
+    var m=document.getElementById('kdPwaNameMsg'); if(m){ m.textContent=v?('✅ 저장됨 — 이제 설치하면 「'+v+'」 이름으로 설치됩니다'):'✅ 기본 이름으로 되돌렸습니다'; }
+  };
+  function ui(){
+    if(!link() || document.getElementById('kdPwaNameBox')) return;
+    if(!link().getAttribute('data-static') && typeof window._kdPwaApply!=='function') return;   /* 이 기능이 없는 앱(주차현황판 단독본 등)은 표시 안 함 */
+    var box=document.createElement('div'); box.id='kdPwaNameBox';
+    box.innerHTML='<div style="font-size:13px;font-weight:900;color:#1E293B;margin-bottom:6px;">📲 앱 이름 (바탕화면 설치용 · 이 기기만)</div>'
+      +'<div style="display:flex;gap:6px;"><input id="kdPwaNameIn" type="text" maxlength="20" autocomplete="off" style="flex:1;min-width:0;padding:9px 10px;border:1.5px solid #CBD5E1;border-radius:9px;font-size:14px;font-family:inherit;">'
+      +'<button type="button" onclick="_kdPwaNameSave()" style="flex:none;padding:9px 14px;border:none;border-radius:9px;background:#1E293B;color:#fff;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer;">💾 저장</button></div>'
+      +'<div id="kdPwaNameMsg" style="font-size:11px;font-weight:700;color:#15803D;margin-top:5px;min-height:14px;"></div>'
+      +'<div style="font-size:11px;color:#64748B;line-height:1.5;">이름을 저장한 뒤 설치(⬇)하면 그 이름으로 바탕화면에 생깁니다. 이미 설치된 앱은 지우고 다시 설치해야 바뀝니다. 비우고 저장하면 기본 이름.</div>';
+    box.style.cssText='background:#fff;border:1.5px solid #CBD5E1;border-radius:12px;padding:10px 12px;margin:0 0 12px;text-align:left;';
+    var sp=document.querySelector('#settingsPage .settings-wrap')||document.getElementById('settingsPage');
+    var vb=document.getElementById('viewBaseMsg'), row=vb&&vb.closest?vb.closest('.s-row'):null;
+    if(sp){ sp.insertBefore(box, sp.firstChild); }
+    else if(row&&row.parentNode){ box.style.margin='6px 0'; row.parentNode.insertBefore(box,row.nextSibling); }
+    else return;
+    var inp=document.getElementById('kdPwaNameIn'); inp.value=nm();
+    defName(function(d){ if(d) inp.placeholder='기본: '+d; });
+  }
+  apply();
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', ui); else ui();
+})();
+</script>
+<!-- /PWA-NAME -->
 </body>
 </html>
