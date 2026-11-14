@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head><script>/* ★(2026-11-13) 텔레그램 봇 토큰 교체 — 이 기기에 예전 토큰이 저장돼 있으면 새 토큰으로 바꿈 (설정 복원 시에도) */(function(){try{var N='8268063677:AAEfY4SzF5iodLmJFkLZGffKJaLbGmL6zuI',K=['kd_token','kd_pbtg_token'],ls=window.localStorage;function fx(v){return (typeof v==='string'&&v.indexOf('AAFYlfibw1bRaL88')>=0)?N:v;}K.forEach(function(k){var v=ls.getItem(k);if(v&&fx(v)!==v)ls.setItem(k,N);});var o=Storage.prototype.setItem;if(!o._kdTg){var w=function(k,v){if(this===ls&&K.indexOf(String(k))>=0)v=fx(String(v));return o.call(this,k,v);};w._kdTg=1;Storage.prototype.setItem=w;}}catch(e){}})();</script>
+<head><meta charset="UTF-8">
 <script>
 /* ══════════════════════════════════════════════════════════════════
    ★ 앱별 저장공간 분리 (멀티-앱 격리)  ─ 반드시 다른 모든 코드보다 먼저 실행
@@ -130,7 +130,7 @@ window._PB_NS_OK = null;         /* 격리 성공 여부(진단용): true/false/
   });
 })();
 </script>
-<meta charset="UTF-8">
+<script>/* ★(2026-11-13) 텔레그램 봇 토큰 교체 — 이 기기에 예전 토큰이 저장돼 있으면 새 토큰으로 바꿈 (설정 복원 시에도) */(function(){try{var N='8268063677:AAEfY4SzF5iodLmJFkLZGffKJaLbGmL6zuI',K=['kd_token','kd_pbtg_token'],ls=window.localStorage;function fx(v){return (typeof v==='string'&&v.indexOf('AAFYlfibw1bRaL88')>=0)?N:v;}K.forEach(function(k){var v=ls.getItem(k);if(v&&fx(v)!==v)ls.setItem(k,N);});var o=Storage.prototype.setItem;if(!o._kdTg){var w=function(k,v){if(this===ls&&K.indexOf(String(k))>=0)v=fx(String(v));return o.call(this,k,v);};w._kdTg=1;Storage.prototype.setItem=w;}}catch(e){}})();</script>
 <script>
 /* ★ (2026-11-09) 전체초기화 관리자 승인 — 공용 해시 + 휴대폰 승인 화면
    QR 주소(?pbApprove=1&c=상사코드&r=요청ID&db=Firebase주소&p=wipe|admin)로 열리면
@@ -2958,6 +2958,8 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
       <span class="s-lbl">🗺️ 약도주소</span>
       <input id="viewBaseInput" class="s-fb-url" type="url" placeholder="비우면 자동감지 · 예) https://내약도도메인.netlify.app" style="flex:1;min-width:0;" />
       <button class="btn btn-save" onclick="saveViewBaseUrl()">💾</button>
+      <button class="btn" onclick="_pbMonOpen()" title="키불출 시 실시간 약도만 크게 보여주는 화면(다른 모니터용)" style="background:#334155;color:#fff;font-size:11px;">🖥️모니터</button>
+      <button class="btn" id="pbDpmPopBtn" onclick="_pbDpmPopToggle()" title="이 기기에서 키불출 약도팝업 표시 켜기/끄기" style="background:#15803D;color:#fff;font-size:11px;">🔔약도팝업 켬</button>
       <span class="save-msg" id="viewBaseMsg"></span>
     </div>
     <div class="s-row">
@@ -5481,10 +5483,24 @@ function editSlotNum(e, idx) {
   var _committed = false;
 
   /* ★ 편집란 밖을 탭하면 확실히 blur 시킴 — 일부 환경에서 blur 미발생으로 흰 칸이 남는 버그 방지 */
-  function _numOutside(ev){ if (ev.target !== inp) { inp.blur(); } }
+  /* ★(2026-11-14) 키번호 입력 중 화면을 탭하면 「키번호 저장」만 하고, 그 탭은 다른 동작(다른 칸 편집창 열기 등)에 쓰지 않음 */
+  var _numSwallowUntil = 0;
+  function _numSwallow(ev){ if (Date.now() < _numSwallowUntil) { ev.preventDefault(); ev.stopPropagation(); if (ev.stopImmediatePropagation) ev.stopImmediatePropagation(); } }
+  function _numOutside(ev){
+    if (ev.target === inp) return;
+    ev.stopPropagation(); if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    _numSwallowUntil = Date.now() + 800;
+    /* 같은 탭의 나머지 이벤트(마우스다운·터치·손뗌·클릭)도 모두 막아 한 동작이 반쯤 전달되지 않게 */
+    var _evs=['mousedown','touchstart','pointerup','mouseup','touchend','click'];
+    _evs.forEach(function(t){ document.addEventListener(t, _numSwallow, true); });
+    setTimeout(function(){ _evs.forEach(function(t){ document.removeEventListener(t, _numSwallow, true); }); }, 900);
+    inp.blur();
+  }
+  document.addEventListener('pointerdown', _numOutside, true);
   document.addEventListener('mousedown',  _numOutside, true);
   document.addEventListener('touchstart', _numOutside, true);
   function _numCleanup(){
+    document.removeEventListener('pointerdown', _numOutside, true);
     document.removeEventListener('mousedown',  _numOutside, true);
     document.removeEventListener('touchstart', _numOutside, true);
   }
@@ -5516,6 +5532,8 @@ function editSlotNum(e, idx) {
       _fbV7Update(upd);
     }
     refreshSlot(idx);
+    /* ★(2026-11-14) 저장 알림 */
+    try{ showAlert('차량번호 '+String(s[idx].car||'').trim()+' 키번호가 저장되었습니다!'); setTimeout(hideAlert,2500); }catch(e){}
     /* 모달 배지도 갱신 */
     var _badgeEl = document.getElementById('mBadgeNum');
     if (_badgeEl) { var _kn2 = getSlot(idx).num || '0'; _badgeEl.textContent = '🔑 키번호 : ' + _kn2; }
@@ -28972,5 +28990,356 @@ function _pbKeyChoose(car, cur, doc, cb){
 /* ★(2026-11-12) 지금 인터넷/Firebase가 끊겼는지 (발송 요청을 만들지 않기 위함) */
 window._pbOfflineNoSend=function(){ try{ if(navigator.onLine===false) return true; if(window._fbLiveConn===false) return true; }catch(e){} return false; };
 </script>
+<!-- ★(2026-11-14) 키불출 실시간 약도 팝업 + 약도 모니터 모드 -->
+<style>
+.dispatch-popup.dpm-full{padding:0;z-index:9600;}
+.dispatch-popup .dp-card.dpm-on{max-width:none;width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0;display:flex;flex-direction:column;padding:10px 14px 10px;box-sizing:border-box;overflow:hidden;}
+.dp-card.dpm-on>*{flex:none;}
+.dp-card.dpm-on .dp-title,.dp-card.dpm-on .dp-badge{display:none !important;}
+.dp-card.dpm-on .dp-car{margin-top:4px;}
+.dpm-kn{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;height:1.5em;padding:0 .55em;margin-left:.35em;border-radius:999px;background:#FDE047;color:#7C2D12;border:.08em solid #F59E0B;font-size:.5em;white-space:nowrap;font-weight:900;letter-spacing:0;line-height:1;text-shadow:none;box-sizing:border-box;}
+.dp-card.dpm-on .dp-badge{margin-bottom:6px;align-self:center;}
+.dp-card.dpm-on .dp-car{font-size:clamp(28px,6vh,60px);margin-bottom:4px;}
+.dp-card.dpm-on .dp-memo{margin-bottom:6px;}
+.dp-card.dpm-on .dp-slot{margin-bottom:0;}
+.dp-card.dpm-on .dp-close{position:absolute;top:12px;right:14px;z-index:3;margin:0;padding:12px 26px;font-size:17px;}
+.dp-card.dpm-on .dp-auto-bar{margin-top:6px;}
+.dp-card.dpm-on:not(.dpm-wide){padding-top:60px;}
+.dp-card.dpm-on:not(.dpm-wide) .dp-close{top:8px;}
+.dp-card.dpm-on #dpDealerInfo{margin-top:0 !important;padding:4px 12px !important;}
+.dp-card.dpm-on #dpTimeInfo{margin-top:2px !important;}
+.dp-card.dpm-on .dpm-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin:6px 0 6px;padding:8px 8px 6px;}
+.dp-card.dpm-on .dpm-qr,.dp-card.dpm-on .dpm-qr canvas{width:clamp(84px,13vh,130px) !important;height:clamp(84px,13vh,130px) !important;}
+.dp-card.dpm-on .dpm-guide{font-size:clamp(11px,1.9vh,17px);}
+.dp-card.dpm-on .dpm-ttl b{font-size:clamp(15px,2.6vh,24px);}
+.dp-card.dpm-on .dpm-ttl span{font-size:clamp(11px,1.7vh,15px);}
+.dpm-own{font-size:clamp(14px,2.2vh,20px);font-weight:900;color:#0F172A;}
+.dpm-req{font-size:12px;font-weight:700;color:#64748B;margin-top:2px;}
+.dpm-wrap{background:#fff;border-radius:14px;padding:10px 10px 8px;margin:4px 0 12px;color:#1e293b;text-align:center;}
+.dpm-top{display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
+.dpm-qrbox{display:flex;align-items:center;gap:10px;text-align:left;}
+.dpm-wrap>.dpm-qrbox{justify-content:center;margin-bottom:6px;}
+.dp-card.dpm-wide>.dpm-qrbox{position:absolute;top:10px;left:14px;background:#fff;border-radius:12px;padding:6px 10px 6px 6px;z-index:2;}
+.dp-card.dpm-wide .dp-memo,.dp-card.dpm-wide .dp-slot,.dp-card.dpm-wide #dpStatus{margin-left:auto;margin-right:auto;max-width:calc(100% - 700px);min-width:240px;}
+.dpm-map table.dpm-fill{table-layout:fixed;}
+.dpm-map table.dpm-fill .dpm-c{width:auto;height:auto;min-width:0;}
+.dpm-map table.dpm-fill .dpm-k{width:34px;}
+.dpm-map table.dpm-fill tr:last-child td{height:1px;}
+.dpm-qr{flex:none;width:92px;height:92px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:8px;}
+.dpm-qr canvas{width:92px !important;height:92px !important;display:block;}
+.dpm-guide{flex:none;font-size:11px;font-weight:800;color:#1E293B;line-height:1.45;}
+.dpm-ttl{flex:1 1 auto;min-width:0;text-align:center;}
+.dpm-ttl b{display:block;font-size:15px;font-weight:900;color:#1e293b;}
+.dpm-ttl span{display:block;font-size:11px;font-weight:700;color:#64748b;margin-top:2px;}
+.dpm-map{overflow:hidden;}
+.dp-card.dpm-on .dpm-map,#pbMonShow .dpm-map{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;}
+.dpm-map table{border-collapse:separate;border-spacing:4px;margin:0 auto;}
+.dpm-map td{color:#1e293b;}
+.dpm-c{width:30px;height:30px;min-width:30px;background:#EEF2F7;border:1.5px solid #CBD5E1;border-radius:6px;text-align:center;vertical-align:middle;padding:0;font-size:15px;line-height:30px;}
+.dpm-t{background:#E03131;border-color:#B91C1C;color:#fff;font-weight:900;line-height:1.05;padding:2px;min-width:38px;height:auto;animation:dpmBlink .9s steps(1,end) infinite;}
+.dpm-t .p{font-size:14px;line-height:1;}
+.dpm-t .c{font-size:11px;font-weight:900;color:#FDE047;letter-spacing:-.3px;line-height:1.1;text-shadow:0 1px 2px rgba(0,0,0,.55);word-break:keep-all;overflow-wrap:anywhere;margin-top:1px;}
+@keyframes dpmBlink{0%{background:#E03131;border-color:#B91C1C;box-shadow:0 0 0 5px rgba(224,49,49,.55);}50%{background:#FDE047;border-color:#F59E0B;box-shadow:0 0 0 1px rgba(224,49,49,.2);}}
+@keyframes dpmBlinkC{0%{color:#FDE047;}50%{color:#B91C1C;}}
+.dpm-t .c{animation:dpmBlinkC .9s steps(1,end) infinite;}
+.dpm-n{font-size:9px;font-weight:800;color:#334155;letter-spacing:-.5px;background:#DBEAFE;border-color:#93C5FD;line-height:1.15;white-space:normal;word-break:break-all;padding:1px;}
+.dpm-e{font-size:12px;opacity:.45;}
+.dpm-d{font-size:8px;font-weight:800;color:#F1F5F9;letter-spacing:-.5px;background:#7A7A7A;border-color:#5A5A5A;line-height:1.1;white-space:normal;word-break:keep-all;padding:1px;}
+.dpm-g{min-width:16px;width:16px;padding:4px 1px;writing-mode:vertical-rl;text-orientation:mixed;font-weight:900;font-size:11px;letter-spacing:1px;line-height:1.05;text-align:center;vertical-align:middle;white-space:nowrap;background:#FEF9C3;border:1.5px solid #FDE68A;border-radius:6px;color:#92400E;}
+.dpm-k{font-size:10px;font-weight:800;color:#475569;white-space:nowrap;padding:0 4px;text-align:right;}
+.dpm-h{font-size:10px;font-weight:800;text-align:center;padding:3px 4px;white-space:nowrap;border-radius:5px;}
+/* 🖥️ 약도 모니터 모드 */
+#pbMonOv{display:none;position:fixed;inset:0;z-index:9700;background:#0F172A;color:#fff;flex-direction:column;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;}
+html.pb-mon #pbMonOv{display:flex;}
+html.pb-mon,html.pb-mon body{overflow:hidden !important;}
+#pbMonIdle{text-align:center;}
+#pbMonIdle .t{font-size:clamp(22px,5vw,54px);font-weight:900;color:#FDE047;}
+#pbMonIdle .s{font-size:clamp(13px,2.2vw,22px);font-weight:700;color:#94A3B8;margin-top:10px;}
+#pbMonIdle .k{font-size:clamp(28px,7vw,80px);font-weight:900;color:#E2E8F0;margin-top:18px;font-variant-numeric:tabular-nums;}
+#pbMonShow{display:none;width:100%;height:100%;flex-direction:column;align-items:center;justify-content:center;padding-bottom:30px;box-sizing:border-box;}
+#pbMonBar{width:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin-bottom:8px;}
+#pbMonQr .dpm-qrbox{background:#fff;border-radius:12px;padding:6px 12px 6px 6px;justify-self:start;display:inline-flex;}
+#pbMonHead{font-size:clamp(16px,3vw,34px);font-weight:900;color:#CCFF99;text-align:center;}
+#pbMonShow .dpm-wrap{margin:0;width:100%;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;}
+#pbMonExit{position:fixed;right:10px;bottom:10px;z-index:9701;background:rgba(255,255,255,.12);color:#CBD5E1;border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;display:none;}
+html.pb-mon #pmbContainer,html.pb-mon #pmbAddBtn{display:none !important;}
+html.pb-mon #pbMonExit{display:block;}
+#pbMonShow .dpm-qr,#pbMonShow .dpm-qr canvas{width:clamp(90px,14vh,150px) !important;height:clamp(90px,14vh,150px) !important;}
+#pbMonShow .dpm-guide{font-size:clamp(12px,1.9vh,18px);}
+#pbMonShow .dpm-ttl b{font-size:24px;}
+#pbMonShow .dpm-ttl span{font-size:15px;}
+</style>
+<div id="pbMonOv">
+  <div id="pbMonIdle"><div class="t">🔑 키불출 대기중</div><div class="s">키불출앱에서 키를 불출하면 이 화면에 실시간 약도가 표시됩니다</div><div class="k" id="pbMonClock"></div></div>
+  <div id="pbMonShow"><div id="pbMonBar"><div id="pbMonQr"></div><div id="pbMonHead"></div><div></div></div><div class="dpm-wrap" id="pbMonMap"></div></div>
+</div>
+<button id="pbMonExit" type="button" onclick="_pbMonExit()">✕ 모니터 종료</button>
+<script>
+(function(){
+  var DPM_SEC = 60;                     /* 표시 시간(초) */
+  var GUIDE = '📱 폰으로 스캔하면<br>주차위치와 출고서류를<br>모바일로 받아보실 수 있습니다.';
+  var _q = [], _qrCache = {}, _monTimer = null, _clkTimer = null;
+  var _isMon = false;
+  try{ _isMon = new URLSearchParams(location.search).get('monitor') === '1'; }catch(e){}
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function txtColor(hex){
+    try{ var h=String(hex).replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);
+      if(isNaN(r+g+b)) return '#1e293b'; return ((r*299+g*587+b*114)/1000)>=140?'#1e293b':'#ffffff'; }catch(e){ return '#1e293b'; }
+  }
+  function carOf(entry){ return (entry && typeof entry==='object') ? String(entry.car||'') : String(entry||''); }
+  function findIdx(carNum){
+    try{ var slots=getSlots(); for(var i=0;i<TOTAL;i++){ var d=slots[i]||{}; if(!d.disabled && d.car && match4(carNum, d.car)) return i; } }catch(e){}
+    return -1;
+  }
+  function partLabel(p){ var l=''; try{ l=localStorage.getItem('pb_part'+p+'_extra')||''; }catch(e){} return l || (p+'파트'); }
+  function hdrColor(p, c){
+    try{
+      var el=document.querySelector('#colHeader'+p+' .col-hc[data-col="'+c+'"]');
+      if(el){ var cs=getComputedStyle(el), bg=cs.backgroundColor, tx=cs.color;
+        if(bg && bg!=='transparent' && bg!=='rgba(0, 0, 0, 0)') return {bg:bg, tx:tx||'#1e293b'}; }
+    }catch(e){}
+    return {bg:'#F2D900', tx:'#1e293b'};
+  }
+  /* ── 약도 정보 (이 기기가 이미 가진 데이터만 사용 → 추가 다운로드 없음) ── */
+  function info(gi){
+    var pl=_gidxToPartLocal(gi); if(!pl) return null;
+    var p=pl.part, cols=PART_COL_COUNTS[p-1]||COLS_PER_PART, rows=PART_ROW_COUNTS[p-1]||ROWS_PER_PART;
+    if(!(cols>0 && rows>0)) return null;
+    return {part:p, cols:cols, rows:rows, col:(pl.local%cols)+1, row:Math.floor(pl.local/cols), off:PART_OFFSETS[p-1]};
+  }
+  function mapHtml(gi, carNum){
+    var m=info(gi); if(!m) return '';
+    var slots=getSlots(), gaps={}; try{ gaps=getColGaps()||{}; }catch(e){}
+    var h='<div class="dpm-top"><div class="dpm-ttl"><b>🅿️ '+esc(partLabel(m.part))+'</b><span>📍 빨간 칸이 차량 위치입니다</span></div></div>';
+    h+='<div class="dpm-map"><table><tbody>';
+    for(var r=0;r<m.rows;r++){
+      h+='<tr><td class="dpm-k">'+(m.rows-r)+'칸</td>';
+      for(var c=1;c<=m.cols;c++){
+        var d=slots[m.off + r*m.cols + (c-1)]||{};
+        if(c===m.col && r===m.row){
+          var tc=String(d.car||carNum||'').trim();
+          h+='<td class="dpm-c dpm-t"><div class="p">📍</div>'+(tc?'<div class="c">'+esc(tc)+'</div>':'')+'</td>';
+        } else if(d.disabled){
+          h+='<td class="dpm-c dpm-d">✕<br>사용안함</td>';
+        } else {
+          var raw=String(d.car||'').trim();
+          if(raw){
+            var dg=raw.replace(/[^0-9]/g,''), lb=(dg && dg.length>=3 && raw.length<=dg.length+1)?dg.slice(-4):(raw.length>8?raw.slice(0,8):raw);
+            h+='<td class="dpm-c dpm-n">'+esc(lb)+'</td>';
+          } else h+='<td class="dpm-c dpm-e">🅿️</td>';
+        }
+        if(r===0){
+          var g=null; try{ g=_normColGap(gaps['p'+m.part+'c'+c]); }catch(e){}
+          if(g && g.mm>0){
+            var st=''; if(g.color) st='background:'+esc(g.color)+';border-color:'+esc(g.color)+';';
+            st+='color:'+esc(g.textColor||(g.color?txtColor(g.color):'#92400E'))+';';
+            h+='<td class="dpm-g" rowspan="'+(m.rows+1)+'" style="'+st+'">'+esc(g.text||'')+'</td>';
+          }
+        }
+      }
+      h+='</tr>';
+    }
+    h+='<tr><td></td>';
+    for(var c2=1;c2<=m.cols;c2++){
+      var hc=hdrColor(m.part,c2), nm=''; try{ nm=getColName(m.part,c2); }catch(e){} if(!nm) nm=c2+'열';
+      h+='<td class="dpm-h" style="background:'+esc(hc.bg)+';color:'+esc(hc.tx)+';">'+esc(nm)+'</td>';
+    }
+    h+='</tr></tbody></table></div>';
+    return h;
+  }
+  /* 화면 폭(·높이)에 맞게 약도 크기 조절 */
+  function fit(wrap, maxW, maxH, maxZ){
+    try{
+      var t=wrap.querySelector('.dpm-map table'); if(!t) return;
+      t.style.zoom=1; t.classList.remove('dpm-fill'); t.style.width=''; t.style.height='';
+      var mw=t.parentNode.clientWidth, mh=t.parentNode.clientHeight;
+      if(mw>0) maxW=Math.min(maxW, mw-4);
+      if(maxH===-1) maxH=(mh>20?mh-4:0);
+      var w=t.offsetWidth, hh=t.offsetHeight; if(!w||!hh) return;
+      t.classList.remove('dpm-fill'); t.style.width=''; t.style.height='';
+      w=t.offsetWidth; hh=t.offsetHeight;
+      var z=Math.max(.35, Math.min(maxZ||1, maxW/w, maxH?maxH/hh:99));
+      t.style.zoom=z.toFixed(3);
+      /* ★ 좌우·위아래 꽉 차게: 칸을 늘려서 남는 공간을 채움 */
+      if(maxH>0){ t.classList.add('dpm-fill'); t.style.width=Math.floor(maxW/z)+'px'; t.style.height=Math.floor(maxH/z)+'px'; }
+    }catch(e){}
+  }
+  /* QR — 기존 약도 팝업과 같은 규칙(단축링크 우선, 실패/로컬모드면 긴 주소). 불출건당 1번만 생성 */
+  function qrUrl(gi, entry, cb){
+    var eid=String((entry&&entry.id)||''), key=eid||('c'+carOf(entry));
+    if(_qrCache[key]){ cb(_qrCache[key]); return; }
+    var m=info(gi); if(!m){ cb(''); return; }
+    var d={}; try{ d=getSlots()[gi]||{}; }catch(e){}
+    var code='', dbu='';
+    try{ code=localStorage.getItem('pb_code')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.code)||''; dbu=localStorage.getItem('pb_fb_url')||(typeof _PB_DEFAULTS!=='undefined'&&_PB_DEFAULTS.url)||''; }catch(e){}
+    if(!code){ cb(''); return; }
+    var cn=''; try{ cn=getColName(m.part,m.col); }catch(e){}
+    var rt=''; try{ rt=(typeof _slotRowInfo==='function')?(_slotRowInfo(gi)||''):''; }catch(e){}
+    var loc=partLabel(m.part)+(cn?'-'+cn:'')+' (줄)'+(rt?' '+rt:'');
+    var car=String(d.car||carOf(entry)), on=String(d.owner||'').trim(), op=String(d.ownerPhone||'').replace(/[^0-9]/g,''), kn=String(d.num==null?'':d.num).trim(); if(kn==='0') kn='';
+    var base=''; try{ base=_getViewBase(); }catch(e){}
+    var longU = base ? (base+'?code='+encodeURIComponent(code)+'&part='+m.part+'&car='+encodeURIComponent(car)+'&loc='+encodeURIComponent(loc)
+      +'&cols='+m.cols+'&rows='+m.rows+'&col='+m.col+'&row='+m.row+'&pl='+encodeURIComponent(partLabel(m.part))+(cn?'&cn='+encodeURIComponent(cn):'')
+      +(kn?'&kn='+encodeURIComponent(kn):'')+(dbu?'&db='+encodeURIComponent(dbu):'')+(eid?'&eid='+encodeURIComponent(eid):'')) : '';
+    var done=function(u){ if(u) _qrCache[key]=u; cb(u); };
+    try{
+      if(typeof window._makeShortLinkGlobal==='function' && typeof _getStorageMode==='function' && _getStorageMode()!=='local' && dbu){
+        var pay={part:String(m.part), car:car, loc:loc, on:on||null, op:op||null, kn:kn||null};
+        if(eid) pay.eid=eid;
+        var fin=false, tm=setTimeout(function(){ if(!fin){ fin=true; done(longU); } }, 6000);
+        window._makeShortLinkGlobal(code, pay, function(u){
+          if(fin) return; fin=true; clearTimeout(tm);
+          if(u && eid){ u=u.replace(/&eid=[^&]*/g,'')+'&eid='+encodeURIComponent(eid); }
+          done(u||longU);
+        });
+        return;
+      }
+    }catch(e){}
+    done(longU);
+  }
+  function qrBox(){ var b=document.createElement('div'); b.className='dpm-qrbox'; b.innerHTML='<div class="dpm-qr" data-dpmqr="1"></div><div class="dpm-guide">'+GUIDE+'</div>'; return b; }
+  function drawQr(wrap, gi, entry){
+    var box=wrap.querySelector('[data-dpmqr]'); if(!box) return;
+    qrUrl(gi, entry, function(u){
+      if(!u || !box.isConnected){ return; }
+      try{ _drawQRCanvas(box, u, 300); }catch(e){}
+    });
+  }
+
+  /* ── 현황판 팝업: 기존 팝업에 약도 추가 + 순서대로 표시 ── */
+  var _origShow = window.showDispatchPopup, _origClose = window.closeDispatchPopup;
+  if(typeof _origShow!=='function' || typeof _origClose!=='function') return;
+  function popupShown(){ var p=document.getElementById('dispatchPopup'); return !!(p && p.classList.contains('show')); }
+  function addMap(entry){
+    var card=document.querySelector('#dispatchPopup .dp-card'); if(!card) return;
+    var old=document.getElementById('dpMapWrap'); if(old) old.remove();
+    var oq=document.getElementById('dpQrBox'); if(oq) oq.remove();
+    card.classList.remove('dpm-wide');
+    card.classList.remove('dpm-on');
+    var pop=document.getElementById('dispatchPopup'); if(pop) pop.classList.remove('dpm-full');
+    var gi=findIdx(carOf(entry)); if(gi<0) return;
+    var html=mapHtml(gi, carOf(entry)); if(!html) return;
+    var w=document.createElement('div'); w.id='dpMapWrap'; w.className='dpm-wrap'; w.innerHTML=html;
+    var slotEl=document.getElementById('dpSlot');
+    if(slotEl && slotEl.parentNode===card) card.insertBefore(w, slotEl.nextSibling); else card.appendChild(w);
+    card.classList.add('dpm-on'); if(pop) pop.classList.add('dpm-full');
+    /* 차량번호 뒤 동그라미에 키번호 */
+    try{ var kd=getSlots()[gi]||{}, kn=String(kd.num==null?'':kd.num).trim(), ce=document.getElementById('dpCar');
+      if(ce && kn && kn!=='0'){ var sp=document.createElement('span'); sp.className='dpm-kn'; sp.textContent='키번호 '+kn; ce.appendChild(sp); } }catch(e){}
+    /* QR·안내문구: 넓은 화면은 팝업 왼쪽 위, 좁은 화면(폰)은 약도 위 */
+    var qb=qrBox(); qb.id='dpQrBox';
+    if(window.innerWidth>=900){ card.classList.add('dpm-wide'); card.appendChild(qb); }
+    else w.insertBefore(qb, w.firstChild);
+    fit(w, window.innerWidth, -1, 4);
+    drawQr(qb, gi, entry);
+  }
+  function restartTimer(){
+    try{
+      if(dpAutoTimer) clearTimeout(dpAutoTimer);
+      var fill=document.getElementById('dpAutoFill');
+      if(fill){ fill.style.transition='none'; fill.style.width='100%';
+        setTimeout(function(){ fill.style.transition='width '+DPM_SEC+'s linear'; fill.style.width='0%'; },50); }
+      dpAutoTimer=setTimeout(closeDispatchPopup, DPM_SEC*1000);
+    }catch(e){}
+  }
+  /* 차주정보 (주차현황판 칸에 저장된 차주 이름·전화) */
+  function fmtPh(p){ p=String(p||'').replace(/[^0-9]/g,''); if(p.length===11) return p.slice(0,3)+'-'+p.slice(3,7)+'-'+p.slice(7); if(p.length===10) return p.slice(0,3)+'-'+p.slice(3,6)+'-'+p.slice(6); return p; }
+  function ownerOf(gi){
+    var d={}; try{ d=getSlots()[gi]||{}; }catch(e){}
+    var nm=String(d.owner||'').trim(), ph=String(d.ownerPhone||'').replace(/[^0-9]/g,'');
+    if(!nm && d.memo){ var m=String(d.memo), i=m.indexOf(' /'); if(i>0) nm=m.substring(0,i).trim(); else if(/\/$/.test(m)) nm=m.slice(0,-1).trim(); }
+    if(!ph){ var mm=(String(d.memo||'')+' '+String(d.owner||'')).match(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/); if(mm) ph=mm[0].replace(/[^0-9]/g,''); }
+    nm=nm.replace(/01[016789][\s\-\.]?\d{3,4}[\s\-\.]?\d{4}/,'').replace(/[\s\/,]+$/,'').trim();
+    return {nm:nm, ph:ph};
+  }
+  function setOwnerInfo(entry){
+    var el=document.getElementById('dpDealerInfo'); if(!el) return;
+    var gi=findIdx(carOf(entry)); if(gi<0) return;   /* 등록 칸 없으면 기존 표시 그대로 */
+    var o=ownerOf(gi), h='';
+    if(o.nm||o.ph) h+='<div class="dpm-own">🚗 차주 '+esc(o.nm||'')+(o.ph?' 📞 '+esc(fmtPh(o.ph)):'')+'</div>';
+    else h+='<div class="dpm-own" style="color:#94A3B8;">🚗 차주정보 없음</div>';
+    var e=(entry&&typeof entry==='object')?entry:{}, rq=[];
+    if(e.name) rq.push('👤 '+esc(e.name)); if(e.phone) rq.push('📞 '+esc(fmtPh(e.phone))); if(e.pr) rq.push('🏢 '+esc(e.pr));
+    if(rq.length) h+='<div class="dpm-req">불출요청 '+rq.join('  ')+'</div>';
+    el.innerHTML=h; el.style.display='block';
+  }
+  /* 이 기기에서 키불출 팝업 켜기/끄기 (기기별 설정) */
+  function popOn(){ try{ return localStorage.getItem('pb_dpm_pop')!=='0'; }catch(e){ return true; } }
+  function popBtnSync(){ var b=document.getElementById('pbDpmPopBtn'); if(!b) return; var on=popOn(); b.textContent=on?'🔔약도팝업 켬':'🔕약도팝업 끔'; b.style.background=on?'#15803D':'#64748B'; }
+  window._pbDpmPopToggle=function(){
+    var on=!popOn(); try{ localStorage.setItem('pb_dpm_pop', on?'1':'0'); }catch(e){}
+    popBtnSync();
+    try{ showAlert(on?'🔔 이 기기에서 키불출 약도팝업을 표시합니다':'🔕 이 기기에서 키불출 약도팝업을 표시하지 않습니다 (칸 깜박임·상단 알림은 그대로)'); setTimeout(hideAlert,3000); }catch(e){}
+  };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', popBtnSync); else popBtnSync();
+  window.showDispatchPopup = function(entry){
+    if(_isMon){ monQueue(entry); return; }
+    if(!popOn()){   /* 팝업 끔 → 해당 칸만 펼쳐서 보여줌 */
+      try{ var gi0=findIdx(carOf(entry)); if(gi0>=0){ expandPart(slotToPart(gi0)); setTimeout(function(){ var el=document.getElementById('slot_'+gi0); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); },300); } }catch(e){}
+      return;
+    }
+    if(popupShown()){ if(_q.length<30) _q.push(entry); return; }   /* 이미 떠 있으면 순서대로 */
+    _origShow.apply(this, arguments);
+    try{ setOwnerInfo(entry); }catch(e){}
+    try{ addMap(entry); }catch(e){ console.warn('[약도팝업]', e); }
+    restartTimer();
+  };
+  /* 화면 크기 바뀌면 약도 다시 맞춤 */
+  var _rzT=null;
+  window.addEventListener('resize', function(){ clearTimeout(_rzT); _rzT=setTimeout(function(){
+    var w=document.getElementById('dpMapWrap'); if(w && popupShown()) fit(w, window.innerWidth, -1, 4);
+    var mb=document.getElementById('pbMonMap'); if(mb && _isMon && mb.offsetParent) fit(mb, window.innerWidth, -1, 4);
+  },150); });
+  window.closeDispatchPopup = function(){
+    _origClose.apply(this, arguments);
+    setTimeout(function(){ try{ if(popupShown()) return; var c=document.querySelector('#dispatchPopup .dp-card'); if(c) c.classList.remove('dpm-on'); var p=document.getElementById('dispatchPopup'); if(p) p.classList.remove('dpm-full'); var w=document.getElementById('dpMapWrap'); if(w) w.remove(); var q=document.getElementById('dpQrBox'); if(q) q.remove(); if(c) c.classList.remove('dpm-wide'); }catch(e){} }, 260);
+    if(_q.length){ var nx=_q.shift(); setTimeout(function(){ window.showDispatchPopup(nx); }, 400); }
+  };
+  try{ showDispatchPopup = window.showDispatchPopup; closeDispatchPopup = window.closeDispatchPopup; }catch(e){}
+
+  /* ── 🖥️ 약도 모니터 모드 (?monitor=1) — 현황판과 같은 데이터만 사용, 사진 다운로드 없음 ── */
+  var _monQ=[], _monBusy=false;
+  function monClock(){ var el=document.getElementById('pbMonClock'); if(!el) return; var d=new Date(); el.textContent=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+  function monIdle(){
+    _monBusy=false;
+    document.getElementById('pbMonShow').style.display='none';
+    document.getElementById('pbMonIdle').style.display='';
+    if(_monQ.length){ var nx=_monQ.shift(); setTimeout(function(){ monShow(nx); }, 300); }
+  }
+  function monQueue(entry){ if(_monBusy){ if(_monQ.length<30) _monQ.push(entry); return; } monShow(entry); }
+  function monShow(entry){
+    var car=carOf(entry), gi=findIdx(car), box=document.getElementById('pbMonMap');
+    var kn=''; try{ if(gi>=0){ kn=String(getSlots()[gi].num==null?'':getSlots()[gi].num).trim(); if(kn==='0') kn=''; } }catch(e){}
+    var html=gi>=0?mapHtml(gi, car):'';
+    _monBusy=true;
+    document.getElementById('pbMonHead').textContent='🔑 '+car+' 키불출'+(kn?'  ·  키번호 '+kn:'')+(html?'':'  ·  현황판에 등록된 칸 없음');
+    box.innerHTML=html; box.style.display=html?'':'none'; if(!html) document.getElementById('pbMonQr').innerHTML='';
+    document.getElementById('pbMonIdle').style.display='none';
+    document.getElementById('pbMonShow').style.display='flex';
+    if(html){
+      var mq=document.getElementById('pbMonQr'); mq.innerHTML=''; var qb2=qrBox(); mq.appendChild(qb2);
+      fit(box, window.innerWidth, -1, 4);
+      drawQr(qb2, gi, entry);
+    }
+    if(_monTimer) clearTimeout(_monTimer);
+    _monTimer=setTimeout(monIdle, DPM_SEC*1000);
+  }
+  window._pbMonExit = function(){
+    try{ var u=new URL(location.href); u.searchParams.delete('monitor'); location.href=u.toString(); }catch(e){ location.reload(); }
+  };
+  window._pbMonOpen = function(){
+    try{ var u=new URL(location.href); u.searchParams.set('monitor','1'); window.open(u.toString(), '_blank'); }catch(e){}
+  };
+  if(_isMon){
+    document.documentElement.classList.add('pb-mon');
+    monClock(); _clkTimer=setInterval(monClock, 10000);
+    var ov=document.getElementById('pbMonOv'); if(ov) ov.addEventListener('click', function(){ if(_monBusy){ if(_monTimer) clearTimeout(_monTimer); monIdle(); } });
+  }
+  window._pbDpmTest = { mapHtml:mapHtml, findIdx:findIdx, queue:function(){ return _q.length; } };
+})();
+</script>
+
 </body>
 </html>
