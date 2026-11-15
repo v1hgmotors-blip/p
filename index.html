@@ -29018,6 +29018,8 @@ window._pbOfflineNoSend=function(){ try{ if(navigator.onLine===false) return tru
 .dpm-wrap{background:#fff;border-radius:14px;padding:10px 10px 8px;margin:4px 0 12px;color:#1e293b;text-align:center;}
 .dpm-top{display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
 .dpm-qrbox{display:flex;align-items:center;gap:10px;text-align:left;}
+.dpm-warn{font-size:clamp(12px,1.9vh,17px);font-weight:900;color:#B45309;background:#FEF3C7;border:2px dashed #F59E0B;border-radius:10px;padding:10px 12px;line-height:1.45;text-align:center;max-width:260px;}
+#pbMonShow .dpm-warn{font-size:clamp(14px,2.2vh,20px);}
 .dpm-wrap>.dpm-qrbox{justify-content:center;margin-bottom:6px;}
 .dp-card.dpm-wide>.dpm-qrbox{position:absolute;top:10px;left:14px;background:#fff;border-radius:12px;padding:6px 10px 6px 6px;z-index:2;}
 .dp-card.dpm-wide .dp-memo,.dp-card.dpm-wide .dp-slot,.dp-card.dpm-wide #dpStatus{margin-left:auto;margin-right:auto;max-width:calc(100% - 700px);min-width:240px;}
@@ -29207,11 +29209,35 @@ html.pb-mon #pbMonExit{display:block;}
     done(longU);
   }
   function qrBox(){ var b=document.createElement('div'); b.className='dpm-qrbox'; b.innerHTML='<div class="dpm-qr" data-dpmqr="1"></div><div class="dpm-guide">'+GUIDE+'</div>'; return b; }
+  /* ★(2026-11-15) 약도 주소 확인 — 없거나(인터넷 주소 아님) 자동감지한 같은 도메인에 view.html이 없으면 QR 대신 안내 문구
+     · 설정에 직접 입력한 주소·앱 기본 주소 → 인터넷 주소면 그대로 사용 · 자동감지 → view.html 실제 확인(성공 1일·실패 3분 기억) */
+  var _vcP=null;
+  function viewOk(cb){
+    var base=''; try{ base=String(_getViewBase()||''); }catch(e){}
+    if(!/^https?:\/\/[^\/]+\.[^\/]+/i.test(base) && !/^https?:\/\/localhost[:\/]/i.test(base)){ cb(false); return; }
+    var manual=''; try{ manual=(localStorage.getItem('pb_view_base_url')||'').trim(); }catch(e){}
+    var def=''; try{ def=String(_getViewBaseDefault()||''); }catch(e){}
+    var auto=!manual && base===def && (function(){ try{ return base.indexOf(location.origin+'/')===0; }catch(e){ return false; } })();
+    if(!auto){ cb(true); return; }
+    var ck='pb_view_ok:'+base, now=Date.now(), c=null;
+    try{ c=JSON.parse(localStorage.getItem(ck)||'null'); }catch(e){}
+    if(c && ((c.ok && now-c.t<86400000) || (!c.ok && now-c.t<180000))){ cb(!!c.ok); return; }
+    if(!_vcP){
+      _vcP=fetch(base,{cache:'no-store'}).then(function(r){ if(!r.ok) return false; return r.text().then(function(t){ return /drawAutoMap|kd_rooms|약도/.test(String(t||'').slice(0,400000)); }); })
+        .catch(function(){ return false; })
+        .then(function(ok){ try{ localStorage.setItem(ck, JSON.stringify({ok:!!ok,t:Date.now()})); }catch(e){} _vcP=null; return !!ok; });
+    }
+    _vcP.then(cb);
+  }
   function drawQr(wrap, gi, entry){
     var box=wrap.querySelector('[data-dpmqr]'); if(!box) return;
-    qrUrl(gi, entry, function(u){
-      if(!u || !box.isConnected){ return; }
-      try{ _drawQRCanvas(box, u, 300); }catch(e){}
+    viewOk(function(ok){
+      if(!box.isConnected) return;
+      if(!ok){ wrap.classList.add('dpm-qrwarn'); wrap.innerHTML='<div class="dpm-warn">⚠️ 설정에서 약도주소를 입력하면<br>QR코드가 보입니다</div>'; return; }
+      qrUrl(gi, entry, function(u){
+        if(!u || !box.isConnected){ return; }
+        try{ _drawQRCanvas(box, u, 300); }catch(e){}
+      });
     });
   }
 
@@ -29406,6 +29432,21 @@ html.pb-mon #pbMonExit{display:block;}
       var t=setInterval(function(){ tries++; if(_monBusy){ clearInterval(t); return; }
         if(findIdx(last.car)>=0){ clearInterval(t); monShow(last); } else if(tries>=20) clearInterval(t); }, 1000); })();
   }
+  /* ★(2026-11-15) 자동감지 약도주소(같은 도메인 view.html 확인됨)를 공용설정(pb_settings/viewBaseAuto)에 올려 둠
+     → 출고서류앱이 별도 약도주소 설정 없이 같은 QR을 만들 수 있음 (직접 입력한 주소는 원래대로 viewBaseUrl로 공유됨) */
+  setTimeout(function(){
+    try{
+      if((localStorage.getItem('pb_view_base_url')||'').trim()) return;
+      if(typeof _getStorageMode==='function' && _getStorageMode()==='local') return;
+      viewOk(function(ok){
+        try{
+          if(!ok || typeof fbSettingsRef==='undefined' || !fbSettingsRef || typeof pushSettings!=='function') return;
+          var b=String(_getViewBase()||''); if(!b || localStorage.getItem('pb_view_auto_pushed')===b) return;
+          pushSettings({viewBaseAuto:b}); localStorage.setItem('pb_view_auto_pushed', b);
+        }catch(e){}
+      });
+    }catch(e){}
+  }, 8000);
   window._pbDpmTest = { mapHtml:mapHtml, findIdx:findIdx, queue:function(){ return _q.length; } };
 })();
 </script>
