@@ -29044,6 +29044,7 @@ window._pbOfflineNoSend=function(){ try{ if(navigator.onLine===false) return tru
 @keyframes dpmBlink{0%{background:#E03131;border-color:#B91C1C;box-shadow:0 0 0 5px rgba(224,49,49,.55);}50%{background:#FDE047;border-color:#F59E0B;box-shadow:0 0 0 1px rgba(224,49,49,.2);}}
 @keyframes dpmBlinkC{0%{color:#FDE047;}50%{color:#B91C1C;}}
 .dpm-t .c{animation:dpmBlinkC .9s steps(1,end) infinite;}
+.dpm-t .c.c2{white-space:nowrap;overflow-wrap:normal;word-break:keep-all;}
 .dpm-n{font-size:9px;font-weight:800;color:#334155;letter-spacing:-.5px;background:#DBEAFE;border-color:#93C5FD;line-height:1.15;white-space:normal;word-break:break-all;padding:1px;}
 .dpm-e{font-size:12px;opacity:.45;}
 .dpm-d{font-size:8px;font-weight:800;color:#F1F5F9;letter-spacing:-.5px;background:#7A7A7A;border-color:#5A5A5A;line-height:1.1;white-space:normal;word-break:keep-all;padding:1px;}
@@ -29124,7 +29125,9 @@ html.pb-mon #pbMonExit{display:block;}
         var d=slots[m.off + r*m.cols + (c-1)]||{};
         if(c===m.col && r===m.row){
           var tc=String(d.car||carNum||'').trim();
-          h+='<td class="dpm-c dpm-t"><div class="p">📍</div>'+(tc?'<div class="c">'+esc(tc)+'</div>':'')+'</td>';
+          var tm=tc.match(/^(.*?[가-힣])\s*(\d{4})$/);   /* ★ 55나7888 → 위 「55나」 / 아래 「7888」 */
+          var tcH=tm?('<div class="c c2">'+esc(tm[1])+'<br>'+esc(tm[2])+'</div>'):('<div class="c">'+esc(tc)+'</div>');
+          h+='<td class="dpm-c dpm-t"><div class="p">📍</div>'+(tc?tcH:'')+'</td>';
         } else if(d.disabled){
           h+='<td class="dpm-c dpm-d">✕<br>사용안함</td>';
         } else {
@@ -29505,5 +29508,55 @@ html.pb-mon #pbMonExit{display:block;}
 })();
 </script>
 <!-- /PWA-NAME -->
+<!-- ★(2026-11-16) PC 설정 한 줄 배치 -->
+<style>
+@media (min-width:1100px){
+  .kd-pc-pair{display:flex;gap:10px;align-items:center;}
+  .kd-pc-pair > *{flex:1 1 0;min-width:0;}
+  .kd-pc-pair > #kdPwaNameBox{margin:0 !important;display:flex;align-items:center;gap:8px;padding:4px 8px !important;border-radius:9px !important;}
+  .kd-pc-pair > #kdPwaNameBox > div:first-child{flex:none;margin:0 !important;font-size:11px !important;white-space:nowrap;}
+  .kd-pc-pair > #kdPwaNameBox > div:nth-child(2){flex:1 1 auto;min-width:0;}
+  .kd-pc-pair > #kdPwaNameBox input{padding:5px 8px !important;font-size:12px !important;}
+  .kd-pc-pair > #kdPwaNameBox button{padding:5px 10px !important;font-size:11px !important;}
+  .kd-pc-pair > #kdPwaNameBox #kdPwaNameMsg{flex:none;margin:0 !important;min-height:0 !important;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kd-pc-pair > #kdPwaNameBox #kdPwaNameMsg:empty{display:none;}
+  .kd-pc-pair > #kdPwaNameBox > div:last-child{display:none;}
+  .kd-pc-msg{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:4px;}
+  .kd-pc-msg > .storage-mode-row{flex:0 1 auto;margin-top:0 !important;width:auto !important;}
+  .kd-pc-msg .kd-pc-hint{display:none !important;}
+}
+</style>
+<script>
+/* PC(가로 1100px 이상)에서 설정 줄 묶기 — 약도주소+앱이름 / ntfy+텔레그램 / 메시지발송·요금발생차단·발송방식·알림채널
+   (모바일은 그대로 · 설명 문구는 PC에서 숨기고 마우스를 올리면 보이게 title로 옮김) */
+(function(){
+  function row(id, sel){ var e=document.getElementById(id); return e&&e.closest?e.closest(sel):null; }
+  function wrap(nodes, cls){
+    nodes=nodes.filter(function(n){ return !!n; }); if(!nodes.length) return;
+    var p=nodes[0].parentNode; if(!p || (p.classList && p.classList.contains(cls))) return;
+    for(var i=1;i<nodes.length;i++){ if(nodes[i].parentNode!==p) return; }
+    var w=document.createElement('div'); w.className=cls; p.insertBefore(w, nodes[0]);
+    nodes.forEach(function(n){ w.appendChild(n); });
+  }
+  function hints(r){
+    if(!r) return;
+    Array.prototype.forEach.call(r.querySelectorAll(':scope > span'), function(s){
+      if(s.style && s.style.width==='100%'){ s.classList.add('kd-pc-hint'); if(!r.title) r.title=s.textContent.trim(); }
+    });
+  }
+  function run(){
+    try{
+      var vb=row('viewBaseMsg','.s-row'), pn=document.getElementById('kdPwaNameBox');
+      if(vb){ if(pn && pn.parentNode===vb.parentNode) wrap([vb,pn],'kd-pc-pair'); else wrap([vb],'kd-pc-pair'); }
+      if(pn && !pn.title){ var d=pn.lastElementChild; if(d) pn.title=d.textContent.trim(); }
+      wrap([row('ntfyMsg','.s-row'), row('pbTgMsg','.s-row')],'kd-pc-pair');
+      var rs=[row('kdMsgEnChk','.storage-mode-row'), row('feeBlockSwitch','.storage-mode-row'), row('sendMode_alimtalk','.storage-mode-row'), document.getElementById('kdChRow')];
+      rs.forEach(hints); wrap(rs,'kd-pc-msg');
+    }catch(e){}
+  }
+  run(); document.addEventListener('DOMContentLoaded', run); window.addEventListener('load', function(){ run(); setTimeout(run,1500); setTimeout(run,5000); });
+})();
+</script>
+<!-- /PC 설정 한 줄 배치 -->
 </body>
 </html>
