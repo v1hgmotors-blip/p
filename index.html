@@ -2590,7 +2590,7 @@ document.addEventListener('DOMContentLoaded', _pbThemeBtns);
     var _biz = _bizRaw.replace(/[^0-9A-Za-z가-힣\s]/g,'').trim();
     if(_biz && _biz !== '주차위치현황판' && _biz !== '주차현황판'){
       var _t = document.getElementById('stabTitleTxt');
-      if(_t) _t.textContent = _biz + ' 주차현황판 시스템';
+      if(_t) _t.textContent = /현황판$/.test(_biz) ? (_biz + ' 시스템') : (_biz + ' 주차현황판 시스템');   /* ★(2026-11-16) 상호에 이미 '…현황판'이 있으면 중복 안 붙임 */
     }
   }catch(e){}
 
