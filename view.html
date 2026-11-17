@@ -2097,7 +2097,7 @@ window._docChoose = _docChoose;
           oName = String(_up.on||oName||'');
           oPhone = String(_up.op||oPhone||'').replace(/[^0-9]/g,'');
           keyNo = String(_up.kn||keyNo||'');
-          applyBiz(_up.bz); applyBizInfo(_up.bi); applyPromo(_up.pt);
+          try{ if(_up.sub && !sub) sub=String(_up.sub); }catch(e){} applyBiz(_up.bz); applyBizInfo(_up.bi); applyPromo(_up.pt);
           try{ if(!eid && _up.eid) eid = String(_up.eid); }catch(e){}
           renderHeader();
           _urlShown = true;
@@ -2154,7 +2154,7 @@ window._docChoose = _docChoose;
         oPhone = String(d.op||oPhone||'').replace(/[^0-9]/g,'');
         keyNo = String(d.kn||keyNo||''); /* ★ 키번호 */
         loadCarDocs(car); /* ★ 출고서류 — 차량번호 기준 조회 */
-        applyBiz(d.bz); /* ★ 업체명 */
+        try{ if(d.sub && !sub) sub=String(d.sub); }catch(e){} /* ★(2026-11-17) 소제목도 단축링크 데이터에서 */ applyBiz(d.bz); /* ★ 업체명 */
         applyBizInfo(d.bi); /* ★ 업체정보 */
         applyPromo(d.pt); /* ★ 제휴점 정보 */
         try{ if(!eid && d.eid) eid = String(d.eid); }catch(e){} /* ★ 단축링크 payload의 eid도 인정 */

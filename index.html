@@ -29558,5 +29558,35 @@ html.pb-mon #pbMonExit{display:block;}
 })();
 </script>
 <!-- /PC 설정 한 줄 배치 -->
+<!-- ★(2026-11-16) 저장됨 알림 보강 -->
+<script>
+/* 저장 버튼을 눌렀는데 「저장됨」 알림이 없던 곳에 알림 추가 (기능은 그대로, 저장이 끝난 뒤 알림만) */
+(function(){
+  function toast(msg){
+    try{ if(typeof showToast==='function'){ showToast(msg,'success'); return; } }catch(e){}
+    try{
+      var t=document.getElementById('kdSaveToast');
+      if(!t){ t=document.createElement('div'); t.id='kdSaveToast';
+        t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:2147483000;background:#16A34A;color:#fff;font-size:15px;font-weight:900;padding:12px 22px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);pointer-events:none;opacity:0;transition:opacity .2s;font-family:inherit;white-space:nowrap;';
+        document.body.appendChild(t); }
+      t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.opacity='0'; },1800);
+    }catch(e){}
+  }
+  window._kdSaveToast=toast;
+  function wrap(name, msg, okFn){
+    var f=window[name]; if(typeof f!=='function' || f._kdSt) return;
+    var w=function(){ var r=f.apply(this, arguments); try{ if(!okFn || okFn()) toast(msg); }catch(e){} return r; };
+    w._kdSt=1; window[name]=w;
+  }
+  function run(){
+    wrap('saveMemoEdit','✅ 저장됨');
+    wrap('savePromoEdit','✅ 저장됨', function(){ var e=document.getElementById('promoEditErr'); return !(e && e.classList.contains('show')); });
+    wrap('onMemoSave','✅ 메모 저장됨');
+    wrap('_kdPwaNameSave','✅ 앱 이름 저장됨');
+  }
+  run(); window.addEventListener('load', function(){ run(); setTimeout(run,1500); });
+})();
+</script>
+<!-- /저장됨 알림 보강 -->
 </body>
 </html>
